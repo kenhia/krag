@@ -1,7 +1,10 @@
 """LLM client for answer synthesis."""
 
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -40,6 +43,7 @@ class LLMClient:
 
     def _load_model(self) -> None:
         """Load the LLM model."""
+        logger.info(f"Loading LLM model from {self.model_path}")
         try:
             from llama_cpp import Llama
 
@@ -49,12 +53,15 @@ class LLMClient:
                 n_threads=self.n_threads,
                 verbose=False,
             )
+            logger.info("LLM model loaded successfully")
         except ImportError as e:
+            logger.error("llama-cpp-python not installed")
             raise ImportError(
                 "llama-cpp-python is required for LLM inference. "
                 "Install with: uv add llama-cpp-python"
             ) from e
         except Exception as e:
+            logger.error(f"Failed to load LLM model: {e}")
             raise RuntimeError(f"Failed to load LLM model: {e}") from e
 
     def generate(
@@ -75,15 +82,18 @@ class LLMClient:
         Returns:
             Generated answer string
         """
+        logger.debug(f"Generating response for query: {query[:50]}...")
         # Use provided values or defaults
         temp = temperature if temperature is not None else self.temperature
         max_tok = max_tokens if max_tokens is not None else self.max_tokens
 
         # If no model loaded (testing mode), return placeholder
         if self.model is None:
+            logger.debug("No model loaded, using fallback response")
             return self._generate_fallback(query, context)
 
         # Generate with llama-cpp-python
+        logger.debug(f"Generating with temperature={temp}, max_tokens={max_tok}")
         try:
             response = self.model(
                 context,
@@ -94,10 +104,16 @@ class LLMClient:
 
             # Extract text from response
             if isinstance(response, dict):
-                return response.get("choices", [{}])[0].get("text", "").strip()
-            return str(response).strip()
+                answer = response.get("choices", [{}])[0].get("text", "").strip()
+            else:
+                answer = str(response).strip()
+
+            logger.info(f"Generated answer: {len(answer)} characters")
+            return answer
 
         except Exception as e:
+            logger.error(f"LLM generation failed: {e}")
+            return f"Error generating response: {e}"
             return f"Error generating response: {str(e)}"
 
     def _generate_fallback(self, query: str, context: str) -> str:

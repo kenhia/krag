@@ -92,40 +92,40 @@
 **Retrieval Module**
 
 - [ ] T033 [P] [US1] Create src/krag/retrieval/__init__.py
-- [ ] T034 [US1] Implement Retriever class in src/krag/retrieval/retriever.py with retrieve method
+- [X] T034 [US1] Implement Retriever class in src/krag/retrieval/retriever.py with retrieve method
 - [ ] T035 [P] [US1] Implement result ranking logic in src/krag/retrieval/ranker.py
 - [ ] T036 [US1] Write unit tests for Retriever in tests/unit/test_retrieval.py
 
 **Synthesis Module**
 
-- [ ] T037 [P] [US1] Create src/krag/synthesis/__init__.py
-- [ ] T038 [US1] Implement LLMClient class in src/krag/synthesis/llm_client.py with generate method
-- [ ] T039 [P] [US1] Implement PromptBuilder class in src/krag/synthesis/prompt_builder.py
+- [X] T037 [P] [US1] Create src/krag/synthesis/__init__.py
+- [X] T038 [US1] Implement LLMClient class in src/krag/synthesis/llm_client.py with generate method
+- [X] T039 [P] [US1] Implement PromptBuilder class in src/krag/synthesis/prompt_builder.py
 - [ ] T040 [US1] Write unit tests for LLMClient in tests/unit/test_synthesis.py
 
 **Query Orchestration**
 
-- [ ] T041 [P] [US1] Create src/krag/orchestration/__init__.py
-- [ ] T042 [US1] Implement QueryEngine class in src/krag/orchestration/query_engine.py with query method
-- [ ] T043 [US1] Implement QueryResponse dataclass in src/krag/orchestration/query_engine.py
-- [ ] T044 [US1] Add error handling for empty queries and no results
-- [ ] T045 [US1] Add logging for query operations
-- [ ] T046 [US1] Write unit tests for QueryEngine in tests/unit/test_query_engine.py
+- [X] T041 [P] [US1] Create src/krag/orchestration/__init__.py
+- [X] T042 [US1] Implement QueryEngine class in src/krag/orchestration/query_engine.py with query method
+- [X] T043 [US1] Implement QueryResponse dataclass in src/krag/orchestration/query_engine.py
+- [X] T044 [US1] Add error handling for empty queries and no results
+- [X] T045 [US1] Add logging for query operations
+- [X] T046 [US1] Write unit tests for QueryEngine in tests/unit/test_query_engine.py
 
 **CLI for Querying**
 
-- [ ] T047 [P] [US1] Create src/krag/cli/__init__.py
-- [ ] T048 [US1] Implement query command in src/krag/cli/query.py with typer
-- [ ] T049 [US1] Add --top-k, --no-synthesis, --show-sources, --format options to query command
-- [ ] T050 [US1] Add output formatting (text and JSON formats)
-- [ ] T051 [US1] Integrate QueryEngine with query CLI command
-- [ ] T052 [US1] Add error handling and user-friendly messages for query CLI
+- [X] T047 [P] [US1] Create src/krag/cli/__init__.py
+- [X] T048 [US1] Implement query command in src/krag/cli/query.py with typer
+- [X] T049 [US1] Add --top-k, --no-synthesis, --show-sources, --format options to query command
+- [X] T050 [US1] Add output formatting (text and JSON formats)
+- [X] T051 [US1] Integrate QueryEngine with query CLI command
+- [X] T052 [US1] Add error handling and user-friendly messages for query CLI
 
 **Integration & Validation**
 
-- [ ] T053 [US1] Run integration test for query pipeline and verify it passes
-- [ ] T054 [US1] Run contract tests for Retriever and LLMClient and verify they pass
-- [ ] T055 [US1] Manual test: Query sample corpus and verify synthesized answers
+- [X] T053 [US1] Run integration test for query pipeline and verify it passes
+- [X] T054 [US1] Run contract tests for Retriever and LLMClient and verify they pass
+- [X] T055 [US1] Manual test: Query sample corpus and verify synthesized answers
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently (requires indexed data from US2)
 

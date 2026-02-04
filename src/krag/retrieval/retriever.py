@@ -1,9 +1,12 @@
 """Retriever for similarity search in vector store."""
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from krag.models.query_result import QueryResult
+
+logger = logging.getLogger(__name__)
 
 
 class Retriever:
@@ -36,11 +39,15 @@ class Retriever:
         Returns:
             List of QueryResult objects ranked by relevance
         """
+        logger.debug(f"Retrieving top {top_k} results for query: {query[:50]}...")
+
         # Generate embedding for query
         query_embedding = self.embedding_generator.generate_single(query)
+        logger.debug(f"Generated query embedding with dimension {len(query_embedding)}")
 
         # Perform similarity search
         results = self.vector_store.search(query_embedding, limit=top_k)
+        logger.debug(f"Vector store returned {len(results)} results")
 
         # Convert to QueryResult objects
         query_results = []

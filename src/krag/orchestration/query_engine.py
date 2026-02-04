@@ -1,5 +1,6 @@
 """Query engine for orchestrating retrieval and synthesis."""
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -7,6 +8,8 @@ from krag.models.query_result import QueryResult
 from krag.retrieval.retriever import Retriever
 from krag.synthesis.llm_client import LLMClient
 from krag.synthesis.prompt_builder import PromptBuilder
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -60,8 +63,11 @@ class QueryEngine:
         Returns:
             QueryResponse with answer and sources
         """
+        logger.info(f"Processing query: {query_text[:100]}...")
+
         # Validate query
         if not query_text or not query_text.strip():
+            logger.warning("Empty query received")
             return QueryResponse(
                 answer="Please provide a valid question.",
                 sources=[],
@@ -70,13 +76,18 @@ class QueryEngine:
 
         # Retrieve relevant chunks
         k = top_k if top_k is not None else self.top_k
+        logger.debug(f"Retrieving top {k} results")
         results = self.retriever.retrieve(query_text, top_k=k)
+        logger.info(f"Retrieved {len(results)} results")
 
         # Build prompt
         prompt = self.prompt_builder.build(query_text, results)
+        logger.debug(f"Built prompt with {len(prompt)} characters")
 
         # Generate answer
+        logger.debug("Generating LLM response")
         answer = self.llm_client.generate(query_text, prompt)
+        logger.info(f"Query completed, answer length: {len(answer)} characters")
 
         return QueryResponse(
             answer=answer,
