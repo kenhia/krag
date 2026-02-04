@@ -1,8 +1,9 @@
 """Embedding record model."""
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
 class EmbeddingRecord(BaseModel):
@@ -40,4 +41,16 @@ class EmbeddingRecord(BaseModel):
             )
         return v
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    @model_serializer
+    def ser_model(self) -> dict[str, Any]:
+        """Serialize model with proper datetime handling."""
+        return {
+            "embedding_id": self.embedding_id,
+            "chunk_id": self.chunk_id,
+            "vector": self.vector,
+            "vector_dim": self.vector_dim,
+            "model_name": self.model_name,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    model_config = ConfigDict()

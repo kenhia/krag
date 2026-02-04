@@ -2,9 +2,10 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
 class TextChunk(BaseModel):
@@ -43,4 +44,18 @@ class TextChunk(BaseModel):
             raise ValueError("end_char must be greater than start_char")
         return v
 
-    model_config = ConfigDict(json_encoders={Path: str, datetime: lambda v: v.isoformat()})
+    @model_serializer
+    def ser_model(self) -> dict[str, Any]:
+        """Serialize model with proper Path and datetime handling."""
+        return {
+            "chunk_id": self.chunk_id,
+            "file_path": str(self.file_path),
+            "chunk_index": self.chunk_index,
+            "content": self.content,
+            "start_char": self.start_char,
+            "end_char": self.end_char,
+            "token_count": self.token_count,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    model_config = ConfigDict()

@@ -1,8 +1,9 @@
 """Query result model."""
 
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
 class QueryResult(BaseModel):
@@ -27,4 +28,17 @@ class QueryResult(BaseModel):
             raise ValueError("file_path must be absolute")
         return v
 
-    model_config = ConfigDict(json_encoders={Path: str})
+    @model_serializer
+    def ser_model(self) -> dict[str, Any]:
+        """Serialize model with proper Path handling."""
+        return {
+            "chunk_id": self.chunk_id,
+            "score": self.score,
+            "rank": self.rank,
+            "chunk_content": self.chunk_content,
+            "file_path": str(self.file_path),
+            "chunk_index": self.chunk_index,
+            "file_type": self.file_type,
+        }
+
+    model_config = ConfigDict()

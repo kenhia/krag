@@ -3,9 +3,10 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
 class JobType(str, Enum):
@@ -60,4 +61,29 @@ class IndexingJob(BaseModel):
             raise ValueError("end_time must be >= start_time")
         return v
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat(), Path: str})
+    @model_serializer
+    def ser_model(self) -> dict[str, Any]:
+        """Serialize model with proper datetime and Path handling."""
+        return {
+            "job_id": self.job_id,
+            "job_type": self.job_type.value,
+            "status": self.status.value,
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "files_discovered": self.files_discovered,
+            "files_processed": self.files_processed,
+            "files_skipped": self.files_skipped,
+            "files_errored": self.files_errored,
+            "chunks_generated": self.chunks_generated,
+            "embeddings_created": self.embeddings_created,
+            "error_summary": [
+                {
+                    "file_path": str(err.file_path),
+                    "error_type": err.error_type,
+                    "error_message": err.error_message,
+                }
+                for err in self.error_summary
+            ],
+        }
+
+    model_config = ConfigDict()

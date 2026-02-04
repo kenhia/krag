@@ -3,8 +3,9 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
 class IndexingStatus(str, Enum):
@@ -68,4 +69,19 @@ class FileMetadata(BaseModel):
             )
         return v
 
-    model_config = ConfigDict(json_encoders={Path: str, datetime: lambda v: v.isoformat()})
+    @model_serializer
+    def ser_model(self) -> dict[str, Any]:
+        """Serialize model with proper Path and datetime handling."""
+        return {
+            "file_path": str(self.file_path),
+            "file_size": self.file_size,
+            "modification_time": self.modification_time.isoformat(),
+            "file_type": self.file_type,
+            "content_hash": self.content_hash,
+            "indexing_status": self.indexing_status.value,
+            "last_indexed_at": self.last_indexed_at.isoformat() if self.last_indexed_at else None,
+            "error_message": self.error_message,
+            "chunk_count": self.chunk_count,
+        }
+
+    model_config = ConfigDict()
