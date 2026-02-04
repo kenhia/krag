@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# uv
+.uv/
+uv.lock
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type Checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Qdrant Vector Store
+qdrant_storage/
+*.qdrant
+
+# SQLite Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Configuration (may contain sensitive paths)
+# Note: Default config template should be in repo
+# config.toml
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Scratch/Temporary
+.scratch/
+tmp/
+temp/
+
+# Downloaded Models (large files)
+models/*.gguf
+models/*.bin
+!models/.gitkeep

@@ -102,22 +102,22 @@ As a user, I want to configure which directories to include/exclude, which file 
 **Text Extraction & Processing**
 
 - **FR-006**: System MUST extract text content from supported file formats (plain text, markdown, source code, JSON, YAML, XML, CSV)
-- **FR-007**: System MUST intelligently chunk extracted text into segments suitable for embedding
+- **FR-007**: System MUST intelligently chunk extracted text into segments suitable for embedding (chunks respect semantic boundaries: paragraph breaks for prose, function/class boundaries for code)
 - **FR-008**: System MUST support configurable chunk size and overlap parameters
-- **FR-009**: System MUST preserve meaningful context boundaries when chunking (e.g., paragraph breaks, code function boundaries)
-- **FR-010**: System MUST handle files that exceed size limits by logging warnings and skipping or truncating content
+- **FR-009**: System MUST preserve meaningful context boundaries when chunking by using semantic-aware splitting that avoids breaking mid-sentence for text or mid-function for code
+- **FR-010**: System MUST handle files that exceed configured max_file_size_mb by logging a warning and skipping the file (files are never truncated to avoid data loss)
 
 **Embedding Generation**
 
 - **FR-011**: System MUST generate vector embeddings for all text chunks using a local embedding model
-- **FR-012**: System MUST support configuration of which local embedding model to use
+- **FR-012**: System MUST support configuration of which local embedding model to use (models must be sentence-transformers compatible and output consistent vector dimensions; changing models requires full re-indexing)
 - **FR-013**: System MUST batch embedding generation to optimize throughput
 - **FR-014**: System MUST store embeddings alongside chunk metadata
 
 **Vector Storage**
 
 - **FR-015**: System MUST persist embeddings and metadata in a vector store that supports similarity search
-- **FR-016**: System MUST support vector store backend selection via configuration
+- **FR-016**: System MUST define an abstract VectorStore interface to enable future backend alternatives (Phase 1 implements Qdrant embedded mode only)
 - **FR-017**: System MUST maintain associations between embeddings, source chunks, and original files
 
 **Query & Retrieval**
@@ -133,7 +133,7 @@ As a user, I want to configure which directories to include/exclude, which file 
 - **FR-023**: System MUST pass retrieved chunks and user query to a local LLM for answer synthesis
 - **FR-024**: System MUST support configuration of which local LLM to use
 - **FR-025**: System MUST handle cases where no relevant chunks are found by informing the user
-- **FR-026**: System MUST stream or display synthesized answers to the user
+- **FR-026**: System MUST display synthesized answers to the user (streaming support is planned for future phases)
 
 **Incremental Indexing**
 

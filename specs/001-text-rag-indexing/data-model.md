@@ -209,6 +209,7 @@ Represents system configuration settings.
 - `chunk_size` > `chunk_overlap`
 - `chunk_overlap` >= 0
 - `embedding_batch_size` > 0
+- `max_file_size_mb` > 0 (files exceeding this are skipped, never truncated)
 - `top_k` > 0
 - `llm_temperature` in range [0.0, 2.0]
 
