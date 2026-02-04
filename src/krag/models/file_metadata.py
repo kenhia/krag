@@ -1,6 +1,6 @@
 """File metadata model and enums."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -59,12 +59,15 @@ class FileMetadata(BaseModel):
         import logging
         from datetime import timedelta
 
-        now = datetime.now()
+        now = datetime.now(UTC)
         grace_period = timedelta(hours=1)
 
-        if v > now + grace_period:
+        # Make comparison timezone-aware
+        v_aware = v if v.tzinfo else v.replace(tzinfo=UTC)
+
+        if v_aware > now + grace_period:
             logging.warning(
-                f"File has future timestamp: {v} (now: {now}). "
+                f"File has future timestamp: {v_aware} (now: {now}). "
                 "This may indicate clock skew or incorrect system time."
             )
         return v
