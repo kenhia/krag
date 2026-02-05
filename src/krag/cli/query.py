@@ -2,7 +2,7 @@
 
 import json
 import logging
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 import typer
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-class OutputFormat(str, Enum):
+class OutputFormat(StrEnum):
     """Output format options."""
 
     TEXT = "text"
