@@ -244,9 +244,9 @@
 
 **Integration & Validation**
 
-- [ ] T114 [US3] Run integration test for incremental update and verify it passes
-- [ ] T115 [US3] Manual test: Index corpus, modify files, run incremental, verify correct behavior
-- [ ] T116 [US3] Performance test: Verify incremental is significantly faster than full re-index
+- [X] T114 [US3] Run integration test for incremental update and verify it passes
+- [X] T115 [US3] Manual test: Index corpus, modify files, run incremental, verify correct behavior
+- [X] T116 [US3] Performance test: Verify incremental is significantly faster than full re-index
 
 **Checkpoint**: All three core user stories (P1, P2, P3) should now be independently functional
 
