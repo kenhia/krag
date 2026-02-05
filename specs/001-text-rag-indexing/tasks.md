@@ -79,29 +79,29 @@
 
 ### Tests for User Story 1 (TDD - WRITE FIRST, VERIFY THEY FAIL)
 
-- [ ] T026 [P] [US1] Create test fixtures directory tests/fixtures/sample_files/ with sample documents
-- [ ] T027 [P] [US1] Create mock embedding generator in tests/fixtures/mock_embeddings.py
-- [ ] T028 [P] [US1] Create mock LLM client in tests/fixtures/mock_llm.py
-- [ ] T029 [P] [US1] Write contract test for Retriever interface in tests/contract/test_retriever_contract.py
-- [ ] T030 [P] [US1] Write contract test for LLMClient interface in tests/contract/test_llm_contract.py
-- [ ] T031 [P] [US1] Write integration test for query pipeline in tests/integration/test_query_pipeline.py
-- [ ] T032 [P] [US1] Write unit tests for PromptBuilder in tests/unit/test_prompt_builder.py
+- [X] T026 [P] [US1] Create test fixtures directory tests/fixtures/sample_files/ with sample documents
+- [X] T027 [P] [US1] Create mock embedding generator in tests/fixtures/mock_embeddings.py
+- [X] T028 [P] [US1] Create mock LLM client in tests/fixtures/mock_llm.py
+- [X] T029 [P] [US1] Write contract test for Retriever interface in tests/contract/test_retriever_contract.py
+- [X] T030 [P] [US1] Write contract test for LLMClient interface in tests/contract/test_llm_contract.py
+- [X] T031 [P] [US1] Write integration test for query pipeline in tests/integration/test_query_pipeline.py
+- [X] T032 [P] [US1] Write unit tests for PromptBuilder in tests/unit/test_prompt_builder.py
 
 ### Implementation for User Story 1
 
 **Retrieval Module**
 
-- [ ] T033 [P] [US1] Create src/krag/retrieval/__init__.py
+- [X] T033 [P] [US1] Create src/krag/retrieval/__init__.py
 - [X] T034 [US1] Implement Retriever class in src/krag/retrieval/retriever.py with retrieve method
-- [ ] T035 [P] [US1] Implement result ranking logic in src/krag/retrieval/ranker.py
-- [ ] T036 [US1] Write unit tests for Retriever in tests/unit/test_retrieval.py
+- [X] T035 [P] [US1] Implement result ranking logic in src/krag/retrieval/ranker.py
+- [X] T036 [US1] Write unit tests for Retriever in tests/unit/test_retrieval.py
 
 **Synthesis Module**
 
 - [X] T037 [P] [US1] Create src/krag/synthesis/__init__.py
 - [X] T038 [US1] Implement LLMClient class in src/krag/synthesis/llm_client.py with generate method
 - [X] T039 [P] [US1] Implement PromptBuilder class in src/krag/synthesis/prompt_builder.py
-- [ ] T040 [US1] Write unit tests for LLMClient in tests/unit/test_synthesis.py
+- [X] T040 [US1] Write unit tests for LLMClient in tests/unit/test_synthesis.py
 
 **Query Orchestration**
 
