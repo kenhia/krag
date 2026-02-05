@@ -208,8 +208,8 @@
 
 - [X] T100 [US2] Run integration test for indexing pipeline and verify it passes
 - [X] T101 [US2] Run contract tests for VectorStore and EmbeddingGenerator and verify they pass
-- [ ] T102 [US2] Manual test: Index sample corpus and verify embeddings in vector store
-- [ ] T103 [US2] End-to-end test: Index files (US2) then query them (US1) and verify complete workflow
+- [X] T102 [US2] Manual test: Index sample corpus and verify embeddings in vector store
+- [X] T103 [US2] End-to-end test: Index files (US2) then query them (US1) and verify complete workflow
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently. MVP is complete!
 
