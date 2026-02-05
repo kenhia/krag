@@ -139,59 +139,59 @@
 
 ### Tests for User Story 2 (TDD - WRITE FIRST, VERIFY THEY FAIL)
 
-- [ ] T056 [P] [US2] Write contract test for VectorStore interface in tests/contract/test_vector_store_contract.py
-- [ ] T057 [P] [US2] Write contract test for EmbeddingGenerator interface in tests/contract/test_embedding_contract.py
-- [ ] T058 [P] [US2] Write integration test for indexing pipeline in tests/integration/test_indexing_pipeline.py
-- [ ] T059 [P] [US2] Write unit tests for FileScanner in tests/unit/test_discovery.py
-- [ ] T060 [P] [US2] Write unit tests for TextExtractor in tests/unit/test_extraction.py
-- [ ] T061 [P] [US2] Write unit tests for TextChunker in tests/unit/test_chunker.py
+- [X] T056 [P] [US2] Write contract test for VectorStore interface in tests/contract/test_vector_store_contract.py
+- [X] T057 [P] [US2] Write contract test for EmbeddingGenerator interface in tests/contract/test_embedding_contract.py
+- [X] T058 [P] [US2] Write integration test for indexing pipeline in tests/integration/test_indexing_pipeline.py
+- [X] T059 [P] [US2] Write unit tests for FileScanner in tests/unit/test_discovery.py
+- [X] T060 [P] [US2] Write unit tests for TextExtractor in tests/unit/test_extraction.py
+- [X] T061 [P] [US2] Write unit tests for TextChunker in tests/unit/test_chunker.py
 
 ### Implementation for User Story 2
 
 **Discovery Module**
 
-- [ ] T062 [P] [US2] Create src/krag/discovery/__init__.py
-- [ ] T063 [US2] Implement FileScanner class in src/krag/discovery/scanner.py with scan and scan_incremental methods
-- [ ] T064 [P] [US2] Implement FileFilter class in src/krag/discovery/filters.py
-- [ ] T065 [US2] Add progress tracking for file discovery
-- [ ] T066 [US2] Add error handling for permission denied and missing directories
+- [X] T062 [P] [US2] Create src/krag/discovery/__init__.py
+- [X] T063 [US2] Implement FileScanner class in src/krag/discovery/scanner.py with scan and scan_incremental methods
+- [X] T064 [P] [US2] Implement FileFilter class in src/krag/discovery/filters.py
+- [X] T065 [US2] Add progress tracking for file discovery
+- [X] T066 [US2] Add error handling for permission denied and missing directories
 
 **Extraction Module**
 
-- [ ] T067 [P] [US2] Create src/krag/extraction/__init__.py
-- [ ] T068 [US2] Implement TextExtractor class in src/krag/extraction/text_extractor.py with extract and detect_encoding methods
-- [ ] T069 [P] [US2] Implement TextChunker class in src/krag/extraction/chunker.py using llama-index splitters
-- [ ] T070 [US2] Add support for code-aware chunking in TextChunker.chunk_code method
-- [ ] T071 [US2] Add file size limit handling in TextExtractor
-- [ ] T072 [US2] Add error handling for corrupt/unreadable files
+- [X] T067 [P] [US2] Create src/krag/extraction/__init__.py
+- [X] T068 [US2] Implement TextExtractor class in src/krag/extraction/text_extractor.py with extract and detect_encoding methods
+- [X] T069 [P] [US2] Implement TextChunker class in src/krag/extraction/chunker.py using llama-index splitters
+- [X] T070 [US2] Add support for code-aware chunking in TextChunker.chunk_code method
+- [X] T071 [US2] Add file size limit handling in TextExtractor
+- [X] T072 [US2] Add error handling for corrupt/unreadable files
 
 **Embeddings Module**
 
-- [ ] T073 [P] [US2] Create src/krag/embeddings/__init__.py
-- [ ] T074 [US2] Implement EmbeddingGenerator class in src/krag/embeddings/generator.py using sentence-transformers
-- [ ] T075 [US2] Add batch processing in EmbeddingGenerator.generate method
-- [ ] T076 [P] [US2] Implement model management in src/krag/embeddings/models.py
-- [ ] T077 [US2] Add progress tracking for embedding generation
-- [ ] T078 [US2] Write unit tests for EmbeddingGenerator in tests/unit/test_embeddings.py
+- [X] T073 [P] [US2] Create src/krag/embeddings/__init__.py
+- [X] T074 [US2] Implement EmbeddingGenerator class in src/krag/embeddings/generator.py using sentence-transformers
+- [X] T075 [US2] Add batch processing in EmbeddingGenerator.generate method
+- [X] T076 [P] [US2] Implement model management in src/krag/embeddings/models.py
+- [X] T077 [US2] Add progress tracking for embedding generation
+- [X] T078 [US2] Write unit tests for EmbeddingGenerator in tests/unit/test_embeddings.py
 
 **Storage Module**
 
-- [ ] T079 [P] [US2] Create src/krag/storage/__init__.py
-- [ ] T080 [US2] Define VectorStore abstract interface in src/krag/storage/vector_store.py
-- [ ] T081 [US2] Implement QdrantVectorStore in src/krag/storage/qdrant_impl.py with upsert, search, delete, get_stats methods
-- [ ] T082 [P] [US2] Implement MetadataStore in src/krag/storage/metadata_store.py using SQLite
-- [ ] T083 [US2] Add collection initialization in QdrantVectorStore
-- [ ] T084 [US2] Add error handling for storage operations
-- [ ] T085 [US2] Write unit tests for MetadataStore in tests/unit/test_storage.py
+- [X] T079 [P] [US2] Create src/krag/storage/__init__.py
+- [X] T080 [US2] Define VectorStore abstract interface in src/krag/storage/vector_store.py
+- [X] T081 [US2] Implement QdrantVectorStore in src/krag/storage/qdrant_impl.py with upsert, search, delete, get_stats methods
+- [X] T082 [P] [US2] Implement MetadataStore in src/krag/storage/metadata_store.py using SQLite
+- [X] T083 [US2] Add collection initialization in QdrantVectorStore
+- [X] T084 [US2] Add error handling for storage operations
+- [X] T085 [US2] Write unit tests for MetadataStore in tests/unit/test_storage.py
 
 **Indexing Orchestration**
 
-- [ ] T086 [US2] Implement IndexingOrchestrator class in src/krag/orchestration/indexer.py with index_full method
-- [ ] T087 [US2] Connect all pipeline stages in IndexingOrchestrator (discovery → extraction → chunking → embedding → storage)
-- [ ] T088 [US2] Add progress tracking and reporting for IndexingOrchestrator
-- [ ] T089 [US2] Add per-file error handling (continue on error, collect error summary)
-- [ ] T090 [US2] Add logging for indexing operations
-- [ ] T091 [US2] Write unit tests for IndexingOrchestrator in tests/unit/test_indexing_orchestrator.py
+- [X] T086 [US2] Implement IndexingOrchestrator class in src/krag/orchestration/indexer.py with index_full method
+- [X] T087 [US2] Connect all pipeline stages in IndexingOrchestrator (discovery → extraction → chunking → embedding → storage)
+- [X] T088 [US2] Add progress tracking and reporting for IndexingOrchestrator
+- [X] T089 [US2] Add per-file error handling (continue on error, collect error summary)
+- [X] T090 [US2] Add logging for indexing operations
+- [X] T091 [US2] Write unit tests for IndexingOrchestrator in tests/unit/test_indexing_orchestrator.py
 
 **CLI for Indexing**
 
