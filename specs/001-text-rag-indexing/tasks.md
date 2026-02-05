@@ -206,8 +206,8 @@
 
 **Integration & Validation**
 
-- [ ] T100 [US2] Run integration test for indexing pipeline and verify it passes
-- [ ] T101 [US2] Run contract tests for VectorStore and EmbeddingGenerator and verify they pass
+- [X] T100 [US2] Run integration test for indexing pipeline and verify it passes
+- [X] T101 [US2] Run contract tests for VectorStore and EmbeddingGenerator and verify they pass
 - [ ] T102 [US2] Manual test: Index sample corpus and verify embeddings in vector store
 - [ ] T103 [US2] End-to-end test: Index files (US2) then query them (US1) and verify complete workflow
 
