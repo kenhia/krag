@@ -195,14 +195,14 @@
 
 **CLI for Indexing**
 
-- [ ] T092 [US2] Implement Typer app entrypoint in src/krag/cli/main.py
-- [ ] T093 [US2] Implement init command in src/krag/cli/main.py for configuration initialization
-- [ ] T094 [US2] Implement index command in src/krag/cli/index.py with --full, --dry-run options
-- [ ] T095 [US2] Add progress bars using rich library in index command
-- [ ] T096 [US2] Add error summary display at end of indexing
-- [ ] T097 [US2] Integrate IndexingOrchestrator with index CLI command
-- [ ] T098 [US2] Add status command in src/krag/cli/main.py to show index statistics
-- [ ] T099 [US2] Add config command in src/krag/cli/main.py with show, validate, edit subcommands
+- [X] T092 [US2] Implement Typer app entrypoint in src/krag/cli/main.py
+- [X] T093 [US2] Implement init command in src/krag/cli/main.py for configuration initialization
+- [X] T094 [US2] Implement index command in src/krag/cli/index.py with --full, --dry-run options
+- [X] T095 [US2] Add progress bars using rich library in index command
+- [X] T096 [US2] Add error summary display at end of indexing
+- [X] T097 [US2] Integrate IndexingOrchestrator with index CLI command
+- [X] T098 [US2] Add status command in src/krag/cli/main.py to show index statistics
+- [X] T099 [US2] Add config command in src/krag/cli/main.py with show, validate, edit subcommands
 
 **Integration & Validation**
 
