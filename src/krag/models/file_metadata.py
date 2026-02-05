@@ -1,14 +1,14 @@
 """File metadata model and enums."""
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
-class IndexingStatus(str, Enum):
+class IndexingStatus(StrEnum):
     """Status of file indexing."""
 
     PENDING = "pending"

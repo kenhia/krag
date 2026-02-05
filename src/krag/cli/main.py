@@ -11,6 +11,7 @@ from rich.table import Table
 
 from krag.cli.index import index_command
 from krag.cli.query import query_command
+from krag.cli.utils import exit_with_code
 from krag.config.settings import ConfigManager
 
 # Create Typer app
@@ -92,7 +93,7 @@ def init(
         if config_path.exists() and not force:
             console.print(f"[yellow]Configuration already exists at {config_path}[/yellow]")
             console.print("Use --force to overwrite")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
         # Create default config
         config = config_manager.create_default(config_path)
@@ -110,7 +111,7 @@ def init(
 
     except Exception as e:
         console.print(f"[red]Failed to create configuration: {e}[/red]")
-        raise typer.Exit(1)  # noqa: B904
+        exit_with_code(1)
 
 
 @app.command()
@@ -142,7 +143,7 @@ def status(
             config = config_manager.load(config_path)
         except FileNotFoundError:
             console.print("[red]Configuration not found. Run 'krag init' first.[/red]")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
         # Create table
         table = Table(title="KRAG System Status", show_header=False)
@@ -185,7 +186,7 @@ def status(
 
     except Exception as e:
         console.print(f"[red]Failed to get status: {e}[/red]")
-        raise typer.Exit(1)  # noqa: B904
+        exit_with_code(1)
 
 
 # Config subcommand group
@@ -220,7 +221,7 @@ def config_show(
             config = config_manager.load(config_path)
         except FileNotFoundError:
             console.print("[red]Configuration not found. Run 'krag init' first.[/red]")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
         # Display as formatted JSON
         config_dict = config.model_dump()
@@ -228,7 +229,7 @@ def config_show(
 
     except Exception as e:
         console.print(f"[red]Failed to show configuration: {e}[/red]")
-        raise typer.Exit(1)  # noqa: B904
+        exit_with_code(1)
 
 
 @config_app.command("validate")
@@ -258,7 +259,7 @@ def config_validate(
 
         if not config_path.exists():
             console.print(f"[red]Configuration file not found: {config_path}[/red]")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
         # Try to load and validate
         try:
@@ -281,11 +282,11 @@ def config_validate(
 
         except Exception as e:
             console.print(f"[red]✗ Configuration is invalid: {e}[/red]")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
     except Exception as e:
         console.print(f"[red]Failed to validate configuration: {e}[/red]")
-        raise typer.Exit(1)  # noqa: B904
+        exit_with_code(1)
 
 
 @config_app.command("edit")
@@ -324,7 +325,7 @@ def config_edit(
         if not config_path.exists():
             console.print(f"[red]Configuration file not found: {config_path}[/red]")
             console.print("Run 'krag init' to create it first.")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
         # Determine editor
         if not editor:
@@ -343,7 +344,7 @@ def config_edit(
 
         if not editor:
             console.print("[red]No editor found. Set $EDITOR or use --editor[/red]")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
         # Open editor
         console.print(f"[cyan]Opening {config_path} in {editor}...[/cyan]")
@@ -361,10 +362,10 @@ def config_edit(
 
     except subprocess.CalledProcessError:
         console.print("[red]Editor exited with error[/red]")
-        raise typer.Exit(1)  # noqa: B904
+        exit_with_code(1)
     except Exception as e:
         console.print(f"[red]Failed to edit configuration: {e}[/red]")
-        raise typer.Exit(1)  # noqa: B904
+        exit_with_code(1)
 
 
 if __name__ == "__main__":

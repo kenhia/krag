@@ -104,7 +104,6 @@ def function_three():
     def test_chunk_returns_metadata(self) -> None:
         """Test chunks include metadata (start/end positions)."""
         from krag.extraction.chunker import TextChunker
-
         from krag.models.text_chunk import TextChunk
 
         chunker = TextChunker(chunk_size=100, chunk_overlap=20)

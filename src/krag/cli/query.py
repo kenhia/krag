@@ -11,6 +11,8 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
+from krag.cli.utils import exit_with_code
+
 logger = logging.getLogger(__name__)
 console = Console()
 
@@ -88,70 +90,82 @@ def query_command(
                         border_style="yellow",
                     )
                 )
-                raise typer.Exit(1)
+                exit_with_code(1)
 
         # Validate query
         if not query or not query.strip():
             console.print("[red]Error:[/red] Query cannot be empty", style="bold")
-            raise typer.Exit(1)
+            exit_with_code(1)
 
-        # Initialize components (will be implemented with US2 - indexing)
-        # For now, provide helpful error message
-        if not Path(config.storage_path).exists():
+        # Initialize components
+        if not Path(config.vector_store_path).exists():
             console.print(
                 Panel(
                     "[yellow]No indexed data found![/yellow]\n\n"
                     "You need to index your documents first:\n"
-                    "  [cyan]krag index --full[/cyan]",
+                    "  [cyan]krag index[/cyan]",
                     title="⚠️  Storage Not Found",
                     border_style="yellow",
                 )
             )
-            raise typer.Exit(1)
+            exit_with_code(1)
 
-        # TODO: Initialize QueryEngine when vector store is implemented
-        console.print(
-            Panel(
-                "[yellow]Query functionality requires implementing User Story 2 (Indexing).[/yellow]\n\n"
-                "The query command is ready, but needs:\n"
-                "  • Vector store implementation (Qdrant)\n"
-                "  • Embedding generator (sentence-transformers)\n"
-                "  • Indexed documents to search\n\n"
-                "Run indexing first:\n"
-                "  [cyan]krag index --full[/cyan]",
-                title="🚧  Implementation In Progress",
-                border_style="yellow",
-            )
-        )
-
-        # Placeholder for actual implementation:
-        """
-        from krag.orchestration.query_engine import QueryEngine
         from krag.embeddings.generator import EmbeddingGenerator
+        from krag.orchestration.query_engine import QueryEngine
         from krag.storage.qdrant_impl import QdrantVectorStore
         from krag.synthesis.llm_client import LLMClient
 
-        # Initialize components
-        vector_store = QdrantVectorStore(...)
-        embedding_generator = EmbeddingGenerator(...)
-        llm_client = LLMClient(...)
+        # Initialize embedding generator first (to get dimension)
+        embedding_generator = EmbeddingGenerator(
+            model_name=config.embedding_model,
+            device=config.embedding_device,
+        )
 
+        # Initialize vector store with embedding dimension
+        vector_store = QdrantVectorStore(
+            storage_path=str(config.vector_store_path),
+            collection_name=config.collection_name,
+            vector_size=embedding_generator.get_dimension(),
+        )
+
+        # Initialize LLM client (if synthesis is needed)
+        llm_client = None
+        if not no_synthesis:
+            llm_client = LLMClient(
+                model_path=str(config.llm_model_path),
+                max_tokens=2000,
+            )
+
+        # Initialize query engine
         query_engine = QueryEngine(
             vector_store=vector_store,
             embedding_generator=embedding_generator,
             llm_client=llm_client,
-            top_k=config.top_k,
+            top_k=top_k,
         )
 
         # Execute query
-        response = query_engine.query(query, top_k=top_k)
+        console.print(f"\n[bold]Query:[/bold] {query}\n")
 
-        # Format and display output
         if no_synthesis:
-            _display_sources_only(response.sources, format)
+            # Just retrieve, don't synthesize
+            from krag.retrieval.retriever import Retriever
+
+            retriever = Retriever(vector_store, embedding_generator)
+            results = retriever.retrieve(query, top_k=top_k)
+
+            console.print("[cyan]📄 Results (retrieval only):[/cyan]")
+            console.print("━" * 80)
+
+            for idx, result in enumerate(results, 1):
+                console.print(f"\n{idx}. [yellow]Score: {result.score:.4f}[/yellow]")
+                console.print(f"   [cyan]📁 Source:[/cyan] {result.file_path}")
+                console.print(f"\n   {result.chunk_content[:500]}...")
+                console.print()
         else:
+            # Full query with synthesis
+            response = query_engine.query(query, top_k=top_k)
             _display_full_response(response, show_sources, format)
-        """
 
     except typer.Exit:
         # Normal exit, don't log as error

@@ -1,7 +1,7 @@
 """Indexing job model and enums."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -9,14 +9,14 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
-class JobType(str, Enum):
+class JobType(StrEnum):
     """Type of indexing job."""
 
     FULL = "full"
     INCREMENTAL = "incremental"
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """Status of indexing job."""
 
     RUNNING = "running"

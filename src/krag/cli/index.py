@@ -15,6 +15,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from krag.cli.utils import exit_with_code
 from krag.config.settings import ConfigManager
 from krag.orchestration.indexer import IndexingOrchestrator
 
@@ -86,13 +87,13 @@ def index_command(
     try:
         # Load configuration
         config_manager = ConfigManager()
-        config_path = Path.home() / ".krag" / "config.yaml"
+        config_path = Path.home() / ".config" / "krag" / "config.yaml"
 
         try:
             config = config_manager.load(config_path)
         except FileNotFoundError:
             console.print("[red]Configuration not found. Run 'krag init' first.[/red]")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
         # Override config with CLI arguments
         if directories:
@@ -103,7 +104,7 @@ def index_command(
         if not dirs_to_index:
             console.print("[red]No directories specified to index.[/red]")
             console.print("Either specify --dir or configure directories in config.")
-            raise typer.Exit(1)  # noqa: B904
+            exit_with_code(1)
 
         # Prepare orchestrator configuration
         vector_store = vector_store_path or config.vector_store_path
@@ -177,11 +178,11 @@ def index_command(
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Indexing cancelled by user[/yellow]")
-        raise typer.Exit(130)  # noqa: B904
+        exit_with_code(130)
     except Exception as e:
         logger.exception("Indexing failed")
         console.print(f"[red]Indexing failed: {e}[/red]")
-        raise typer.Exit(1)  # noqa: B904
+        exit_with_code(1)
 
 
 def _perform_dry_run(

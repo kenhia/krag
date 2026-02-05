@@ -252,6 +252,48 @@
 
 ---
 
+## Phase 5.5: Future Enhancements & Architecture Updates
+
+**Purpose**: Spec updates and architectural improvements identified during MVP development
+
+**Note**: These tasks update specifications first, then implement the changes described
+
+### Configuration System Modernization
+
+- [ ] T164 [P] Update spec.md, plan.md, and data-model.md to document XDG Base Directory compliance (~/.config/krag for config, ~/.cache/krag for cache, ~/.local/state/krag for logs and state)
+- [ ] T165 Implement XDG directory structure: Update Configuration model default paths
+- [ ] T166 Implement migration logic to move existing ~/.krag data to new locations
+- [ ] T167 Add --legacy-paths flag to support old ~/.krag structure if needed
+- [ ] T168 Update all documentation (README.md, quickstart.md) with new paths
+
+### Logging Improvements
+
+- [ ] T169 [P] Update spec.md to document logging behavior: file-based by default, --show-logs flag for console output
+- [ ] T170 Implement file-based logging with rotation (using Python's RotatingFileHandler)
+- [ ] T171 Add --show-logs flag to all CLI commands
+- [ ] T172 Suppress third-party library logs (httpx, sentence-transformers) at INFO level by default
+- [ ] T173 Keep ERROR/CRITICAL messages on console regardless of --show-logs setting
+
+### Configuration Format Enhancement
+
+- [ ] T174 [P] Update spec.md and plan.md to document TOML as primary configuration format
+- [ ] T175 Add tomli/tomllib support for reading TOML config files
+- [ ] T176 Implement config file format detection (support both .yaml and .toml)
+- [ ] T177 Update init command to create config.toml by default (with --yaml flag for legacy)
+- [ ] T178 Add migration utility: config migrate command to convert YAML → TOML
+
+### Plugin Architecture (Future Work)
+
+- [ ] T179 [P] Create spec.md for plugin system (new spec: 002-plugin-architecture)
+- [ ] T180 [P] Document plugin interfaces for: file type handlers, chunking strategies, embedding models, vector stores
+- [ ] T181 [P] Design plugin discovery mechanism (entry points or explicit registration)
+- [ ] T182 [P] Define plugin API contracts and lifecycle hooks
+- [ ] T183 [P] Create example plugin implementation showing all hooks
+
+**Checkpoint**: Specifications updated, implementation roadmap clear for post-MVP enhancements
+
+---
+
 ## Phase 6: User Story 4 - Configure Indexing Behavior (Priority: P4)
 
 **Goal**: Provide configuration flexibility for directories, file types, and chunking parameters. Users can tailor system to their specific needs.

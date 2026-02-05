@@ -46,7 +46,7 @@ pip install -e ".[dev]"
 krag init
 
 # Edit configuration to add your directories
-# Default location: ~/.krag/config.toml
+# Default location: ~/.config/krag/config.toml
 ```
 
 ### Index Your Files
@@ -114,7 +114,7 @@ uv run mypy src/
 
 ## Configuration
 
-Configuration file location: `~/.krag/config.toml`
+Configuration file location: `~/.config/krag/config.toml`
 
 Key settings:
 - `directory_paths`: Directories to index

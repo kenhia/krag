@@ -52,6 +52,10 @@ class Configuration(BaseSettings):
             ".go",
             ".rb",
             ".php",
+            ".lua",
+            ".ps1",
+            ".psm1",
+            ".psd1",
             ".json",
             ".yaml",
             ".yml",
@@ -81,7 +85,7 @@ class Configuration(BaseSettings):
 
     # Vector Store
     vector_store_path: Path = Field(
-        default=Path.home() / ".krag" / "storage", description="Path to Qdrant storage"
+        default=Path.home() / ".config" / "krag" / "storage", description="Path to Qdrant storage"
     )
     collection_name: str = Field(default="krag_embeddings", description="Collection name")
     distance_metric: str = Field(default="cosine", description="Distance metric")
@@ -91,7 +95,7 @@ class Configuration(BaseSettings):
 
     # LLM
     llm_model_path: Path | None = Field(
-        default=Path.home() / ".krag" / "models" / "model.gguf",
+        default=Path.home() / ".config" / "krag" / "models" / "model.gguf",
         description="Path to GGUF model file",
     )
     llm_context_size: int = Field(default=2048, gt=0, description="Context window size")
