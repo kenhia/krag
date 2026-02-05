@@ -17,6 +17,7 @@ from rich.table import Table
 
 from krag.cli.utils import exit_with_code
 from krag.config.settings import ConfigManager
+from krag.models.indexing_job import IndexingJob
 from krag.orchestration.indexer import IndexingOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -230,11 +231,11 @@ def _perform_dry_run(
     console.print(f"\n[cyan]Total:[/cyan] {len(files)} files")
 
 
-def _display_results(result: dict, full: bool) -> None:
+def _display_results(result: IndexingJob, full: bool) -> None:
     """Display indexing results summary.
 
     Args:
-        result: Result dictionary from orchestrator
+        result: IndexingJob from orchestrator
         full: Whether this was a full reindex
     """
     console.print("\n" + "=" * 60)
@@ -246,17 +247,20 @@ def _display_results(result: dict, full: bool) -> None:
     table.add_column("Metric", style="cyan")
     table.add_column("Value", justify="right", style="green")
 
-    table.add_row("Files discovered", str(result.get("files_discovered", 0)))
-    table.add_row("Files processed", str(result.get("files_processed", 0)))
+    table.add_row("Files discovered", str(result.files_discovered))
+    table.add_row("Files processed", str(result.files_processed))
 
-    if not full and "files_skipped" in result:
-        table.add_row("Files skipped", str(result["files_skipped"]))
+    if not full:
+        # Show incremental stats
+        table.add_row("Files added", str(result.files_added))
+        table.add_row("Files modified", str(result.files_modified))
+        table.add_row("Files deleted", str(result.files_deleted))
+        table.add_row("Files skipped", str(result.files_skipped))
 
-    table.add_row("Chunks created", str(result.get("chunks_created", 0)))
-    table.add_row("Embeddings generated", str(result.get("embeddings_generated", 0)))
-    table.add_row("Vectors stored", str(result.get("vectors_stored", 0)))
+    table.add_row("Chunks generated", str(result.chunks_generated))
+    table.add_row("Embeddings created", str(result.embeddings_created))
 
-    error_count = result.get("errors", 0)
+    error_count = result.files_errored
     if error_count > 0:
         table.add_row("Errors", f"[red]{error_count}[/red]")
 
@@ -266,14 +270,12 @@ def _display_results(result: dict, full: bool) -> None:
     if error_count > 0:
         console.print(f"\n[yellow]Encountered {error_count} errors:[/yellow]\n")
 
-        error_details = result.get("error_details", [])
-        for i, error in enumerate(error_details[:10], 1):  # Show first 10
-            file_path = error.get("file", error.get("directory", "unknown"))
-            stage = error.get("stage", "unknown")
-            error_msg = error.get("error", "unknown error")
-            console.print(f"  {i}. [red]{file_path}[/red] ({stage}): {error_msg}")
+        for i, error in enumerate(result.error_summary[:10], 1):  # Show first 10
+            console.print(
+                f"  {i}. [red]{error.file_path}[/red] ({error.error_type}): {error.error_message}"
+            )
 
-        if len(error_details) > 10:
-            console.print(f"\n  ... and {len(error_details) - 10} more errors")
+        if len(result.error_summary) > 10:
+            console.print(f"\n  ... and {len(result.error_summary) - 10} more errors")
 
     console.print()

@@ -3,7 +3,7 @@
 Tests focus on change detection, file categorization, and hash-based comparison.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -84,7 +84,7 @@ class TestChangeDetector:
         previous_meta = FileMetadata(
             file_path=file,
             file_size=100,
-            modification_time=datetime.now(),
+            modification_time=datetime.now(UTC),
             file_type="txt",
             status=IndexingStatus.COMPLETED,
             content_hash="abc123",
@@ -102,7 +102,7 @@ class TestChangeDetector:
         file.write_text("Original content")
 
         # Create previous metadata with old timestamp
-        old_time = datetime.now() - timedelta(hours=1)
+        old_time = datetime.now(UTC) - timedelta(hours=1)
         previous_meta = FileMetadata(
             file_path=file,
             file_size=100,
@@ -131,7 +131,7 @@ class TestChangeDetector:
 
         # Get current file stats
         stat = file.stat()
-        current_time = datetime.fromtimestamp(stat.st_mtime)
+        current_time = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
         current_hash = compute_file_hash(file)
 
         # Create previous metadata matching current state
@@ -163,7 +163,7 @@ class TestChangeDetector:
         unchanged_file.write_text("Unchanged")
 
         # Create previous metadata
-        old_time = datetime.now() - timedelta(hours=1)
+        old_time = datetime.now(UTC) - timedelta(hours=1)
         previous_metadata = {
             str(modified_file): FileMetadata(
                 file_path=modified_file,
@@ -176,7 +176,7 @@ class TestChangeDetector:
             str(unchanged_file): FileMetadata(
                 file_path=unchanged_file,
                 file_size=9,
-                modification_time=datetime.fromtimestamp(unchanged_file.stat().st_mtime),
+                modification_time=datetime.fromtimestamp(unchanged_file.stat().st_mtime, tz=UTC),
                 file_type="txt",
                 status=IndexingStatus.COMPLETED,
                 content_hash=compute_file_hash(unchanged_file),

@@ -151,6 +151,29 @@ class QdrantVectorStore(VectorStore):
 
         logger.info(f"Deleted {len(ids)} vectors from {self.collection_name}")
 
+    def delete_by_filter(self, filter_dict: dict[str, Any]) -> None:
+        """Delete vectors matching the given filter.
+
+        Args:
+            filter_dict: Dictionary of filter conditions (e.g., {"file_path": "/path/to/file"})
+        """
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        # Build filter conditions
+        conditions = []
+        for key, value in filter_dict.items():
+            conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
+
+        if not conditions:
+            logger.warning("No filter conditions provided")
+            return
+
+        # Delete using filter
+        filter_obj = Filter(must=conditions)
+        self.client.delete(collection_name=self.collection_name, points_selector=filter_obj)
+
+        logger.info(f"Deleted vectors matching filter {filter_dict} from {self.collection_name}")
+
     def get_stats(self) -> dict[str, Any]:
         """Get statistics about the collection.
 

@@ -45,8 +45,15 @@ class IndexingJob(BaseModel):
     end_time: datetime | None = Field(default=None, description="When job completed")
     files_discovered: int = Field(default=0, ge=0, description="Total files found")
     files_processed: int = Field(default=0, ge=0, description="Files successfully indexed")
-    files_skipped: int = Field(default=0, ge=0, description="Files skipped")
+    files_skipped: int = Field(default=0, ge=0, description="Files skipped (incremental only)")
     files_errored: int = Field(default=0, ge=0, description="Files with errors")
+    files_added: int = Field(default=0, ge=0, description="New files added (incremental only)")
+    files_modified: int = Field(
+        default=0, ge=0, description="Modified files re-indexed (incremental only)"
+    )
+    files_deleted: int = Field(
+        default=0, ge=0, description="Deleted files removed (incremental only)"
+    )
     chunks_generated: int = Field(default=0, ge=0, description="Total chunks created")
     embeddings_created: int = Field(default=0, ge=0, description="Total embeddings generated")
     error_summary: list[FileError] = Field(

@@ -3,7 +3,7 @@
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
@@ -97,7 +97,7 @@ class ChangeDetector:
 
         # Case 3: File exists with previous metadata -> check for changes
         current_stat = file_path.stat()
-        current_mtime = datetime.fromtimestamp(current_stat.st_mtime)
+        current_mtime = datetime.fromtimestamp(current_stat.st_mtime, tz=UTC)
 
         # Quick check: if mtime hasn't changed, file is likely unchanged
         # Use a small tolerance for filesystem timestamp precision

@@ -223,18 +223,18 @@
 
 ### Tests for User Story 3 (TDD - WRITE FIRST, VERIFY THEY FAIL)
 
-- [ ] T104 [P] [US3] Write integration test for incremental update in tests/integration/test_incremental_update.py
-- [ ] T105 [P] [US3] Write unit tests for incremental logic in tests/unit/test_incremental.py
+- [X] T104 [P] [US3] Write integration test for incremental update in tests/integration/test_incremental_update.py
+- [X] T105 [P] [US3] Write unit tests for incremental logic in tests/unit/test_incremental.py
 
 ### Implementation for User Story 3
 
 **Incremental Indexing Logic**
 
-- [ ] T106 [US3] Implement index_incremental method in src/krag/orchestration/indexer.py
-- [ ] T107 [US3] Implement change detection logic in src/krag/orchestration/incremental.py using modification time and content hash
-- [ ] T108 [US3] Add file categorization (new, modified, deleted, unchanged) in incremental.py
-- [ ] T109 [US3] Implement deletion handling (remove vectors from store)
-- [ ] T110 [US3] Add logging for incremental operations (showing files categorized)
+- [X] T106 [US3] Implement index_incremental method in src/krag/orchestration/indexer.py
+- [X] T107 [US3] Implement change detection logic in src/krag/orchestration/incremental.py using modification time and content hash
+- [X] T108 [US3] Add file categorization (new, modified, deleted, unchanged) in incremental.py
+- [X] T109 [US3] Implement deletion handling (remove vectors from store)
+- [X] T110 [US3] Add logging for incremental operations (showing files categorized)
 
 **CLI Integration**
 

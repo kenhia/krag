@@ -103,15 +103,9 @@ class TestIncrementalIndexing:
         job1 = orchestrator.index_full()
         assert job1.files_processed == 3
 
-        # Get initial vector count
-        from krag.storage.qdrant_impl import QdrantVectorStore
-
-        vector_store = QdrantVectorStore(
-            storage_path=orchestrator.config.vector_store_path,
-            collection_name=orchestrator.config.collection_name,
-        )
-        initial_stats = vector_store.get_stats()
-        initial_count = initial_stats["vector_count"]
+        # Get initial vector count from orchestrator's vector store
+        initial_stats = orchestrator.vector_store.get_stats()
+        initial_count = initial_stats["vectors_count"]
         assert initial_count > 0
 
         # Delete one file
@@ -122,8 +116,8 @@ class TestIncrementalIndexing:
         assert job2.files_discovered == 2  # Only 2 files remain
 
         # Verify vector store updated (vectors for deleted file removed)
-        updated_stats = vector_store.get_stats()
-        updated_count = updated_stats["vector_count"]
+        updated_stats = orchestrator.vector_store.get_stats()
+        updated_count = updated_stats["vectors_count"]
         assert updated_count < initial_count, "Deleted file vectors should be removed"
 
     def test_unchanged_files_are_skipped(

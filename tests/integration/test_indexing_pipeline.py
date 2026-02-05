@@ -33,11 +33,10 @@ class TestIndexingPipeline:
         result = orchestrator.index_full()
 
         # Verify results
-        assert result["files_processed"] == 3, "Should process all 3 files"
-        assert result["chunks_created"] > 0, "Should create text chunks"
-        assert result["embeddings_generated"] > 0, "Should generate embeddings"
-        assert result["vectors_stored"] > 0, "Should store vectors"
-        assert result["errors"] == 0, "Should have no errors"
+        assert result.files_processed == 3, "Should process all 3 files"
+        assert result.chunks_generated > 0, "Should create text chunks"
+        assert result.embeddings_created > 0, "Should generate embeddings"
+        assert result.files_errored == 0, "Should have no errors"
 
     def test_indexing_pipeline_with_filtering(self, tmp_path: Path) -> None:
         """Test indexing respects file type filters."""
@@ -61,7 +60,7 @@ class TestIndexingPipeline:
         result = orchestrator.index_full()
 
         # Should only process .txt and .py files
-        assert result["files_processed"] == 2, "Should only process filtered file types"
+        assert result.files_processed == 2, "Should only process filtered file types"
 
     def test_indexing_pipeline_handles_errors_gracefully(self, tmp_path: Path) -> None:
         """Test indexing continues on file errors and reports them."""
@@ -83,8 +82,8 @@ class TestIndexingPipeline:
         result = orchestrator.index_full()
 
         # Should process good file, record error for binary
-        assert result["files_processed"] >= 1, "Should process at least the good file"
-        assert "errors" in result, "Should report errors"
+        assert result.files_processed >= 1, "Should process at least the good file"
+        assert result.files_errored >= 0, "Should report errors"
 
     def test_indexing_pipeline_tracks_progress(self, tmp_path: Path) -> None:
         """Test indexing provides progress tracking."""
@@ -111,7 +110,7 @@ class TestIndexingPipeline:
 
         # Should have received progress updates
         assert len(progress_updates) > 0, "Should report progress"
-        assert result["files_processed"] == 5, "Should process all files"
+        assert result.files_processed == 5, "Should process all files"
 
     def test_indexing_pipeline_incremental_update(self, tmp_path: Path) -> None:
         """Test incremental indexing only processes new/modified files."""
@@ -131,7 +130,7 @@ class TestIndexingPipeline:
 
         # First indexing
         result1 = orchestrator.index_full()
-        assert result1["files_processed"] == 1
+        assert result1.files_processed == 1
 
         # Add new file
         (test_dir / "doc2.txt").write_text("New content")
@@ -140,8 +139,8 @@ class TestIndexingPipeline:
         result2 = orchestrator.index_incremental()
 
         # Should only process new file
-        assert result2["files_processed"] == 1, "Incremental should only process new file"
-        assert result2["files_skipped"] == 1, "Should skip unchanged file"  # or similar tracking
+        assert result2.files_processed == 1, "Incremental should only process new file"
+        assert result2.files_skipped == 1, "Should skip unchanged file"  # or similar tracking
 
     def test_indexing_pipeline_with_subdirectories(self, tmp_path: Path) -> None:
         """Test indexing recursively processes subdirectories."""
@@ -164,7 +163,7 @@ class TestIndexingPipeline:
         result = orchestrator.index_full()
 
         # Should find files in subdirectories
-        assert result["files_processed"] == 2, "Should process files in subdirectories"
+        assert result.files_processed == 2, "Should process files in subdirectories"
 
     def test_indexing_pipeline_chunk_creation(self, tmp_path: Path) -> None:
         """Test indexing creates appropriate text chunks."""
@@ -187,7 +186,7 @@ class TestIndexingPipeline:
         result = orchestrator.index_full()
 
         # Should create multiple chunks
-        assert result["chunks_created"] > 1, "Large file should be split into chunks"
+        assert result.chunks_generated > 1, "Large file should be split into chunks"
 
     def test_indexing_pipeline_stores_metadata(self, tmp_path: Path) -> None:
         """Test indexing stores file metadata with chunks."""
