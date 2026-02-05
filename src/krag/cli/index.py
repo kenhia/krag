@@ -36,9 +36,9 @@ def index_command(
         resolve_path=True,
     ),
     full: bool = typer.Option(
-        True,
+        False,
         "--full/--incremental",
-        help="Full reindex or incremental update",
+        help="Full reindex or incremental update (default: incremental)",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -68,16 +68,18 @@ def index_command(
     Scans specified directories for supported file types, extracts text,
     generates embeddings, and stores vectors for later retrieval.
 
+    By default, performs incremental indexing (only processes new/modified files).
+
     Examples:
 
-        # Index using configuration
+        # Incremental index using configuration (default)
         krag index
+
+        # Full reindex from scratch
+        krag index --full
 
         # Index specific directories
         krag index --dir ~/Documents --dir ~/Code
-
-        # Incremental update
-        krag index --incremental
 
         # Dry run to see what would be indexed
         krag index --dry-run

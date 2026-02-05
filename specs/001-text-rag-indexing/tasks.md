@@ -238,9 +238,9 @@
 
 **CLI Integration**
 
-- [ ] T111 [US3] Add --incremental option to index command (make it default behavior)
-- [ ] T112 [US3] Update index command to use index_incremental by default
-- [ ] T113 [US3] Add statistics display for incremental runs (new, modified, deleted, unchanged counts)
+- [X] T111 [US3] Add --incremental option to index command (make it default behavior)
+- [X] T112 [US3] Update index command to use index_incremental by default
+- [X] T113 [US3] Add statistics display for incremental runs (new, modified, deleted, unchanged counts)
 
 **Integration & Validation**
 
