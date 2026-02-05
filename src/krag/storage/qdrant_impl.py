@@ -184,6 +184,12 @@ class QdrantVectorStore(VectorStore):
         self.client.delete_collection(self.collection_name)
         self._ensure_collection()
 
+    def close(self) -> None:
+        """Close the Qdrant client and release resources."""
+        if hasattr(self, "client") and self.client:
+            logger.debug(f"Closing Qdrant client for {self.collection_name}")
+            self.client.close()
+
     @staticmethod
     def _id_to_int(id_str: str) -> int:
         """Convert string ID to integer hash for Qdrant.

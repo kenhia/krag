@@ -207,6 +207,9 @@ class TestIndexingPipeline:
 
         orchestrator.index_full()
 
+        # Close the orchestrator to release the vector store lock
+        orchestrator.close()
+
         # Verify metadata is stored
         # Access vector store to check
         vector_store = QdrantVectorStore(
