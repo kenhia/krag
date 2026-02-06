@@ -190,7 +190,7 @@ Represents system configuration settings.
 - `chunk_overlap: int` - Overlap between chunks in tokens
 
 **Vector Store**:
-- `vector_store_path: Path` - Path to Qdrant storage
+- `vector_store_path: Path` - Path to Qdrant storage (default: `~/.cache/krag/storage` or `$XDG_CACHE_HOME/krag/storage`)
 - `collection_name: str` - Collection name in vector store
 - `distance_metric: str` - Distance metric ("cosine", "dot", "euclidean")
 
@@ -198,10 +198,17 @@ Represents system configuration settings.
 - `top_k: int` - Number of results to retrieve
 
 **LLM**:
-- `llm_model_path: Path` - Path to GGUF model file
+- `llm_model_path: Path` - Path to GGUF model file (default: `~/.cache/krag/models/model.gguf` or `$XDG_CACHE_HOME/krag/models/model.gguf`)
 - `llm_context_size: int` - Context window size (n_ctx)
 - `llm_num_threads: int` - Number of threads for inference
 - `llm_temperature: float` - Temperature for generation
+
+**XDG Base Directory Compliance**:
+- Configuration files stored in `~/.config/krag/` (or `$XDG_CONFIG_HOME/krag/`)
+- Cache data (models, temporary files) stored in `~/.cache/krag/` (or `$XDG_CACHE_HOME/krag/`)
+- State data (logs, indexed file metadata) stored in `~/.local/state/krag/` (or `$XDG_STATE_HOME/krag/`)
+- Legacy `~/.krag/` structure automatically migrated on first run
+- `--legacy-paths` flag available for backward compatibility
 
 **Validation Rules**:
 - All paths must be absolute

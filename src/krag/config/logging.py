@@ -5,6 +5,8 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from krag.config.xdg import get_krag_state_dir
+
 
 class SafeStreamHandler(logging.StreamHandler):
     """StreamHandler that ignores I/O errors during shutdown.
@@ -35,13 +37,13 @@ def setup_logging(
     ERROR and CRITICAL messages always appear on console regardless of settings.
 
     Args:
-        log_dir: Directory for log files (defaults to ~/.krag/logs)
+        log_dir: Directory for log files (defaults to XDG_STATE_HOME/krag/logs)
         show_logs: Enable console logging for INFO+ application messages
         verbose: Enable DEBUG level logging (applies to both file and console)
     """
     # Determine log directory
     if log_dir is None:
-        log_dir = Path.home() / ".krag" / "logs"
+        log_dir = get_krag_state_dir() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = log_dir / "krag.log"

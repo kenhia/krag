@@ -268,11 +268,11 @@
 
 ### Configuration System Modernization
 
-- [ ] T164 [P] Update spec.md, plan.md, and data-model.md to document XDG Base Directory compliance (~/.config/krag for config, ~/.cache/krag for cache, ~/.local/state/krag for logs and state)
-- [ ] T165 Implement XDG directory structure: Update Configuration model default paths
-- [ ] T166 Implement migration logic to move existing ~/.krag data to new locations
-- [ ] T167 Add --legacy-paths flag to support old ~/.krag structure if needed
-- [ ] T168 Update all documentation (README.md, quickstart.md) with new paths
+- [X] T164 [P] Update spec.md, plan.md, and data-model.md to document XDG Base Directory compliance (~/.config/krag for config, ~/.cache/krag for cache, ~/.local/state/krag for logs and state)
+- [X] T165 Implement XDG directory structure: Update Configuration model default paths
+- [X] T166 Implement migration logic to move existing ~/.krag data to new locations
+- [X] T167 Add --legacy-paths flag to support old ~/.krag structure if needed
+- [X] T168 Update all documentation (README.md, quickstart.md) with new paths
 
 ### Logging Improvements
 

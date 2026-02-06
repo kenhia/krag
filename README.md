@@ -42,12 +42,20 @@ pip install -e ".[dev]"
 ### Initialize
 
 ```bash
-# Create configuration and storage
+# Create configuration and storage (uses XDG directories)
 krag init
 
 # Edit configuration to add your directories
 # Default location: ~/.config/krag/config.toml
+# Or $XDG_CONFIG_HOME/krag/config.toml
 ```
+
+**Directory Structure (XDG Base Directory Compliant)**:
+- Configuration: `~/.config/krag/` (or `$XDG_CONFIG_HOME/krag/`)
+- Cache (models, vector store): `~/.cache/krag/` (or `$XDG_CACHE_HOME/krag/`)
+- State (logs, metadata): `~/.local/state/krag/` (or `$XDG_STATE_HOME/krag/`)
+
+**Automatic Migration**: Existing `~/.krag/` installations are automatically migrated to XDG directories on first run. Use `--legacy-paths` flag to revert to old structure if needed.
 
 ### Index Your Files
 
@@ -114,7 +122,12 @@ uv run mypy src/
 
 ## Configuration
 
-Configuration file location: `~/.config/krag/config.toml`
+Configuration file location: `~/.config/krag/config.toml` (or `$XDG_CONFIG_HOME/krag/config.toml`)
+
+**XDG Base Directory Compliance**:
+- Config files: `~/.config/krag/`
+- Cache data (models, vector store): `~/.cache/krag/`
+- State data (logs, indexed file metadata): `~/.local/state/krag/`
 
 Key settings:
 - `directory_paths`: Directories to index

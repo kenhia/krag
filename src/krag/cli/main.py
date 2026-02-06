@@ -13,6 +13,7 @@ from krag.cli.query import query_command
 from krag.cli.utils import exit_with_code
 from krag.config.logging import setup_logging
 from krag.config.settings import ConfigManager
+from krag.config.xdg import get_krag_config_dir, migrate_from_legacy, should_migrate_from_legacy
 
 # Create Typer app
 app = typer.Typer(
@@ -42,8 +43,25 @@ def main_callback(
         "--show-logs",
         help="Show application logs on console (INFO level)",
     ),
+    legacy_paths: bool = typer.Option(
+        False,
+        "--legacy-paths",
+        help="Use legacy ~/.krag directory structure instead of XDG paths",
+    ),
 ) -> None:
     """Configure global options for krag CLI."""
+    # Check for automatic migration from legacy paths
+    if not legacy_paths and should_migrate_from_legacy():
+        console.print("[yellow]Migrating from legacy ~/.krag to XDG directories...[/yellow]")
+        migrations = migrate_from_legacy()
+        if migrations:
+            console.print("[green]Migration complete:[/green]")
+            for old, new in migrations.items():
+                console.print(f"  {old} → {new}")
+            console.print(
+                "\n[cyan]Tip:[/cyan] Use --legacy-paths flag if you need to revert to old structure\n"
+            )
+
     setup_logging(show_logs=show_logs, verbose=verbose)
 
 
@@ -59,7 +77,7 @@ def init(
         None,
         "--config",
         "-c",
-        help="Configuration file path (default: ~/.krag/config.toml)",
+        help="Configuration file path (default: XDG_CONFIG_HOME/krag/config.toml)",
     ),
     yaml: bool = typer.Option(
         False,
@@ -70,7 +88,8 @@ def init(
     """Initialize configuration for krag.
 
     Creates a default configuration file with sensible defaults.
-    By default, creates TOML format (config.toml). Use --yaml for legacy YAML format.
+    By default, creates TOML format in XDG_CONFIG_HOME/krag/config.toml
+    (typically ~/.config/krag/config.toml). Use --yaml for legacy YAML format.
     Edit the file to customize directories, models, and other settings.
 
     Examples:
@@ -91,10 +110,11 @@ def init(
 
     # Determine default config path if not specified
     if config_path is None:
+        config_dir = get_krag_config_dir()
         if yaml:
-            config_path = Path.home() / ".krag" / "config.yaml"
+            config_path = config_dir / "config.yaml"
         else:
-            config_path = Path.home() / ".krag" / "config.toml"
+            config_path = config_dir / "config.toml"
 
     # Validate extension matches format
     suffix = config_path.suffix.lower()

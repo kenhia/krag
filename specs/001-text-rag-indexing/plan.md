@@ -19,11 +19,13 @@ Implement Phase 1 of a personal multimodal RAG system that indexes text-based co
 - **LLM Framework**: llama-cpp-python (efficient local LLM inference)
 - **Chunking**: llama-index text splitters (semantic-aware text chunking)
 - **Configuration**: TOML (primary format via tomllib/tomli), YAML (legacy support via PyYAML)
+- **Directory Structure**: XDG Base Directory compliant (config: `~/.config/krag/`, cache: `~/.cache/krag/`, state: `~/.local/state/krag/`)
 - **Package Management**: uv (dependency and environment management)
 - **Code Quality**: ruff (formatting and linting), pytest (testing)
 
 **Storage**: Qdrant embedded vector database + filesystem for file metadata tracking
 **Configuration Format**: TOML (config.toml) as primary, YAML (config.yaml) for backward compatibility
+**Configuration Location**: `~/.config/krag/config.toml` (XDG_CONFIG_HOME), with automatic migration from legacy `~/.krag/`
 **Testing**: pytest with fixtures for embeddings, mock vector stores, and LLM responses
 **Target Platform**: Linux/macOS/Windows desktop with local and network-mounted storage
 **Project Type**: Single project (CLI application with library modules)

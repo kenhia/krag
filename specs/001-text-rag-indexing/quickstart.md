@@ -196,9 +196,14 @@ class KragConfig(BaseSettings):
     
     model_config = SettingsConfigDict(
         env_prefix="KRAG_",
-        toml_file=Path.home() / ".krag" / "config.toml"
+        toml_file=Path.home() / ".config" / "krag" / "config.toml"  # XDG_CONFIG_HOME
     )
 ```
+
+**Note**: The system follows XDG Base Directory specification:
+- Config: `~/.config/krag/` (or `$XDG_CONFIG_HOME/krag/`)
+- Cache: `~/.cache/krag/` (or `$XDG_CACHE_HOME/krag/`)
+- State: `~/.local/state/krag/` (or `$XDG_STATE_HOME/krag/`)
 
 ### 5. Implement Core Modules (TDD)
 
@@ -341,11 +346,11 @@ uv run pytest tests/integration/ -v
 ### First-Time Setup
 
 ```bash
-# 1. Initialize configuration
+# 1. Initialize configuration (creates XDG directories)
 uv run krag init
 
 # 2. Edit configuration file
-vim ~/.krag/config.toml
+vim ~/.config/krag/config.toml  # Or $XDG_CONFIG_HOME/krag/config.toml
 
 # Add your directories:
 [directories]

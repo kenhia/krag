@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from krag.config.xdg import get_krag_cache_dir, get_krag_config_dir, get_krag_state_dir
+
 # Default directory paths (user should customize)
 DEFAULT_DIRECTORIES = [
     Path.home() / "Documents",
@@ -63,3 +65,11 @@ DEFAULT_TOP_K = 5
 DEFAULT_LLM_CONTEXT_SIZE = 2048
 DEFAULT_LLM_NUM_THREADS = 4
 DEFAULT_LLM_TEMPERATURE = 0.7
+
+# XDG Base Directory paths
+DEFAULT_CONFIG_DIR = get_krag_config_dir()
+DEFAULT_CACHE_DIR = get_krag_cache_dir()
+DEFAULT_STATE_DIR = get_krag_state_dir()
+DEFAULT_VECTOR_STORE_PATH = DEFAULT_CACHE_DIR / "storage"
+DEFAULT_LLM_MODEL_PATH = DEFAULT_CACHE_DIR / "models" / "model.gguf"
+DEFAULT_LOG_DIR = DEFAULT_STATE_DIR / "logs"

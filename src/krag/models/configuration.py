@@ -6,6 +6,26 @@ from pydantic import ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
 
 
+def _get_default_vector_store_path() -> Path:
+    """Get default vector store path using XDG cache directory.
+
+    Imports lazily to avoid circular dependency.
+    """
+    from krag.config.xdg import get_krag_cache_dir
+
+    return get_krag_cache_dir() / "storage"
+
+
+def _get_default_llm_model_path() -> Path:
+    """Get default LLM model path using XDG cache directory.
+
+    Imports lazily to avoid circular dependency.
+    """
+    from krag.config.xdg import get_krag_cache_dir
+
+    return get_krag_cache_dir() / "models" / "model.gguf"
+
+
 class Configuration(BaseSettings):
     model_config = ConfigDict(env_prefix="KRAG_", env_file=".env", env_file_encoding="utf-8")
     """System configuration settings.
@@ -85,7 +105,8 @@ class Configuration(BaseSettings):
 
     # Vector Store
     vector_store_path: Path = Field(
-        default=Path.home() / ".config" / "krag" / "storage", description="Path to Qdrant storage"
+        default_factory=_get_default_vector_store_path,
+        description="Path to Qdrant storage (XDG_CACHE_HOME/krag/storage)",
     )
     collection_name: str = Field(default="krag_embeddings", description="Collection name")
     distance_metric: str = Field(default="cosine", description="Distance metric")
@@ -95,8 +116,8 @@ class Configuration(BaseSettings):
 
     # LLM
     llm_model_path: Path | None = Field(
-        default=Path.home() / ".config" / "krag" / "models" / "model.gguf",
-        description="Path to GGUF model file",
+        default_factory=_get_default_llm_model_path,
+        description="Path to GGUF model file (XDG_CACHE_HOME/krag/models/model.gguf)",
     )
     llm_context_size: int = Field(default=2048, gt=0, description="Context window size")
     llm_num_threads: int = Field(default=4, gt=0, description="Number of threads for inference")

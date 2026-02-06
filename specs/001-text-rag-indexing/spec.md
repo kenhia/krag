@@ -153,6 +153,15 @@ As a user, I want to configure which directories to include/exclude, which file 
 - **FR-045**: System MUST automatically detect configuration file format based on file extension
 - **FR-046**: System MUST provide a migration utility to convert YAML configuration to TOML format
 
+**Directory Structure**
+
+- **FR-047**: System MUST follow XDG Base Directory specification for file organization
+- **FR-048**: System MUST store configuration files in `~/.config/krag/` (or `$XDG_CONFIG_HOME/krag/`)
+- **FR-049**: System MUST store cache data (downloaded models, temporary files) in `~/.cache/krag/` (or `$XDG_CACHE_HOME/krag/`)
+- **FR-050**: System MUST store state data (logs, indexed file metadata) in `~/.local/state/krag/` (or `$XDG_STATE_HOME/krag/`)
+- **FR-051**: System MUST provide automatic migration from legacy `~/.krag/` structure to XDG-compliant paths on first run
+- **FR-052**: System MUST support `--legacy-paths` flag to use old `~/.krag/` structure for backward compatibility
+
 **Logging & Diagnostics**
 
 - **FR-038**: System MUST log operational events (indexing progress, errors, configuration) to rotating log files by default
