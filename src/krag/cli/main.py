@@ -1,7 +1,6 @@
 """Main CLI application using Typer."""
 
 import json
-import logging
 import subprocess
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from rich.table import Table
 from krag.cli.index import index_command
 from krag.cli.query import query_command
 from krag.cli.utils import exit_with_code
+from krag.config.logging import setup_logging
 from krag.config.settings import ConfigManager
 
 # Create Typer app
@@ -29,30 +29,22 @@ app.command(name="index")(index_command)
 console = Console()
 
 
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging for CLI.
-
-    Args:
-        verbose: Enable debug logging
-    """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-
 @app.callback()
 def main_callback(
     verbose: bool = typer.Option(
         False,
         "--verbose",
         "-v",
-        help="Enable verbose logging",
+        help="Enable verbose (DEBUG level) logging",
+    ),
+    show_logs: bool = typer.Option(
+        False,
+        "--show-logs",
+        help="Show application logs on console (INFO level)",
     ),
 ) -> None:
     """Configure global options for krag CLI."""
-    setup_logging(verbose)
+    setup_logging(show_logs=show_logs, verbose=verbose)
 
 
 @app.command()

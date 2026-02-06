@@ -258,6 +258,14 @@
 
 **Note**: These tasks update specifications first, then implement the changes described
 
+### Incremental Indexing State Persistence (Critical Fix)
+
+- [X] T163 [P] Update spec.md and data-model.md to document metadata persistence strategy (JSON file alongside vector store)
+- [X] T163a Implement FileMetadata persistence in IndexingOrchestrator (save/load indexed_files state)
+- [X] T163b Update index commands to load previous state on startup
+- [X] T163c Write integration test verifying incremental works across separate CLI invocations
+- [X] T163d Manual test: Run index, make changes, run index again in new process, verify incremental detection
+
 ### Configuration System Modernization
 
 - [ ] T164 [P] Update spec.md, plan.md, and data-model.md to document XDG Base Directory compliance (~/.config/krag for config, ~/.cache/krag for cache, ~/.local/state/krag for logs and state)
@@ -268,11 +276,11 @@
 
 ### Logging Improvements
 
-- [ ] T169 [P] Update spec.md to document logging behavior: file-based by default, --show-logs flag for console output
-- [ ] T170 Implement file-based logging with rotation (using Python's RotatingFileHandler)
-- [ ] T171 Add --show-logs flag to all CLI commands
-- [ ] T172 Suppress third-party library logs (httpx, sentence-transformers) at INFO level by default
-- [ ] T173 Keep ERROR/CRITICAL messages on console regardless of --show-logs setting
+- [X] T169 [P] Update spec.md to document logging behavior: file-based by default, --show-logs flag for console output
+- [X] T170 Implement file-based logging with rotation (using Python's RotatingFileHandler)
+- [X] T171 Add --show-logs flag to all CLI commands
+- [X] T172 Suppress third-party library logs (httpx, sentence-transformers) at INFO level by default
+- [X] T173 Keep ERROR/CRITICAL messages on console regardless of --show-logs setting
 
 ### Configuration Format Enhancement
 

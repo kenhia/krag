@@ -141,12 +141,21 @@ As a user, I want to configure which directories to include/exclude, which file 
 - **FR-028**: System MUST support incremental re-indexing that processes only new or modified files
 - **FR-029**: System MUST remove embeddings for files that have been deleted from storage
 - **FR-030**: System MUST update embeddings for files that have been modified since last indexing
+- **FR-031**: System MUST persist FileMetadata state between CLI invocations to enable incremental indexing across separate runs
 
 **Configuration**
 
 - **FR-031**: System MUST support a configuration file for all tunable parameters
 - **FR-032**: Configuration MUST include directory paths, file type filters, embedding model selection, vector store backend, chunking parameters, and LLM selection
 - **FR-033**: System MUST validate configuration on startup and report clear errors for invalid settings
+
+**Logging & Diagnostics**
+
+- **FR-038**: System MUST log operational events (indexing progress, errors, configuration) to rotating log files by default
+- **FR-039**: System MUST support a `--show-logs` flag to display INFO-level application logs on console in addition to file logging
+- **FR-040**: System MUST suppress third-party library logs (httpx, sentence-transformers, qdrant, llama-cpp) at INFO level to reduce console noise
+- **FR-041**: System MUST always display ERROR and CRITICAL level messages on console regardless of `--show-logs` setting
+- **FR-042**: System MUST implement log rotation to prevent unbounded log file growth (max 10MB per file, keep 5 backup files)
 
 **Observability**
 

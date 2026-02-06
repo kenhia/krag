@@ -113,14 +113,17 @@ class IndexingOrchestrator:
         self.vector_store = QdrantVectorStore(
             collection_name=collection_name,
             vector_size=embedding_dim,
-            storage_path=vector_store_path,
+            storage_path=self.vector_store_path,
         )
 
         # Initialize change detector for incremental updates
-        self.change_detector = ChangeDetector(storage_path=vector_store_path or Path("."))
+        self.change_detector = ChangeDetector(storage_path=self.vector_store_path or Path("."))
 
         # Track indexed files for incremental updates (metadata storage)
         self.indexed_files: dict[str, FileMetadata] = {}  # path -> FileMetadata
+
+        # Load previously indexed files from disk
+        self._load_metadata()
 
     def close(self) -> None:
         """Close resources and release locks."""
@@ -138,6 +141,113 @@ class IndexingOrchestrator:
     def __del__(self) -> None:
         """Cleanup on deletion."""
         self.close()
+
+    def _get_metadata_path(self) -> Path:
+        """Get path to metadata persistence file.
+
+        Returns:
+            Path to metadata.json file
+        """
+        storage_path = self.vector_store.storage_path or Path(".")
+        return storage_path / "metadata.json"
+
+    def _load_metadata(self) -> None:
+        """Load previously indexed file metadata from disk.
+
+        Only loads metadata for files within the configured directory paths
+        to avoid cross-contamination between different workspaces.
+        """
+        metadata_path = self._get_metadata_path()
+
+        if not metadata_path.exists():
+            logger.info("No previous metadata found, starting fresh")
+            return
+
+        try:
+            import json
+
+            with open(metadata_path) as f:
+                data = json.load(f)
+
+            # Deserialize FileMetadata objects
+            from datetime import datetime
+
+            loaded_count = 0
+            for item in data:
+                # Convert datetime strings back to datetime objects
+                item["modification_time"] = datetime.fromisoformat(item["modification_time"])
+                if item.get("last_indexed_at"):
+                    item["last_indexed_at"] = datetime.fromisoformat(item["last_indexed_at"])
+
+                # Recreate FileMetadata object
+                file_path = Path(item["file_path"])
+
+                # Only load metadata for files within our configured directories
+                # This prevents cross-contamination between different workspaces
+                # Get directory paths from config or from direct parameters
+                dir_paths = (
+                    self.config.directory_paths
+                    if self.config
+                    else [Path(d) for d in self.directory_paths]
+                )
+
+                is_in_workspace = any(file_path.is_relative_to(dir_path) for dir_path in dir_paths)
+
+                if not is_in_workspace:
+                    continue
+
+                metadata = FileMetadata(
+                    file_path=file_path,
+                    file_size=item["file_size"],
+                    modification_time=item["modification_time"],
+                    file_type=item["file_type"],
+                    content_hash=item.get("content_hash"),
+                    last_indexed_at=item.get("last_indexed_at"),
+                    chunk_count=item.get("chunk_count", 0),
+                )
+                self.indexed_files[str(metadata.file_path)] = metadata
+                loaded_count += 1
+
+            logger.info(f"Loaded metadata for {loaded_count} previously indexed files")
+
+        except Exception as e:
+            logger.warning(f"Failed to load metadata from {metadata_path}: {e}")
+            logger.info("Starting with empty metadata state")
+            self.indexed_files = {}
+
+    def _save_metadata(self) -> None:
+        """Save indexed file metadata to disk for incremental indexing."""
+        metadata_path = self._get_metadata_path()
+
+        try:
+            import json
+
+            # Ensure parent directory exists
+            metadata_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Serialize FileMetadata objects
+            data = []
+            for metadata in self.indexed_files.values():
+                item = {
+                    "file_path": str(metadata.file_path),
+                    "file_size": metadata.file_size,
+                    "modification_time": metadata.modification_time.isoformat(),
+                    "file_type": metadata.file_type,
+                    "content_hash": metadata.content_hash,
+                    "last_indexed_at": (
+                        metadata.last_indexed_at.isoformat() if metadata.last_indexed_at else None
+                    ),
+                    "chunk_count": metadata.chunk_count,
+                }
+                data.append(item)
+
+            with open(metadata_path, "w") as f:
+                json.dump(data, f, indent=2)
+
+            logger.info(f"Saved metadata for {len(self.indexed_files)} files to {metadata_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to save metadata to {metadata_path}: {e}")
 
     def index_full(
         self, progress_callback: Callable[[int, int, str], None] | None = None
@@ -302,6 +412,9 @@ class IndexingOrchestrator:
             f"{job.chunks_generated} chunks, {job.embeddings_created} embeddings, "
             f"{job.files_errored} errors"
         )
+
+        # Save metadata for incremental indexing
+        self._save_metadata()
 
         return job
 
@@ -480,5 +593,8 @@ class IndexingOrchestrator:
             f"{job.files_deleted} deleted, {job.files_skipped} skipped, "
             f"{job.chunks_generated} chunks, {job.embeddings_created} embeddings"
         )
+
+        # Save metadata for next incremental run
+        self._save_metadata()
 
         return job

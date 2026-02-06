@@ -276,14 +276,23 @@ Query String → Query Embedding → Similarity Search → QueryResult List → 
 - Payload stores: file_path, chunk_index, file_type, modification_time
 - Indexed by `embedding_id` (chunk_id)
 
-### Metadata Store (SQLite)
+### FileMetadata Persistence (JSON)
+- Location: `{vector_store_path}/metadata.json`
+- Format: JSON array of FileMetadata objects
+- Purpose: Enable incremental indexing across CLI invocations
+- Saved after each indexing operation (full or incremental)
+- Loaded on IndexingOrchestrator initialization
+- Contains: file_path, file_size, modification_time, content_hash, last_indexed_at, chunk_count
+
+### Metadata Store (SQLite) [Future Enhancement]
 - Table: `file_metadata` - All FileMetadata records
 - Table: `indexing_jobs` - Job history and statistics
 - Indexed by file_path for quick lookups
 - Used for incremental update logic
+- Note: Currently using JSON file; SQLite planned for Phase 6+
 
 ### Configuration
-- TOML file: `~/.krag/config.toml`
+- TOML file: `~/.krag/config.toml` (or YAML for legacy support)
 - Loaded on startup, validated with Pydantic
 
 ---
