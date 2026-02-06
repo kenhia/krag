@@ -55,30 +55,53 @@ def init(
         "-f",
         help="Overwrite existing configuration",
     ),
-    config_path: Path = typer.Option(
-        Path.home() / ".krag" / "config.yaml",
+    config_path: Path | None = typer.Option(
+        None,
         "--config",
         "-c",
-        help="Configuration file path",
+        help="Configuration file path (default: ~/.krag/config.toml)",
+    ),
+    yaml: bool = typer.Option(
+        False,
+        "--yaml",
+        help="Create YAML configuration instead of TOML (legacy format)",
     ),
 ) -> None:
     """Initialize configuration for krag.
 
     Creates a default configuration file with sensible defaults.
+    By default, creates TOML format (config.toml). Use --yaml for legacy YAML format.
     Edit the file to customize directories, models, and other settings.
 
     Examples:
 
-        # Initialize with default settings
+        # Initialize with default TOML config
         krag init
+
+        # Initialize with legacy YAML format
+        krag init --yaml
 
         # Force overwrite existing config
         krag init --force
 
         # Use custom config location
-        krag init --config /path/to/config.yaml
+        krag init --config /path/to/config.toml
     """
     config_manager = ConfigManager()
+
+    # Determine default config path if not specified
+    if config_path is None:
+        if yaml:
+            config_path = Path.home() / ".krag" / "config.yaml"
+        else:
+            config_path = Path.home() / ".krag" / "config.toml"
+
+    # Validate extension matches format
+    suffix = config_path.suffix.lower()
+    if yaml and suffix != ".yaml" and suffix != ".yml":
+        console.print(f"[yellow]Warning: --yaml specified but file has {suffix} extension[/yellow]")
+    elif not yaml and suffix != ".toml":
+        console.print(f"[yellow]Warning: TOML format but file has {suffix} extension[/yellow]")
 
     try:
         # Check if config exists
@@ -87,9 +110,12 @@ def init(
             console.print("Use --force to overwrite")
             exit_with_code(1)
 
-        # Create default config
-        config = config_manager.create_default(config_path)
-        console.print(f"[green]Created configuration at {config_path}[/green]\n")
+        # Create default config in requested format
+        format_type = "yaml" if yaml else "toml"
+        config = config_manager.create_default(config_path, format=format_type)
+        console.print(
+            f"[green]Created {format_type.upper()} configuration at {config_path}[/green]\n"
+        )
 
         # Display key settings
         console.print("[cyan]Default Settings:[/cyan]")
@@ -103,6 +129,86 @@ def init(
 
     except Exception as e:
         console.print(f"[red]Failed to create configuration: {e}[/red]")
+        exit_with_code(1)
+
+
+@app.command()
+def migrate(
+    yaml_path: Path = typer.Argument(
+        ...,
+        help="Path to existing YAML configuration file",
+    ),
+    toml_path: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Path for new TOML file (default: same location with .toml extension)",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Overwrite existing TOML file",
+    ),
+) -> None:
+    """Migrate YAML configuration to TOML format.
+
+    Converts an existing YAML configuration file to the modern TOML format.
+    The YAML file is not deleted - you can remove it manually after verification.
+
+    Examples:
+
+        # Migrate config.yaml to config.toml in same directory
+        krag migrate ~/.krag/config.yaml
+
+        # Specify custom output path
+        krag migrate old.yaml --output new.toml
+
+        # Overwrite existing TOML file
+        krag migrate config.yaml --force
+    """
+    config_manager = ConfigManager()
+
+    try:
+        # Validate YAML file exists
+        if not yaml_path.exists():
+            console.print(f"[red]YAML configuration not found: {yaml_path}[/red]")
+            exit_with_code(1)
+
+        # Determine output path
+        if toml_path is None:
+            toml_path = yaml_path.with_suffix(".toml")
+
+        # Check if TOML file exists
+        if toml_path.exists() and not force:
+            console.print(f"[yellow]TOML configuration already exists: {toml_path}[/yellow]")
+            console.print("Use --force to overwrite")
+            exit_with_code(1)
+
+        # Remove existing TOML if force
+        if toml_path.exists() and force:
+            toml_path.unlink()
+
+        # Perform migration
+        console.print(f"[cyan]Migrating {yaml_path} → {toml_path}...[/cyan]")
+        result_path = config_manager.migrate_yaml_to_toml(yaml_path, toml_path)
+
+        console.print(f"[green]✓ Successfully migrated configuration to {result_path}[/green]\n")
+
+        # Load and display the migrated config
+        migrated_config = config_manager.load(result_path)
+        console.print("[cyan]Migrated Settings:[/cyan]")
+        console.print(f"  Directories: {migrated_config.directory_paths}")
+        console.print(f"  Embedding model: {migrated_config.embedding_model}")
+        console.print(f"  Vector store: {migrated_config.vector_store_path}")
+
+        console.print(f"\n[yellow]Note:[/yellow] Original YAML file not deleted: {yaml_path}")
+        console.print(
+            "[cyan]Verify the TOML configuration, then you can remove the YAML file[/cyan]"
+        )
+
+    except Exception as e:
+        console.print(f"[red]Failed to migrate configuration: {e}[/red]")
         exit_with_code(1)
 
 

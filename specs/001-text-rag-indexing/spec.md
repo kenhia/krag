@@ -148,6 +148,10 @@ As a user, I want to configure which directories to include/exclude, which file 
 - **FR-031**: System MUST support a configuration file for all tunable parameters
 - **FR-032**: Configuration MUST include directory paths, file type filters, embedding model selection, vector store backend, chunking parameters, and LLM selection
 - **FR-033**: System MUST validate configuration on startup and report clear errors for invalid settings
+- **FR-043**: System MUST use TOML as the primary configuration format (config.toml)
+- **FR-044**: System MUST support YAML format for backward compatibility (config.yaml)
+- **FR-045**: System MUST automatically detect configuration file format based on file extension
+- **FR-046**: System MUST provide a migration utility to convert YAML configuration to TOML format
 
 **Logging & Diagnostics**
 

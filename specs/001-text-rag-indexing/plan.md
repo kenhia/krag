@@ -18,10 +18,12 @@ Implement Phase 1 of a personal multimodal RAG system that indexes text-based co
 - **Vector Store**: qdrant-client (embedded mode for local vector database)
 - **LLM Framework**: llama-cpp-python (efficient local LLM inference)
 - **Chunking**: llama-index text splitters (semantic-aware text chunking)
+- **Configuration**: TOML (primary format via tomllib/tomli), YAML (legacy support via PyYAML)
 - **Package Management**: uv (dependency and environment management)
 - **Code Quality**: ruff (formatting and linting), pytest (testing)
 
 **Storage**: Qdrant embedded vector database + filesystem for file metadata tracking
+**Configuration Format**: TOML (config.toml) as primary, YAML (config.yaml) for backward compatibility
 **Testing**: pytest with fixtures for embeddings, mock vector stores, and LLM responses
 **Target Platform**: Linux/macOS/Windows desktop with local and network-mounted storage
 **Project Type**: Single project (CLI application with library modules)

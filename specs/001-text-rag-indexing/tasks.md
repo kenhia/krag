@@ -284,11 +284,11 @@
 
 ### Configuration Format Enhancement
 
-- [ ] T174 [P] Update spec.md and plan.md to document TOML as primary configuration format
-- [ ] T175 Add tomli/tomllib support for reading TOML config files
-- [ ] T176 Implement config file format detection (support both .yaml and .toml)
-- [ ] T177 Update init command to create config.toml by default (with --yaml flag for legacy)
-- [ ] T178 Add migration utility: config migrate command to convert YAML → TOML
+- [X] T174 [P] Update spec.md and plan.md to document TOML as primary configuration format
+- [X] T175 Add tomli/tomllib support for reading TOML config files
+- [X] T176 Implement config file format detection (support both .yaml and .toml)
+- [X] T177 Update init command to create config.toml by default (with --yaml flag for legacy)
+- [X] T178 Add migration utility: config migrate command to convert YAML → TOML
 
 ### Plugin Architecture (Future Work)
 
