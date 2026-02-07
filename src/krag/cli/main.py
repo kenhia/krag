@@ -388,19 +388,20 @@ def status(
             stats = vector_store.get_stats()
             table.add_row("Vector Store", str(config.vector_store_path or "In-memory"))
             table.add_row("Collection", stats["collection_name"])
-            
+
             # Count indexed files from metadata
             file_count = 0
             try:
                 metadata_path = (config.vector_store_path or Path(".")) / "metadata.json"
                 if metadata_path.exists():
                     import json
+
                     with open(metadata_path) as f:
                         metadata = json.load(f)
                         file_count = len(metadata)
             except Exception:
                 pass
-            
+
             table.add_row("Indexed Files", str(file_count))
             table.add_row("Indexed Vectors", str(stats["count"]))
             table.add_row("Status", stats["status"])
