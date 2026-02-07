@@ -320,11 +320,11 @@ def migrate(
 
 @app.command()
 def status(
-    config_path: Path = typer.Option(
-        Path.home() / ".krag" / "config.yaml",
+    config_path: Path | None = typer.Option(
+        None,
         "--config",
         "-c",
-        help="Configuration file path",
+        help="Path to configuration file (default: ~/.config/krag/config.toml)",
     ),
 ) -> None:
     """Show index statistics and system status.
@@ -344,7 +344,14 @@ def status(
         # Load configuration
         config_manager = ConfigManager()
         try:
-            config = config_manager.load(config_path)
+            if config_path:
+                config = config_manager.load(config_path)
+                actual_config_path = config_path
+            else:
+                from krag.config.xdg import get_krag_config_dir
+
+                actual_config_path = get_krag_config_dir() / "config.toml"
+                config = config_manager.load(actual_config_path)
         except FileNotFoundError:
             console.print("[red]Configuration not found. Run 'krag init' first.[/red]")
             exit_with_code(1)
@@ -355,7 +362,7 @@ def status(
         table.add_column("Value", style="green")
 
         # Configuration status
-        table.add_row("Configuration", str(config_path))
+        table.add_row("Configuration", str(actual_config_path))
         table.add_row(
             "Directories",
             ", ".join(str(d) for d in config.directory_paths) or "Not configured",
