@@ -310,38 +310,38 @@
 
 ### Tests for User Story 4 (TDD - WRITE FIRST, VERIFY THEY FAIL)
 
-- [ ] T117 [P] [US4] Write unit tests for configuration validation in tests/unit/test_config_validation.py
-- [ ] T118 [P] [US4] Write integration test for configuration-based filtering in tests/integration/test_config_filtering.py
+- [X] T117 [P] [US4] Write unit tests for configuration validation in tests/unit/test_config_validation.py
+- [X] T118 [P] [US4] Write integration test for configuration-based filtering in tests/integration/test_config_filtering.py
 
 ### Implementation for User Story 4
 
 **Enhanced Configuration**
 
-- [ ] T119 [US4] Ensure Configuration model supports all required fields per data-model.md
-- [ ] T120 [US4] Add validation rules to Configuration model (chunk_size > chunk_overlap, etc.)
-- [ ] T121 [US4] Implement configuration file template generation in ConfigManager.create_default
-- [ ] T122 [US4] Add configuration validation error messages in ConfigManager.validate
+- [X] T119 [US4] Ensure Configuration model supports all required fields per data-model.md
+- [X] T120 [US4] Add validation rules to Configuration model (chunk_size > chunk_overlap, etc.)
+- [X] T121 [US4] Implement configuration file template generation in ConfigManager.create_default
+- [X] T122 [US4] Add configuration validation error messages in ConfigManager.validate
 
 **Apply Configuration Throughout System**
 
-- [ ] T123 [US4] Update FileScanner to respect exclusion_patterns from configuration
-- [ ] T124 [US4] Update FileScanner to respect supported_file_types from configuration
-- [ ] T125 [US4] Update TextChunker to use chunk_size and chunk_overlap from configuration
-- [ ] T126 [US4] Update EmbeddingGenerator to use embedding_model and device from configuration
-- [ ] T127 [US4] Update Retriever to use top_k from configuration
+- [X] T123 [US4] Update FileScanner to respect exclusion_patterns from configuration
+- [X] T124 [US4] Update FileScanner to respect supported_file_types from configuration
+- [X] T125 [US4] Update TextChunker to use chunk_size and chunk_overlap from configuration
+- [X] T126 [US4] Update EmbeddingGenerator to use embedding_model and device from configuration
+- [X] T127 [US4] Update Retriever to use top_k from configuration
 
 **CLI for Configuration**
 
-- [ ] T128 [US4] Enhance init command to create configuration file with prompts for directories
-- [ ] T129 [US4] Implement config validate subcommand with detailed validation messages
-- [ ] T130 [US4] Implement config show subcommand with formatted output
-- [ ] T131 [US4] Implement config edit subcommand to open config in default editor
+- [X] T128 [US4] Enhance init command to create configuration file with prompts for directories
+- [X] T129 [US4] Implement config validate subcommand with detailed validation messages
+- [X] T130 [US4] Implement config show subcommand with formatted output
+- [X] T131 [US4] Implement config edit subcommand to open config in default editor
 
 **Integration & Validation**
 
-- [ ] T132 [US4] Run integration test for configuration filtering and verify it passes
-- [ ] T133 [US4] Manual test: Change configuration, verify indexing behavior changes accordingly
-- [ ] T134 [US4] Test invalid configurations are caught and reported clearly
+- [X] T132 [US4] Run integration test for configuration filtering and verify it passes
+- [X] T133 [US4] Manual test: Change configuration, verify indexing behavior changes accordingly
+- [X] T134 [US4] Test invalid configurations are caught and reported clearly
 
 **Checkpoint**: All user stories (P1-P4) should now be independently functional
 
@@ -370,10 +370,10 @@
 
 **Code Quality**
 
-- [ ] T146 Run `uv run ruff format .` and verify all code is formatted
-- [ ] T147 Run `uv run ruff check --fix .` and fix all linting issues
+- [X] T146 Run `uv run ruff format .` and verify all code is formatted
+- [X] T147 Run `uv run ruff check --fix .` and fix all linting issues
 - [ ] T148 Run `uv run mypy src/` and fix all type errors
-- [ ] T149 Run `uv run pytest` and ensure all tests pass
+- [X] T149 Run `uv run pytest` and ensure all tests pass
 - [ ] T150 Review and refactor any code smells or duplication
 
 **Error Handling & Logging**
@@ -385,8 +385,8 @@
 
 **CLI Enhancements**
 
-- [ ] T155 [P] Add reset command with confirmation prompts
-- [ ] T156 [P] Add --version flag to main CLI
+- [X] T155 [P] Add reset command with confirmation prompts
+- [X] T156 [P] Add --version flag to main CLI
 - [ ] T157 Add shell completion support for bash/zsh
 - [ ] T158 Improve progress indicators with richer formatting
 

@@ -1,19 +1,28 @@
 """Main CLI application using Typer."""
 
-import json
-import subprocess
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from krag import __version__
+from krag.cli.config import config_app
 from krag.cli.index import index_command
 from krag.cli.query import query_command
 from krag.cli.utils import exit_with_code
 from krag.config.logging import setup_logging
 from krag.config.settings import ConfigManager
 from krag.config.xdg import get_krag_config_dir, migrate_from_legacy, should_migrate_from_legacy
+
+
+def version_callback(value: bool) -> None:
+    """Show version and exit."""
+    if value:
+        console = Console()
+        console.print(f"krag version {__version__}")
+        raise typer.Exit()
+
 
 # Create Typer app
 app = typer.Typer(
@@ -25,6 +34,7 @@ app = typer.Typer(
 # Add commands
 app.command(name="query")(query_command)
 app.command(name="index")(index_command)
+app.add_typer(config_app, name="config")
 
 # Console for rich output
 console = Console()
@@ -32,6 +42,13 @@ console = Console()
 
 @app.callback()
 def main_callback(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show version and exit",
+        callback=version_callback,
+        is_eager=True,
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -84,6 +101,12 @@ def init(
         "--yaml",
         help="Create YAML configuration instead of TOML (legacy format)",
     ),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive",
+        "-i",
+        help="Prompt for directories and settings interactively",
+    ),
 ) -> None:
     """Initialize configuration for krag.
 
@@ -96,6 +119,9 @@ def init(
 
         # Initialize with default TOML config
         krag init
+
+        # Initialize interactively with prompts
+        krag init --interactive
 
         # Initialize with legacy YAML format
         krag init --yaml
@@ -130,22 +156,82 @@ def init(
             console.print("Use --force to overwrite")
             exit_with_code(1)
 
+        # Remove existing config if force is enabled
+        if config_path.exists() and force:
+            config_path.unlink()
+            console.print("[yellow]Removed existing configuration[/yellow]")
+
+        # Interactive mode - prompt for directories
+        directory_paths = []
+        if interactive:
+            console.print("\n[cyan]Configure directories to index[/cyan]\n")
+            console.print(
+                "Enter directories one at a time (press Enter with empty input to finish)"
+            )
+
+            while True:
+                dir_input = typer.prompt(
+                    "Directory path (or press Enter to finish)",
+                    default="",
+                    show_default=False,
+                )
+
+                if not dir_input.strip():
+                    if not directory_paths:
+                        # Need at least one directory
+                        console.print("[yellow]At least one directory is required[/yellow]")
+                        continue
+                    break
+
+                dir_path = Path(dir_input.strip()).expanduser().resolve()
+
+                if not dir_path.exists():
+                    console.print(f"[yellow]Warning: Directory does not exist: {dir_path}[/yellow]")
+                    use_anyway = typer.confirm("Add it anyway?", default=False)
+                    if not use_anyway:
+                        continue
+
+                if not dir_path.is_dir():
+                    console.print(f"[red]Error: Not a directory: {dir_path}[/red]")
+                    continue
+
+                directory_paths.append(dir_path)
+                console.print(f"[green]✓ Added: {dir_path}[/green]")
+
         # Create default config in requested format
         format_type = "yaml" if yaml else "toml"
         config = config_manager.create_default(config_path, format=format_type)
+
+        # Update with interactive directories if provided
+        if directory_paths:
+            config.directory_paths = directory_paths
+            # Save the updated config
+            config_dict = config.model_dump(mode="json")
+            if format_type == "toml":
+                import tomli_w
+
+                with open(config_path, "wb") as f:
+                    tomli_w.dump(config_dict, f)
+            else:
+                import yaml
+
+                with open(config_path, "w") as f:
+                    yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
+
         console.print(
-            f"[green]Created {format_type.upper()} configuration at {config_path}[/green]\n"
+            f"\n[green]Created {format_type.upper()} configuration at {config_path}[/green]\n"
         )
 
         # Display key settings
-        console.print("[cyan]Default Settings:[/cyan]")
+        console.print("[cyan]Configuration:[/cyan]")
         console.print(f"  Directories: {config.directory_paths}")
         console.print(f"  Embedding model: {config.embedding_model}")
         console.print(f"  Vector store: {config.vector_store_path}")
         console.print(f"  LLM model: {config.llm_model_path or 'Not configured'}")
 
-        console.print(f"\n[cyan]Edit configuration:[/cyan] {config_path}")
-        console.print("[cyan]Then run:[/cyan] krag index --dir /path/to/documents")
+        console.print("\n[cyan]Edit configuration:[/cyan] krag config edit")
+        console.print("[cyan]Validate configuration:[/cyan] krag config validate")
+        console.print("[cyan]Then run:[/cyan] krag index")
 
     except Exception as e:
         console.print(f"[red]Failed to create configuration: {e}[/red]")
@@ -307,183 +393,110 @@ def status(
         exit_with_code(1)
 
 
-# Config subcommand group
-config_app = typer.Typer(help="Manage configuration")
-app.add_typer(config_app, name="config")
-
-
-@config_app.command("show")
-def config_show(
-    config_path: Path = typer.Option(
-        Path.home() / ".krag" / "config.yaml",
+@app.command()
+def reset(
+    config: bool = typer.Option(
+        False,
         "--config",
-        "-c",
-        help="Configuration file path",
+        help="Remove configuration files",
+    ),
+    data: bool = typer.Option(
+        False,
+        "--data",
+        help="Remove vector store and cache data",
+    ),
+    logs: bool = typer.Option(
+        False,
+        "--logs",
+        help="Remove log files",
+    ),
+    all: bool = typer.Option(
+        False,
+        "--all",
+        help="Remove everything (config, data, logs)",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip confirmation prompts",
     ),
 ) -> None:
-    """Display current configuration.
+    """Reset krag by removing data, configuration, or logs.
 
-    Shows all configuration settings in a readable format.
+    This command removes krag files from XDG directories. Use with caution!
 
     Examples:
 
-        # Show configuration
-        krag config show
+        # Remove only vector store data
+        krag reset --data
 
-        # Show custom config
-        krag config show --config /path/to/config.yaml
+        # Remove everything with confirmation
+        krag reset --all
+
+        # Remove config and data without prompts
+        krag reset --config --data --yes
     """
-    try:
-        config_manager = ConfigManager()
-        try:
-            config = config_manager.load(config_path)
-        except FileNotFoundError:
-            console.print("[red]Configuration not found. Run 'krag init' first.[/red]")
-            exit_with_code(1)
+    from krag.config.xdg import get_krag_cache_dir, get_krag_config_dir, get_krag_state_dir
 
-        # Display as formatted JSON
-        config_dict = config.model_dump()
-        console.print_json(json.dumps(config_dict, indent=2, default=str))
+    # Determine what to reset
+    reset_config = config or all
+    reset_data = data or all
+    reset_logs = logs or all
 
-    except Exception as e:
-        console.print(f"[red]Failed to show configuration: {e}[/red]")
+    if not (reset_config or reset_data or reset_logs):
+        console.print("[yellow]No reset options specified. Use --help to see options.[/yellow]")
+        console.print("Examples:")
+        console.print("  krag reset --data        # Remove vector store")
+        console.print("  krag reset --all         # Remove everything")
         exit_with_code(1)
 
+    # Show what will be removed
+    console.print("\n[yellow]The following will be removed:[/yellow]\n")
+    items_to_remove = []
 
-@config_app.command("validate")
-def config_validate(
-    config_path: Path = typer.Option(
-        Path.home() / ".krag" / "config.yaml",
-        "--config",
-        "-c",
-        help="Configuration file path",
-    ),
-) -> None:
-    """Validate configuration file.
+    if reset_config:
+        config_dir = get_krag_config_dir()
+        console.print(f"  • Configuration: {config_dir}")
+        items_to_remove.append(("Configuration", config_dir))
 
-    Checks that the configuration file is valid and all
-    required fields are present with correct types.
+    if reset_data:
+        cache_dir = get_krag_cache_dir()
+        console.print(f"  • Data (vector store, models): {cache_dir}")
+        items_to_remove.append(("Data", cache_dir))
 
-    Examples:
+    if reset_logs:
+        state_dir = get_krag_state_dir()
+        console.print(f"  • Logs: {state_dir / 'logs'}")
+        items_to_remove.append(("Logs", state_dir / "logs"))
 
-        # Validate configuration
-        krag config validate
+    # Confirm
+    if not yes:
+        console.print()
+        confirm = typer.confirm("Are you sure you want to proceed?", default=False)
+        if not confirm:
+            console.print("[yellow]Reset cancelled[/yellow]")
+            raise typer.Exit(0)
 
-        # Validate custom config
-        krag config validate --config /path/to/config.yaml
-    """
-    try:
-        config_manager = ConfigManager()
+    # Perform removal
+    import shutil
 
-        if not config_path.exists():
-            console.print(f"[red]Configuration file not found: {config_path}[/red]")
-            exit_with_code(1)
-
-        # Try to load and validate
+    console.print()
+    for name, path in items_to_remove:
         try:
-            config = config_manager.load(config_path)
-            config_manager.validate(config)
-            console.print("[green]✓ Configuration is valid[/green]")
-
-            # Show warnings for missing directories
-            missing = []
-            for dir_path in config.directory_paths:
-                if not dir_path.exists():
-                    missing.append(str(dir_path))
-
-            if missing:
-                console.print(
-                    f"\n[yellow]Warning: {len(missing)} configured directories do not exist:[/yellow]"
-                )
-                for dir_path in missing:
-                    console.print(f"  - {dir_path}")
-
+            if path.exists():
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+                console.print(f"[green]✓ Removed {name}:[/green] {path}")
+            else:
+                console.print(f"[dim]• {name} not found:[/dim] {path}")
         except Exception as e:
-            console.print(f"[red]✗ Configuration is invalid: {e}[/red]")
-            exit_with_code(1)
+            console.print(f"[red]✗ Failed to remove {name}: {e}[/red]")
 
-    except Exception as e:
-        console.print(f"[red]Failed to validate configuration: {e}[/red]")
-        exit_with_code(1)
-
-
-@config_app.command("edit")
-def config_edit(
-    config_path: Path = typer.Option(
-        Path.home() / ".krag" / "config.yaml",
-        "--config",
-        "-c",
-        help="Configuration file path",
-    ),
-    editor: str = typer.Option(
-        None,
-        "--editor",
-        "-e",
-        help="Editor to use (default: $EDITOR env var)",
-        envvar="EDITOR",
-    ),
-) -> None:
-    """Edit configuration file in default editor.
-
-    Opens the configuration file in your default text editor.
-    Uses $EDITOR environment variable or falls back to nano/vim.
-
-    Examples:
-
-        # Edit with default editor
-        krag config edit
-
-        # Edit with specific editor
-        krag config edit --editor vim
-
-        # Edit custom config
-        krag config edit --config /path/to/config.yaml
-    """
-    try:
-        if not config_path.exists():
-            console.print(f"[red]Configuration file not found: {config_path}[/red]")
-            console.print("Run 'krag init' to create it first.")
-            exit_with_code(1)
-
-        # Determine editor
-        if not editor:
-            # Try common editors
-            for fallback in ["nano", "vim", "vi"]:
-                try:
-                    subprocess.run(
-                        ["which", fallback],
-                        check=True,
-                        capture_output=True,
-                    )
-                    editor = fallback
-                    break
-                except subprocess.CalledProcessError:
-                    continue
-
-        if not editor:
-            console.print("[red]No editor found. Set $EDITOR or use --editor[/red]")
-            exit_with_code(1)
-
-        # Open editor
-        console.print(f"[cyan]Opening {config_path} in {editor}...[/cyan]")
-        subprocess.run([editor, str(config_path)], check=True)
-
-        # Validate after edit
-        console.print("\n[cyan]Validating configuration...[/cyan]")
-        config_manager = ConfigManager()
-        try:
-            config = config_manager.load(config_path)
-            config_manager.validate(config)
-            console.print("[green]✓ Configuration is valid[/green]")
-        except Exception as e:
-            console.print(f"[yellow]Warning: Configuration may be invalid: {e}[/yellow]")
-
-    except subprocess.CalledProcessError:
-        console.print("[red]Editor exited with error[/red]")
-        exit_with_code(1)
-    except Exception as e:
-        console.print(f"[red]Failed to edit configuration: {e}[/red]")
-        exit_with_code(1)
+    console.print("\n[green]Reset complete[/green]")
+    console.print("[cyan]Run 'krag init' to reinitialize[/cyan]")
 
 
 if __name__ == "__main__":

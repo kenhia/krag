@@ -50,6 +50,15 @@ class ConfigManager:
         """Load TOML configuration file."""
         with open(config_path, "rb") as f:
             config_dict = tomllib.load(f)
+
+        # Convert string paths to Path objects
+        if "directory_paths" in config_dict:
+            config_dict["directory_paths"] = [Path(p) for p in config_dict["directory_paths"]]
+        if "vector_store_path" in config_dict:
+            config_dict["vector_store_path"] = Path(config_dict["vector_store_path"])
+        if "llm_model_path" in config_dict and config_dict["llm_model_path"]:
+            config_dict["llm_model_path"] = Path(config_dict["llm_model_path"])
+
         return Configuration(**config_dict)
 
     @staticmethod
@@ -57,6 +66,15 @@ class ConfigManager:
         """Load YAML configuration file (legacy support)."""
         with open(config_path) as f:
             config_dict = yaml.safe_load(f)
+
+        # Convert string paths to Path objects
+        if "directory_paths" in config_dict:
+            config_dict["directory_paths"] = [Path(p) for p in config_dict["directory_paths"]]
+        if "vector_store_path" in config_dict:
+            config_dict["vector_store_path"] = Path(config_dict["vector_store_path"])
+        if "llm_model_path" in config_dict and config_dict["llm_model_path"]:
+            config_dict["llm_model_path"] = Path(config_dict["llm_model_path"])
+
         return Configuration(**config_dict)
 
     @staticmethod
