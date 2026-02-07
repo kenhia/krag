@@ -392,8 +392,8 @@
 
 **Quickstart Validation**
 
-- [ ] T159 Follow quickstart.md step-by-step and verify all instructions work
-- [ ] T160 Update quickstart.md with any discovered issues or improvements
+- [X] T159 Follow quickstart.md step-by-step and verify all instructions work
+- [X] T160 Update quickstart.md with any discovered issues or improvements
 
 **Final Pre-Commit Validation**
 
