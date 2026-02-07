@@ -134,7 +134,7 @@ def index_command(
             return
 
         # Create orchestrator
-        console.print("[cyan]Initializing indexing pipeline...[/cyan]")
+        console.print("[cyan]Initializing indexing pipeline...[/cyan][dim](be patient)[/dim]")
         orchestrator = IndexingOrchestrator(
             directory_paths=dirs_to_index,
             vector_store_path=vector_store,

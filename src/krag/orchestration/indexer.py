@@ -365,6 +365,10 @@ class IndexingOrchestrator:
                     }
                     all_vectors.append(vector)
 
+                # Update file metadata with indexing details
+                file_metadata.chunk_count = len(chunks)
+                file_metadata.last_indexed_at = datetime.now()
+
                 job.files_processed += 1
                 # Store file metadata for incremental updates
                 self.indexed_files[str(file_metadata.file_path)] = file_metadata
@@ -544,6 +548,10 @@ class IndexingOrchestrator:
                         },
                     }
                     all_vectors.append(vector)
+
+                # Update file metadata with indexing details
+                file_metadata.chunk_count = len(chunks)
+                file_metadata.last_indexed_at = datetime.now()
 
                 job.files_processed += 1
                 # Store file metadata for incremental updates

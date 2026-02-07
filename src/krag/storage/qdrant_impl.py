@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +44,10 @@ class QdrantVectorStore(VectorStore):
         if self.storage_path:
             logger.info(f"Initializing Qdrant with storage at {self.storage_path}")
             self.storage_path.mkdir(parents=True, exist_ok=True)
-            self.client = QdrantClient(path=str(self.storage_path))
+            # Suppress Qdrant's large collection warning for local mode
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                self.client = QdrantClient(path=str(self.storage_path))
         else:
             logger.info("Initializing Qdrant in-memory")
             self.client = QdrantClient(":memory:")
