@@ -154,7 +154,7 @@ class KragConfig(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 50
     vector_store_path: Path = Path("./qdrant_storage")
-    llm_model_path: Path
+    llm_model: str = "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
     top_k: int = 5
 ```
 
@@ -178,8 +178,9 @@ overlap = 50
 top_k = 5
 
 [llm]
-model_path = "/home/user/.models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
-n_ctx = 2048
+model = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
+context_size = 2048
+num_threads = 4
 ```
 
 ---

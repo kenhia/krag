@@ -342,9 +342,9 @@ overlap = 50
 top_k = 5
 
 [llm]
-model_path = "/home/user/.models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
-n_ctx = 2048
-n_threads = 4
+model = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
+context_size = 2048
+num_threads = 4
 temperature = 0.7
 ```
 
@@ -422,7 +422,7 @@ Run 'krag init' to create a new configuration.
 Error: Invalid configuration in /home/user/.krag/config.toml
 
   - directories.paths: At least one directory path required
-  - llm.model_path: File does not exist: /path/to/missing-model.gguf
+  - llm.model: Invalid model name or path
 
 Fix the errors and try again.
 ```

@@ -135,7 +135,7 @@ Key settings:
 - `supported_file_types`: File extensions to process
 - `chunk_size` / `chunk_overlap`: Chunking parameters
 - `embedding_model`: sentence-transformers model name
-- `llm_model_path`: Path to local GGUF model
+- `llm_model`: HuggingFace model name or local GGUF path
 
 See [docs/configuration.md](docs/configuration.md) for full details.
 

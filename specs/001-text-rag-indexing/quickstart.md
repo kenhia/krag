@@ -189,7 +189,7 @@ class KragConfig(BaseSettings):
     top_k: int = 5
     
     # LLM
-    llm_model_path: Path | None = None
+    llm_model: str = "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
     llm_context_size: int = 2048
     llm_num_threads: int = 4
     llm_temperature: float = 0.7
@@ -359,13 +359,14 @@ paths = [
     "/home/user/projects"
 ]
 
-# 3. Download LLM model (example using Mistral)
-mkdir -p ~/.models
-# Download from HuggingFace: mistral-7b-instruct-v0.2.Q4_K_M.gguf
-
-# 4. Update config with LLM path
+# 3. Configure LLM model (uses HuggingFace, auto-downloads)
+# Default: TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
+# Or use a larger model:
 [llm]
-model_path = "/home/user/.models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+model = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
+
+# Alternatively, use a local GGUF file:
+# model = "/home/user/.models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
 ```
 
 ### Index Your Files

@@ -198,7 +198,7 @@ Represents system configuration settings.
 - `top_k: int` - Number of results to retrieve
 
 **LLM**:
-- `llm_model_path: Path` - Path to GGUF model file (default: `~/.cache/krag/models/model.gguf` or `$XDG_CACHE_HOME/krag/models/model.gguf`)
+- `llm_model: str` - HuggingFace model name (e.g., `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF`) or local path to GGUF file (default: `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF`, auto-downloads to `~/.cache/krag/models/huggingface/`)
 - `llm_context_size: int` - Context window size (n_ctx)
 - `llm_num_threads: int` - Number of threads for inference
 - `llm_temperature: float` - Temperature for generation

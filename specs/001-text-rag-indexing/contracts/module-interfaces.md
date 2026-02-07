@@ -449,7 +449,7 @@ class LLMClient:
     
     def __init__(
         self,
-        model_path: Path,
+        model: str | Path,
         context_size: int = 2048,
         num_threads: int = 4,
         temperature: float = 0.7
@@ -458,14 +458,15 @@ class LLMClient:
         Initialize LLM client.
         
         Args:
-            model_path: Path to GGUF model file
+            model: HuggingFace model name (e.g., 'TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF')
+                   or local path to GGUF file. HuggingFace models are auto-downloaded.
             context_size: Context window size (n_ctx)
             num_threads: Number of threads for inference
             temperature: Generation temperature
             
         Raises:
-            FileNotFoundError: If model file doesn't exist
-            ModelLoadError: If model fails to load
+            FileNotFoundError: If local model file doesn't exist
+            ModelLoadError: If model fails to load or download
         """
         ...
     
