@@ -195,9 +195,7 @@ def config_show(
         table = Table(title="LLM (Language Model)", show_header=True)
         table.add_column("Setting", style="cyan")
         table.add_column("Value", style="white")
-        table.add_row(
-            "Model path", str(config.llm_model_path) if config.llm_model_path else "Not configured"
-        )
+        table.add_row("Model", config.llm_model)
         table.add_row("Context size", str(config.llm_context_size))
         table.add_row("Threads", str(config.llm_num_threads))
         table.add_row("Temperature", str(config.llm_temperature))

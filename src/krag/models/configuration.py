@@ -16,14 +16,12 @@ def _get_default_vector_store_path() -> Path:
     return get_krag_cache_dir() / "storage"
 
 
-def _get_default_llm_model_path() -> Path:
-    """Get default LLM model path using XDG cache directory.
+def _get_default_llm_model() -> str:
+    """Get default LLM model name.
 
-    Imports lazily to avoid circular dependency.
+    Uses a small, quantized model suitable for CPU inference.
     """
-    from krag.config.xdg import get_krag_cache_dir
-
-    return get_krag_cache_dir() / "models" / "model.gguf"
+    return "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
 
 
 class Configuration(BaseSettings):
@@ -115,9 +113,9 @@ class Configuration(BaseSettings):
     top_k: int = Field(default=5, gt=0, description="Number of results to retrieve")
 
     # LLM
-    llm_model_path: Path | None = Field(
-        default_factory=_get_default_llm_model_path,
-        description="Path to GGUF model file (XDG_CACHE_HOME/krag/models/model.gguf)",
+    llm_model: str = Field(
+        default_factory=_get_default_llm_model,
+        description="HuggingFace model name (e.g., 'TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF') or local path to GGUF file",
     )
     llm_context_size: int = Field(default=2048, gt=0, description="Context window size")
     llm_num_threads: int = Field(default=4, gt=0, description="Number of threads for inference")

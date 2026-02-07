@@ -19,8 +19,8 @@ class TestLLMClientContract:
         """Test that generate method accepts query and context."""
         from krag.synthesis.llm_client import LLMClient
 
-        # Should be able to instantiate with model path
-        client = LLMClient(model_path=None)  # None for testing
+        # Should be able to instantiate with model
+        client = LLMClient(model=None)  # None for testing
 
         # Should accept query and context
         # Will fail if not implemented
@@ -34,7 +34,7 @@ class TestLLMClientContract:
         """Test that generate returns a string response."""
         from krag.synthesis.llm_client import LLMClient
 
-        client = LLMClient(model_path=None)
+        client = LLMClient(model=None)
         response = client.generate("test query", "test context")
 
         assert isinstance(response, str), "Response must be a string"
@@ -44,7 +44,7 @@ class TestLLMClientContract:
         """Test that generate handles empty context gracefully."""
         from krag.synthesis.llm_client import LLMClient
 
-        client = LLMClient(model_path=None)
+        client = LLMClient(model=None)
         response = client.generate("test query", "")
 
         assert isinstance(response, str), "Should return string even with empty context"
@@ -53,7 +53,7 @@ class TestLLMClientContract:
         """Test that generate handles long context (truncation/chunking)."""
         from krag.synthesis.llm_client import LLMClient
 
-        client = LLMClient(model_path=None)
+        client = LLMClient(model=None)
         long_context = "test " * 10000  # Very long context
 
         # Should not crash with long context
@@ -65,12 +65,12 @@ class TestLLMClientContract:
         from krag.synthesis.llm_client import LLMClient
 
         # Should accept temperature in constructor or generate
-        client = LLMClient(model_path=None, temperature=0.7)
+        client = LLMClient(model=None, temperature=0.7)
         assert client.temperature == 0.7, "Should store temperature"
 
     def test_llm_client_accepts_max_tokens(self) -> None:
         """Test that LLMClient accepts max_tokens parameter."""
         from krag.synthesis.llm_client import LLMClient
 
-        client = LLMClient(model_path=None, max_tokens=512)
+        client = LLMClient(model=None, max_tokens=512)
         assert client.max_tokens == 512, "Should store max_tokens"

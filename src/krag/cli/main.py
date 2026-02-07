@@ -227,7 +227,7 @@ def init(
         console.print(f"  Directories: {config.directory_paths}")
         console.print(f"  Embedding model: {config.embedding_model}")
         console.print(f"  Vector store: {config.vector_store_path}")
-        console.print(f"  LLM model: {config.llm_model_path or 'Not configured'}")
+        console.print(f"  LLM model: {config.llm_model}")
 
         console.print("\n[cyan]Edit configuration:[/cyan] krag config edit")
         console.print("[cyan]Validate configuration:[/cyan] krag config validate")

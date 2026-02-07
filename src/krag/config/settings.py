@@ -115,8 +115,11 @@ class ConfigManager:
         # [llm] section
         if "llm" in toml_data:
             llm_section = toml_data["llm"]
-            if "model_path" in llm_section and llm_section["model_path"]:
-                config_dict["llm_model_path"] = Path(llm_section["model_path"])
+            # Support both 'model' (new) and 'model_path' (legacy) keys
+            if "model" in llm_section:
+                config_dict["llm_model"] = llm_section["model"]
+            elif "model_path" in llm_section and llm_section["model_path"]:
+                config_dict["llm_model"] = llm_section["model_path"]
             if "context_size" in llm_section:
                 config_dict["llm_context_size"] = llm_section["context_size"]
             if "num_threads" in llm_section:
@@ -137,8 +140,10 @@ class ConfigManager:
             config_dict["directory_paths"] = [Path(p) for p in config_dict["directory_paths"]]
         if "vector_store_path" in config_dict:
             config_dict["vector_store_path"] = Path(config_dict["vector_store_path"])
+        # Handle legacy llm_model_path field
         if "llm_model_path" in config_dict and config_dict["llm_model_path"]:
-            config_dict["llm_model_path"] = Path(config_dict["llm_model_path"])
+            config_dict["llm_model"] = str(config_dict["llm_model_path"])
+            del config_dict["llm_model_path"]
 
         return Configuration(**config_dict)
 
@@ -202,9 +207,7 @@ class ConfigManager:
                     "top_k": default_config.top_k,
                 },
                 "llm": {
-                    "model_path": str(default_config.llm_model_path)
-                    if default_config.llm_model_path
-                    else "",
+                    "model": default_config.llm_model,
                     "context_size": default_config.llm_context_size,
                     "num_threads": default_config.llm_num_threads,
                     "temperature": default_config.llm_temperature,
@@ -275,7 +278,7 @@ class ConfigManager:
                 "top_k": config.top_k,
             },
             "llm": {
-                "model_path": str(config.llm_model_path) if config.llm_model_path else "",
+                "model": config.llm_model,
                 "context_size": config.llm_context_size,
                 "num_threads": config.llm_num_threads,
                 "temperature": config.llm_temperature,
@@ -311,9 +314,18 @@ class ConfigManager:
                     f"Vector store parent directory does not exist: {config.vector_store_path.parent}",
                 )
 
-            # Check LLM model exists if path is configured
-            if config.llm_model_path and not config.llm_model_path.exists():
-                return False, f"LLM model file not found: {config.llm_model_path}"
+            # Check LLM model exists if it's a local path (not a HuggingFace model name)
+            if (
+                config.llm_model
+                and "/" in config.llm_model
+                and not config.llm_model.startswith("http")
+            ):
+                # Looks like a filesystem path
+                model_path = Path(config.llm_model)
+                if model_path.exists() and not model_path.is_file():
+                    return False, f"LLM model path is not a file: {config.llm_model}"
+                # Don't fail validation if model doesn't exist yet - it might be downloaded later
+            # If it contains no slash, assume it's a HuggingFace model name (will be downloaded on first use)
 
             # Validate distance metric
             valid_metrics = ["cosine", "dot", "euclidean"]

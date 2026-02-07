@@ -132,7 +132,7 @@ def query_command(
         llm_client = None
         if not no_synthesis:
             llm_client = LLMClient(
-                model_path=str(config.llm_model_path),
+                model=config.llm_model,
                 max_tokens=2000,
             )
 

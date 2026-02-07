@@ -64,7 +64,7 @@ def test_validate_config_success(tmp_path: Path) -> None:
     config = Configuration(
         directory_paths=[test_dir],
         vector_store_path=storage_parent / "storage",
-        llm_model_path=None,  # Skip LLM validation for this test
+        llm_model="",  # Skip LLM validation for this test
     )
 
     is_valid, error = ConfigManager.validate(config)
@@ -98,7 +98,7 @@ def test_validate_config_invalid_metric() -> None:
             directory_paths=[tmpdir_path],
             vector_store_path=storage_parent / "storage",
             distance_metric="invalid_metric",
-            llm_model_path=None,  # Skip LLM check
+            llm_model="",  # Skip LLM check
         )
 
         is_valid, error = ConfigManager.validate(config)
