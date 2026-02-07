@@ -19,9 +19,9 @@ def _get_default_vector_store_path() -> Path:
 def _get_default_llm_model() -> str:
     """Get default LLM model name.
 
-    Uses a small, quantized model suitable for CPU inference.
+    Uses Phi-3 Mini, a capable 3.8B parameter model suitable for CPU inference.
     """
-    return "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
+    return "microsoft/Phi-3-mini-4k-instruct-gguf"
 
 
 class Configuration(BaseSettings):
