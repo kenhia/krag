@@ -243,7 +243,6 @@ class LLMClient:
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
             return f"Error generating response: {e}"
-            return f"Error generating response: {str(e)}"
 
     def _generate_fallback(self, query: str, context: str) -> str:
         """Fallback response when no model is loaded.
