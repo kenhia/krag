@@ -47,17 +47,82 @@ class ConfigManager:
 
     @staticmethod
     def _load_toml(config_path: Path) -> Configuration:
-        """Load TOML configuration file."""
-        with open(config_path, "rb") as f:
-            config_dict = tomllib.load(f)
+        """Load TOML configuration file with section-based format.
 
-        # Convert string paths to Path objects
-        if "directory_paths" in config_dict:
-            config_dict["directory_paths"] = [Path(p) for p in config_dict["directory_paths"]]
-        if "vector_store_path" in config_dict:
-            config_dict["vector_store_path"] = Path(config_dict["vector_store_path"])
-        if "llm_model_path" in config_dict and config_dict["llm_model_path"]:
-            config_dict["llm_model_path"] = Path(config_dict["llm_model_path"])
+        Expects TOML sections like:
+        [directories]
+        paths = ["/home/user"]
+
+        [embedding]
+        model = "model-name"
+        """
+        with open(config_path, "rb") as f:
+            toml_data = tomllib.load(f)
+
+        # Flatten section-based TOML to flat dict for Configuration model
+        config_dict = {}
+
+        # [directories] section
+        if "directories" in toml_data:
+            dirs_section = toml_data["directories"]
+            if "paths" in dirs_section:
+                config_dict["directory_paths"] = [Path(p) for p in dirs_section["paths"]]
+            if "exclusion_patterns" in dirs_section:
+                config_dict["exclusion_patterns"] = dirs_section["exclusion_patterns"]
+            if "follow_symlinks" in dirs_section:
+                config_dict["follow_symlinks"] = dirs_section["follow_symlinks"]
+            if "supported_file_types" in dirs_section:
+                config_dict["supported_file_types"] = dirs_section["supported_file_types"]
+            if "max_file_size_mb" in dirs_section:
+                config_dict["max_file_size_mb"] = dirs_section["max_file_size_mb"]
+            if "skip_binary_files" in dirs_section:
+                config_dict["skip_binary_files"] = dirs_section["skip_binary_files"]
+
+        # [embedding] section
+        if "embedding" in toml_data:
+            emb_section = toml_data["embedding"]
+            if "model" in emb_section:
+                config_dict["embedding_model"] = emb_section["model"]
+            if "batch_size" in emb_section:
+                config_dict["embedding_batch_size"] = emb_section["batch_size"]
+            if "device" in emb_section:
+                config_dict["embedding_device"] = emb_section["device"]
+
+        # [chunking] section
+        if "chunking" in toml_data:
+            chunk_section = toml_data["chunking"]
+            if "size" in chunk_section:
+                config_dict["chunk_size"] = chunk_section["size"]
+            if "overlap" in chunk_section:
+                config_dict["chunk_overlap"] = chunk_section["overlap"]
+
+        # [vector_store] section
+        if "vector_store" in toml_data:
+            vs_section = toml_data["vector_store"]
+            if "path" in vs_section:
+                config_dict["vector_store_path"] = Path(vs_section["path"])
+            if "collection_name" in vs_section:
+                config_dict["collection_name"] = vs_section["collection_name"]
+            if "distance_metric" in vs_section:
+                config_dict["distance_metric"] = vs_section["distance_metric"]
+
+        # [retrieval] section
+        if "retrieval" in toml_data:
+            retr_section = toml_data["retrieval"]
+            if "top_k" in retr_section:
+                config_dict["top_k"] = retr_section["top_k"]
+
+        # [llm] section
+        if "llm" in toml_data:
+            llm_section = toml_data["llm"]
+            if "model_path" in llm_section and llm_section["model_path"]:
+                config_dict["llm_model_path"] = Path(llm_section["model_path"])
+            if "context_size" in llm_section:
+                config_dict["llm_context_size"] = llm_section["context_size"]
+            if "num_threads" in llm_section:
+                config_dict["llm_num_threads"] = llm_section["num_threads"]
+            if "temperature" in llm_section:
+                config_dict["llm_temperature"] = llm_section["temperature"]
 
         return Configuration(**config_dict)
 
@@ -108,12 +173,47 @@ class ConfigManager:
         )
 
         # Write to file in requested format
-        config_dict = default_config.model_dump(mode="json")
-
         if format == "toml":
+            # Create section-based TOML structure
+            toml_dict = {
+                "directories": {
+                    "paths": [str(p) for p in default_config.directory_paths],
+                    "exclusion_patterns": default_config.exclusion_patterns,
+                    "follow_symlinks": default_config.follow_symlinks,
+                    "supported_file_types": default_config.supported_file_types,
+                    "max_file_size_mb": default_config.max_file_size_mb,
+                    "skip_binary_files": default_config.skip_binary_files,
+                },
+                "embedding": {
+                    "model": default_config.embedding_model,
+                    "batch_size": default_config.embedding_batch_size,
+                    "device": default_config.embedding_device,
+                },
+                "chunking": {
+                    "size": default_config.chunk_size,
+                    "overlap": default_config.chunk_overlap,
+                },
+                "vector_store": {
+                    "path": str(default_config.vector_store_path),
+                    "collection_name": default_config.collection_name,
+                    "distance_metric": default_config.distance_metric,
+                },
+                "retrieval": {
+                    "top_k": default_config.top_k,
+                },
+                "llm": {
+                    "model_path": str(default_config.llm_model_path)
+                    if default_config.llm_model_path
+                    else "",
+                    "context_size": default_config.llm_context_size,
+                    "num_threads": default_config.llm_num_threads,
+                    "temperature": default_config.llm_temperature,
+                },
+            }
             with open(config_path, "wb") as f:
-                tomli_w.dump(config_dict, f)
+                tomli_w.dump(toml_dict, f)
         else:  # yaml
+            config_dict = default_config.model_dump(mode="json")
             with open(config_path, "w") as f:
                 yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
@@ -147,10 +247,42 @@ class ConfigManager:
         # Load YAML config
         config = ConfigManager._load_yaml(yaml_path)
 
-        # Write as TOML
-        config_dict = config.model_dump(mode="json")
+        # Write as section-based TOML
+        toml_dict = {
+            "directories": {
+                "paths": [str(p) for p in config.directory_paths],
+                "exclusion_patterns": config.exclusion_patterns,
+                "follow_symlinks": config.follow_symlinks,
+                "supported_file_types": config.supported_file_types,
+                "max_file_size_mb": config.max_file_size_mb,
+                "skip_binary_files": config.skip_binary_files,
+            },
+            "embedding": {
+                "model": config.embedding_model,
+                "batch_size": config.embedding_batch_size,
+                "device": config.embedding_device,
+            },
+            "chunking": {
+                "size": config.chunk_size,
+                "overlap": config.chunk_overlap,
+            },
+            "vector_store": {
+                "path": str(config.vector_store_path),
+                "collection_name": config.collection_name,
+                "distance_metric": config.distance_metric,
+            },
+            "retrieval": {
+                "top_k": config.top_k,
+            },
+            "llm": {
+                "model_path": str(config.llm_model_path) if config.llm_model_path else "",
+                "context_size": config.llm_context_size,
+                "num_threads": config.llm_num_threads,
+                "temperature": config.llm_temperature,
+            },
+        }
         with open(toml_path, "wb") as f:
-            tomli_w.dump(config_dict, f)
+            tomli_w.dump(toml_dict, f)
 
         return toml_path
 

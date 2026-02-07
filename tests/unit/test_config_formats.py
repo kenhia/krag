@@ -85,10 +85,12 @@ class TestConfigCreation:
         assert config_path.exists()
         assert config_path.suffix == ".toml"
 
-        # Verify content
+        # Verify content uses section-based format
         content = config_path.read_text()
-        assert "directory_paths" in content
-        assert "embedding_model" in content
+        assert "[directories]" in content
+        assert "paths = [" in content
+        assert "[embedding]" in content
+        assert "model = " in content
 
     def test_create_yaml_with_format_param(self, tmp_path: Path) -> None:
         """Test creating YAML config with format parameter."""
