@@ -38,7 +38,7 @@ class TextChunk(BaseModel):
 
     @field_validator("end_char")
     @classmethod
-    def end_after_start(cls, v: int, info: dict) -> int:
+    def end_after_start(cls, v: int, info: dict) -> int:  # type: ignore[type-arg]
         """Ensure end_char is greater than start_char."""
         if "start_char" in info.data and v <= info.data["start_char"]:
             raise ValueError("end_char must be greater than start_char")
