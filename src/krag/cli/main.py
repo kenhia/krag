@@ -1,6 +1,12 @@
 """Main CLI application using Typer."""
 
+import os
 from pathlib import Path
+
+# Suppress verbose output from transformers library before importing anything else
+# These can be overridden by --verbose flag later
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import typer
 from rich.console import Console

@@ -1,6 +1,9 @@
 """Text embedding generation using sentence-transformers."""
 
+import io
 import logging
+import sys
+import warnings
 from typing import Any
 
 from sentence_transformers import SentenceTransformer
@@ -30,7 +33,37 @@ class EmbeddingGenerator:
         self.device = device
 
         logger.info(f"Loading embedding model: {model_name} on device: {device}")
-        self.model = SentenceTransformer(model_name, device=device)
+
+        # Suppress verbose output from transformers library
+        # Only show warnings and errors unless in verbose/debug mode
+        root_logger = logging.getLogger()
+        is_verbose = root_logger.level <= logging.DEBUG
+
+        if not is_verbose:
+            # Suppress transformers and sentence-transformers INFO logs
+            logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+            logging.getLogger("transformers").setLevel(logging.ERROR)
+
+            # Suppress specific noisy loggers
+            logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+            logging.getLogger("transformers.configuration_utils").setLevel(logging.ERROR)
+            logging.getLogger("transformers.modeling_tf_utils").setLevel(logging.ERROR)
+
+            # Temporarily redirect stderr to suppress progress bars and model load reports
+            # This captures output from the underlying C++/Rust libraries
+            stderr_backup = sys.stderr
+            try:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=FutureWarning)
+                    warnings.filterwarnings("ignore", category=UserWarning)
+                    # Redirect stderr to devnull during model load
+                    sys.stderr = io.StringIO()
+                    self.model = SentenceTransformer(model_name, device=device)
+            finally:
+                # Always restore stderr
+                sys.stderr = stderr_backup
+        else:
+            self.model = SentenceTransformer(model_name, device=device)
 
         # Get model dimension
         self.dimension = self.model.get_sentence_embedding_dimension()

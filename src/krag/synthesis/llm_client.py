@@ -1,6 +1,8 @@
 """LLM client for answer synthesis."""
 
+import io
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -176,12 +178,31 @@ class LLMClient:
         try:
             from llama_cpp import Llama
 
-            self.model = Llama(
-                model_path=str(self.model_path),
-                n_ctx=self.n_ctx,
-                n_threads=self.n_threads,
-                verbose=False,
-            )
+            # Check if we should suppress output
+            root_logger = logging.getLogger()
+            is_verbose = root_logger.level <= logging.DEBUG
+
+            if not is_verbose:
+                # Suppress llama.cpp output by redirecting stderr temporarily
+                stderr_backup = sys.stderr
+                try:
+                    sys.stderr = io.StringIO()
+                    self.model = Llama(
+                        model_path=str(self.model_path),
+                        n_ctx=self.n_ctx,
+                        n_threads=self.n_threads,
+                        verbose=False,
+                    )
+                finally:
+                    sys.stderr = stderr_backup
+            else:
+                self.model = Llama(
+                    model_path=str(self.model_path),
+                    n_ctx=self.n_ctx,
+                    n_threads=self.n_threads,
+                    verbose=True,
+                )
+
             logger.info("LLM model loaded successfully")
         except ImportError as e:
             logger.error("llama-cpp-python not installed")

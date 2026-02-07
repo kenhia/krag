@@ -1,6 +1,7 @@
 """Logging configuration for krag CLI."""
 
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -92,21 +93,36 @@ def setup_logging(
     # Use NullHandler to prevent any output during shutdown
     third_party_loggers = [
         "httpx",
-        "httpcore",  # Added httpcore specifically
+        "httpcore",
         "sentence_transformers",
+        "transformers",  # HuggingFace transformers
+        "transformers.modeling_utils",
+        "transformers.configuration_utils",
+        "transformers.modeling_tf_utils",
         "qdrant_client",
         "llama_cpp",
         "urllib3",
         "filelock",
-        "huggingface_hub",  # Added huggingface_hub
+        "huggingface_hub",
     ]
 
     for logger_name in third_party_loggers:
         third_party_logger = logging.getLogger(logger_name)
-        # Allow WARNING+ but suppress INFO and DEBUG
-        third_party_logger.setLevel(logging.WARNING)
+        if verbose:
+            # In verbose mode, allow INFO+ from third-party libraries
+            third_party_logger.setLevel(logging.INFO)
+        else:
+            # Allow WARNING+ but suppress INFO and DEBUG
+            third_party_logger.setLevel(logging.WARNING)
         # Ensure no duplicate handlers
         third_party_logger.propagate = True
+
+    # Set environment variables for transformers library
+    if not verbose:
+        os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    else:
+        os.environ["TRANSFORMERS_VERBOSITY"] = "info"
 
     # Log the initialization
     logger = logging.getLogger(__name__)
