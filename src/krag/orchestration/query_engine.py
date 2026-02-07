@@ -34,6 +34,7 @@ class QueryEngine:
         llm_client: LLMClient,
         top_k: int = 5,
         max_context_length: int = 4000,
+        path_aliases: list[str] | None = None,
     ):
         """Initialize query engine.
 
@@ -43,9 +44,12 @@ class QueryEngine:
             llm_client: LLM client for synthesis
             top_k: Number of results to retrieve
             max_context_length: Max context characters
+            path_aliases: Optional path aliases for display reduction
         """
         self.retriever = Retriever(vector_store, embedding_generator)
-        self.prompt_builder = PromptBuilder(max_context_length=max_context_length)
+        self.prompt_builder = PromptBuilder(
+            max_context_length=max_context_length, path_aliases=path_aliases
+        )
         self.llm_client = llm_client
         self.top_k = top_k
 

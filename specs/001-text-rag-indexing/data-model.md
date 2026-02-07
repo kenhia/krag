@@ -198,10 +198,13 @@ Represents system configuration settings.
 - `top_k: int` - Number of results to retrieve
 
 **LLM**:
-- `llm_model: str` - HuggingFace model name (e.g., `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF`) or local path to GGUF file (default: `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF`, auto-downloads to `~/.cache/krag/models/huggingface/`)
+- `llm_model: str` - HuggingFace model name (e.g., `microsoft/Phi-3-mini-4k-instruct-gguf`) or local path to GGUF file (default: `microsoft/Phi-3-mini-4k-instruct-gguf`, auto-downloads to `~/.cache/krag/models/huggingface/`)
 - `llm_context_size: int` - Context window size (n_ctx)
 - `llm_num_threads: int` - Number of threads for inference
 - `llm_temperature: float` - Temperature for generation
+
+**Path Reductions**:
+- `path_aliases: list[str]` - Display path aliases in `full_path:alias` format (e.g., `["/home/ken:~", "/home/ken/src:src"]`). Uses longest-match-first for cleaner output while maintaining absolute paths internally.
 
 **XDG Base Directory Compliance**:
 - Configuration files stored in `~/.config/krag/` (or `$XDG_CONFIG_HOME/krag/`)

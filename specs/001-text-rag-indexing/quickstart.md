@@ -189,10 +189,13 @@ class KragConfig(BaseSettings):
     top_k: int = 5
     
     # LLM
-    llm_model: str = "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
+    llm_model: str = "microsoft/Phi-3-mini-4k-instruct-gguf"
     llm_context_size: int = 2048
     llm_num_threads: int = 4
     llm_temperature: float = 0.7
+    
+    # Path Reductions
+    path_aliases: List[str] = []  # e.g., ["/home/ken:~", "/home/ken/src:src"]
     
     model_config = SettingsConfigDict(
         env_prefix="KRAG_",
@@ -360,13 +363,21 @@ paths = [
 ]
 
 # 3. Configure LLM model (uses HuggingFace, auto-downloads)
-# Default: TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
+# Default: microsoft/Phi-3-mini-4k-instruct-gguf
 # Or use a larger model:
 [llm]
 model = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
 
 # Alternatively, use a local GGUF file:
 # model = "/home/user/.models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+
+# 4. Optional: Configure path display reductions for cleaner output
+[path_reductions]
+aliases = [
+    "/home/user:~",
+    "/home/user/projects:projects",
+]
+# This will display /home/user/projects/krag/README.md as projects/krag/README.md
 ```
 
 ### Index Your Files

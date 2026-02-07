@@ -1,18 +1,21 @@
 """Prompt builder for LLM synthesis."""
 
+from krag.config.path_reducer import PathReducer
 from krag.models.query_result import QueryResult
 
 
 class PromptBuilder:
     """Builds prompts for LLM from query and retrieved context."""
 
-    def __init__(self, max_context_length: int = 4000):
+    def __init__(self, max_context_length: int = 4000, path_aliases: list[str] | None = None):
         """Initialize prompt builder.
 
         Args:
             max_context_length: Maximum characters for context section
+            path_aliases: Optional path aliases for display reduction
         """
         self.max_context_length = max_context_length
+        self.path_reducer = PathReducer(path_aliases)
 
     def build(self, query: str, results: list[QueryResult]) -> str:
         """Build prompt from query and results.
@@ -53,8 +56,9 @@ Instructions: Answer the user's question based solely on the context provided ab
         total_length = 0
 
         for result in results:
-            # Format source info
-            source = f"[Source: {result.file_path.name}]"
+            # Format source info with reduced path
+            reduced_path = self.path_reducer.reduce(result.file_path)
+            source = f"[Source: {reduced_path}]"
             content = result.chunk_content.strip()
 
             chunk_text = f"{source}\n{content}\n"

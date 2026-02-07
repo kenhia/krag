@@ -127,6 +127,12 @@ class ConfigManager:
             if "temperature" in llm_section:
                 config_dict["llm_temperature"] = llm_section["temperature"]
 
+        # [path_reductions] section
+        if "path_reductions" in toml_data:
+            pr_section = toml_data["path_reductions"]
+            if "aliases" in pr_section:
+                config_dict["path_aliases"] = pr_section["aliases"]
+
         return Configuration(**config_dict)
 
     @staticmethod
@@ -212,6 +218,9 @@ class ConfigManager:
                     "num_threads": default_config.llm_num_threads,
                     "temperature": default_config.llm_temperature,
                 },
+                "path_reductions": {
+                    "aliases": default_config.path_aliases,
+                },
             }
             with open(config_path, "wb") as f:
                 tomli_w.dump(toml_dict, f)
@@ -282,6 +291,9 @@ class ConfigManager:
                 "context_size": config.llm_context_size,
                 "num_threads": config.llm_num_threads,
                 "temperature": config.llm_temperature,
+            },
+            "path_reductions": {
+                "aliases": config.path_aliases,
             },
         }
         with open(toml_path, "wb") as f:

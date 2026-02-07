@@ -12,6 +12,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from krag.cli.utils import exit_with_code
+from krag.config.path_reducer import PathReducer
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -142,6 +143,7 @@ def query_command(
             embedding_generator=embedding_generator,
             llm_client=llm_client,
             top_k=top_k,
+            path_aliases=config.path_aliases,
         )
 
         # Execute query
@@ -165,7 +167,8 @@ def query_command(
         else:
             # Full query with synthesis
             response = query_engine.query(query, top_k=top_k)
-            _display_full_response(response, show_sources, format)
+            path_reducer = PathReducer(config.path_aliases)
+            _display_full_response(response, show_sources, format, path_reducer)
 
     except typer.Exit:
         # Normal exit, don't log as error
@@ -184,6 +187,7 @@ def _display_full_response(
     response,
     show_sources: bool,
     format: OutputFormat,
+    path_reducer: PathReducer,
 ) -> None:
     """Display complete query response with answer and sources.
 
@@ -191,6 +195,7 @@ def _display_full_response(
         response: QueryResponse object
         show_sources: Whether to show source information
         format: Output format
+        path_reducer: Path reducer for display
     """
     if format == OutputFormat.JSON:
         output = {
@@ -198,7 +203,7 @@ def _display_full_response(
             "answer": response.answer,
             "sources": [
                 {
-                    "file_path": str(result.file_path),
+                    "file_path": path_reducer.reduce(result.file_path),
                     "chunk_content": result.chunk_content,
                     "score": result.score,
                     "rank": result.rank,
@@ -215,7 +220,8 @@ def _display_full_response(
         if show_sources and response.sources:
             output += "## Sources\n\n"
             for result in response.sources:
-                output += f"### {result.file_path.name} (score: {result.score:.3f})\n\n"
+                reduced_path = path_reducer.reduce(result.file_path)
+                output += f"### {reduced_path} (score: {result.score:.3f})\n\n"
                 output += f"```\n{result.chunk_content}\n```\n\n"
         console.print(Markdown(output))
 
@@ -234,8 +240,9 @@ def _display_full_response(
         if show_sources and response.sources:
             console.print("\n[bold]📚 Sources:[/bold]\n")
             for result in response.sources:
+                reduced_path = path_reducer.reduce(result.file_path)
                 console.print(
-                    f"  [cyan]{result.rank}.[/cyan] {result.file_path.name} "
+                    f"  [cyan]{result.rank}.[/cyan] {reduced_path} "
                     f"[dim](score: {result.score:.3f})[/dim]"
                 )
 
@@ -243,17 +250,19 @@ def _display_full_response(
 def _display_sources_only(
     sources,
     format: OutputFormat,
+    path_reducer: PathReducer,
 ) -> None:
     """Display only retrieved sources without synthesis.
 
     Args:
         sources: List of QueryResult objects
         format: Output format
+        path_reducer: Path reducer for display
     """
     if format == OutputFormat.JSON:
         output = [
             {
-                "file_path": str(result.file_path),
+                "file_path": path_reducer.reduce(result.file_path),
                 "chunk_content": result.chunk_content,
                 "score": result.score,
                 "rank": result.rank,
@@ -265,7 +274,8 @@ def _display_sources_only(
     elif format == OutputFormat.MARKDOWN:
         output = "# Retrieved Chunks\n\n"
         for result in sources:
-            output += f"## {result.rank}. {result.file_path.name} (score: {result.score:.3f})\n\n"
+            reduced_path = path_reducer.reduce(result.file_path)
+            output += f"## {result.rank}. {reduced_path} (score: {result.score:.3f})\n\n"
             output += f"```\n{result.chunk_content}\n```\n\n"
         console.print(Markdown(output))
 
@@ -277,6 +287,7 @@ def _display_sources_only(
         table.add_column("Content Preview", style="white", width=60)
 
         for result in sources:
+            reduced_path = path_reducer.reduce(result.file_path)
             preview = (
                 result.chunk_content[:100] + "..."
                 if len(result.chunk_content) > 100
@@ -284,7 +295,7 @@ def _display_sources_only(
             )
             table.add_row(
                 str(result.rank),
-                result.file_path.name,
+                reduced_path,
                 f"{result.score:.3f}",
                 preview,
             )

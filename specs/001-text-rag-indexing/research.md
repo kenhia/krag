@@ -154,7 +154,8 @@ class KragConfig(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 50
     vector_store_path: Path = Path("./qdrant_storage")
-    llm_model: str = "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
+    llm_model: str = "microsoft/Phi-3-mini-4k-instruct-gguf"
+    path_aliases: List[str] = []  # Path display reductions
     top_k: int = 5
 ```
 

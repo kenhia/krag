@@ -136,6 +136,7 @@ Key settings:
 - `chunk_size` / `chunk_overlap`: Chunking parameters
 - `embedding_model`: sentence-transformers model name
 - `llm_model`: HuggingFace model name or local GGUF path
+- `path_aliases`: Display path reductions (e.g., `/home/ken:~`)
 
 See [docs/configuration.md](docs/configuration.md) for full details.
 

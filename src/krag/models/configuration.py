@@ -123,6 +123,12 @@ class Configuration(BaseSettings):
         default=0.7, ge=0.0, le=2.0, description="Temperature for generation"
     )
 
+    # Path Reductions
+    path_aliases: list[str] = Field(
+        default_factory=list,
+        description="Path display aliases in 'full_path:alias' format, e.g., '/home/ken:~'",
+    )
+
     @field_validator("directory_paths")
     @classmethod
     def directory_paths_not_empty(cls, v: list[Path]) -> list[Path]:
