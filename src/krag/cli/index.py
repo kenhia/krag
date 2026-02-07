@@ -17,6 +17,7 @@ from rich.table import Table
 
 from krag.cli.utils import exit_with_code
 from krag.config.settings import ConfigManager
+from krag.config.xdg import get_krag_config_dir
 from krag.models.indexing_job import IndexingJob
 from krag.orchestration.indexer import IndexingOrchestrator
 
@@ -90,7 +91,19 @@ def index_command(
     try:
         # Load configuration
         config_manager = ConfigManager()
-        config_path = Path.home() / ".config" / "krag" / "config.yaml"
+
+        # Try TOML first (primary format), fall back to YAML (legacy)
+        config_dir = get_krag_config_dir()
+        config_toml = config_dir / "config.toml"
+        config_yaml = config_dir / "config.yaml"
+
+        if config_toml.exists():
+            config_path = config_toml
+        elif config_yaml.exists():
+            config_path = config_yaml
+        else:
+            console.print("[red]Configuration not found. Run 'krag init' first.[/red]")
+            exit_with_code(1)
 
         try:
             config = config_manager.load(config_path)
