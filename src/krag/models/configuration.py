@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from pydantic import ConfigDict, Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _get_default_vector_store_path() -> Path:
@@ -25,7 +25,9 @@ def _get_default_llm_model() -> str:
 
 
 class Configuration(BaseSettings):
-    model_config = ConfigDict(env_prefix="KRAG_", env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_prefix="KRAG_", env_file=".env", env_file_encoding="utf-8"
+    )
     """System configuration settings.
 
     Loads from environment variables and config file.
