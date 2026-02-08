@@ -34,7 +34,9 @@ def version_callback(value: bool) -> None:
 app = typer.Typer(
     name="krag",
     help="Personal RAG system for querying local knowledge base",
-    add_completion=False,
+    # Completion is enabled by default - users can run:
+    # krag --install-completion
+    # krag --show-completion
 )
 
 # Add commands
@@ -525,6 +527,95 @@ def reset(
 
     console.print("\n[green]Reset complete[/green]")
     console.print("[cyan]Run 'krag init' to reinitialize[/cyan]")
+
+
+@app.command()
+def completion(
+    shell: str | None = typer.Option(
+        None,
+        "--shell",
+        help="Shell type (bash, zsh, fish, powershell)",
+    ),
+) -> None:
+    """Set up shell command completion.
+
+    Enable tab completion for krag commands in your shell.
+    After setup, you can use Tab to complete commands and options.
+
+    Examples:
+
+        # Show completion setup for your current shell
+        krag completion
+
+        # Show setup for specific shell
+        krag completion --shell bash
+    """
+    import os
+    import shutil
+
+    # Detect shell if not specified
+    if shell is None:
+        current_shell = os.environ.get("SHELL", "").split("/")[-1]
+        if current_shell in ["bash", "zsh", "fish"]:
+            shell = current_shell
+        else:
+            shell = "bash"  # Default fallback
+
+    shell = shell.lower()
+
+    console.print(f"[cyan]Setting up completion for {shell}[/cyan]\n")
+
+    if shell == "bash":
+        console.print("[bold]For Bash:[/bold]")
+        console.print("1. Generate completion script:")
+        console.print("   [dim]krag --show-completion[/dim]")
+        console.print("\n2. Add to your ~/.bashrc:")
+        console.print('   [dim]eval "$(_KRAG_COMPLETE=bash_source krag)"[/dim]')
+        console.print("\n3. Reload your shell:")
+        console.print("   [dim]source ~/.bashrc[/dim]")
+
+    elif shell == "zsh":
+        console.print("[bold]For Zsh:[/bold]")
+        console.print("1. Generate completion script:")
+        console.print("   [dim]krag --show-completion[/dim]")
+        console.print("\n2. Add to your ~/.zshrc:")
+        console.print('   [dim]eval "$(_KRAG_COMPLETE=zsh_source krag)"[/dim]')
+        console.print("\n3. Reload your shell:")
+        console.print("   [dim]source ~/.zshrc[/dim]")
+
+    elif shell == "fish":
+        console.print("[bold]For Fish:[/bold]")
+        console.print("1. Generate completion script:")
+        console.print("   [dim]krag --show-completion[/dim]")
+        console.print("\n2. Add to fish config:")
+        console.print("   [dim]_KRAG_COMPLETE=fish_source krag | source[/dim]")
+
+    elif shell == "powershell":
+        console.print("[bold]For PowerShell:[/bold]")
+        console.print("1. Generate completion script:")
+        console.print("   [dim]krag --show-completion[/dim]")
+        console.print("\n2. Add to your PowerShell profile")
+        console.print("   (PowerShell completion support may be limited)")
+
+    else:
+        console.print(f"[yellow]Unknown shell: {shell}[/yellow]")
+        console.print("Supported shells: bash, zsh, fish, powershell")
+        exit_with_code(1)
+
+    console.print("\n[cyan]Quick test:[/cyan]")
+    console.print("After setup, try: [dim]krag <Tab>[/dim]")
+    console.print("You should see available commands and options.\n")
+
+    # Check if completion is working
+    typer_completion = shutil.which("_krag_completion")
+    if typer_completion:
+        console.print("[green]✓ Completion script detected[/green]")
+    else:
+        console.print("[yellow]! Completion not yet installed[/yellow]")
+
+    console.print("\n[cyan]Alternative: Use built-in Typer completion commands:[/cyan]")
+    console.print("• [dim]krag --install-completion[/dim] - Install for your shell")
+    console.print("• [dim]krag --show-completion[/dim] - Show completion script")
 
 
 if __name__ == "__main__":

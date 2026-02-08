@@ -7,11 +7,13 @@ import typer
 from rich.console import Console
 from rich.progress import (
     BarColumn,
+    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
+    TimeRemainingColumn,
 )
 from rich.table import Table
 
@@ -152,31 +154,47 @@ def index_command(
         console.print(f"[cyan]Vector store:[/cyan] {vector_store or 'in-memory'}")
         console.print(f"[cyan]Mode:[/cyan] {'Full reindex' if full else 'Incremental'}\n")
 
-        # Progress tracking
+        # Enhanced Progress tracking with ETA and completion count
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
+            MofNCompleteColumn(),
             TaskProgressColumn(),
             TextColumn("files"),
             TimeElapsedColumn(),
+            TimeRemainingColumn(),
             console=console,
         )
 
-        # Track progress state
+        # Track progress state and timing for rate calculation
         progress_task_id = None
+        start_time = None
 
         def progress_callback(current: int, total: int, stage: str) -> None:
-            """Update progress bar."""
-            nonlocal progress_task_id
+            """Update progress bar with enhanced information."""
+            nonlocal progress_task_id, start_time
 
             if progress_task_id is None:
                 progress_task_id = progress.add_task(f"[cyan]{stage}[/cyan]", total=total)
+                start_time = progress.get_time()
             else:
+                # Calculate processing rate if applicable
+                if current > 0 and start_time:
+                    elapsed = progress.get_time() - start_time
+                    rate = current / elapsed if elapsed > 0 else 0
+                    if rate > 1:
+                        rate_text = f" ({rate:.1f}/sec)"
+                    else:
+                        rate_text = ""
+                    description = f"[cyan]{stage}[/cyan]{rate_text}"
+                else:
+                    description = f"[cyan]{stage}[/cyan]"
+
                 progress.update(
                     progress_task_id,
                     completed=current,
-                    description=f"[cyan]{stage}[/cyan]",
+                    description=description,
                 )
 
         # Run indexing

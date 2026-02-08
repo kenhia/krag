@@ -292,11 +292,11 @@
 
 ### Plugin Architecture (Future Work)
 
-- [ ] T179 [P] Create spec.md for plugin system (new spec: 002-plugin-architecture)
-- [ ] T180 [P] Document plugin interfaces for: file type handlers, chunking strategies, embedding models, vector stores
-- [ ] T181 [P] Design plugin discovery mechanism (entry points or explicit registration)
-- [ ] T182 [P] Define plugin API contracts and lifecycle hooks
-- [ ] T183 [P] Create example plugin implementation showing all hooks
+- [➡️] T179 [P] Create spec.md for plugin system (new spec: 002-plugin-architecture)
+- [➡️] T180 [P] Document plugin interfaces for: file type handlers, chunking strategies, embedding models, vector stores
+- [➡️] T181 [P] Design plugin discovery mechanism (entry points or explicit registration)
+- [➡️] T182 [P] Define plugin API contracts and lifecycle hooks
+- [➡️] T183 [P] Create example plugin implementation showing all hooks
 
 **Checkpoint**: Specifications updated, implementation roadmap clear for post-MVP enhancements
 
@@ -353,20 +353,20 @@
 
 **Documentation**
 
-- [ ] T135 [P] Create comprehensive README.md with installation, setup, usage examples
-- [ ] T136 [P] Add docstrings to all public classes and methods
-- [ ] T137 [P] Create docs/architecture.md documenting system design
-- [ ] T138 [P] Create docs/configuration.md explaining all config options
-- [ ] T139 [P] Create docs/troubleshooting.md with common issues and solutions
+- [➡️] T135 [P] Create comprehensive README.md with installation, setup, usage examples
+- [X] T136 [P] Add docstrings to all public classes and methods
+- [X] T137 [P] Create docs/architecture.md documenting system design
+- [➡️] T138 [P] Create docs/configuration.md explaining all config options
+- [➡️] T139 [P] Create docs/troubleshooting.md with common issues and solutions
 
 **Additional Testing**
 
-- [ ] T140 [P] Add unit tests for any modules missing coverage in tests/unit/
-- [ ] T141 [P] Add edge case tests for all 9 edge cases from spec.md (empty query, no indexed content, large files, binary misidentification, storage unavailable, corrupt files, long chunks, concurrent indexing, config errors)
-- [ ] T142 Achieve minimum 80% test coverage across all modules
-- [ ] T143 [P] Add performance tests in tests/performance/ for indexing throughput
-- [ ] T144 [P] Add accuracy validation test in tests/integration/ for SC-004 (verify top-5 retrieval accuracy on test corpus)
-- [ ] T145 [P] Add memory profiling test in tests/performance/ for SC-006 (verify no memory leaks during extended operation)
+- [➡️] T140 [P] Add unit tests for any modules missing coverage in tests/unit/
+- [➡️] T141 [P] Add edge case tests for all 9 edge cases from spec.md (empty query, no indexed content, large files, binary misidentification, storage unavailable, corrupt files, long chunks, concurrent indexing, config errors)
+- [➡️] T142 Achieve minimum 80% test coverage across all modules
+- [➡️] T143 [P] Add performance tests in tests/performance/ for indexing throughput
+- [➡️] T144 [P] Add accuracy validation test in tests/integration/ for SC-004 (verify top-5 retrieval accuracy on test corpus)
+- [➡️] T145 [P] Add memory profiling test in tests/performance/ for SC-006 (verify no memory leaks during extended operation)
 
 **Code Quality**
 
@@ -378,17 +378,17 @@
 
 **Error Handling & Logging**
 
-- [ ] T151 [P] Ensure all modules have consistent error handling
-- [ ] T152 [P] Ensure all CLI commands have user-friendly error messages
-- [ ] T153 Add log rotation configuration
-- [ ] T154 Add structured logging for machine-readable logs
+- [➡️] T151 [P] Ensure all modules have consistent error handling
+- [➡️] T152 [P] Ensure all CLI commands have user-friendly error messages
+- [➡️] T153 Add log rotation configuration
+- [➡️] T154 Add structured logging for machine-readable logs
 
 **CLI Enhancements**
 
 - [X] T155 [P] Add reset command with confirmation prompts
 - [X] T156 [P] Add --version flag to main CLI
-- [ ] T157 Add shell completion support for bash/zsh
-- [ ] T158 Improve progress indicators with richer formatting
+- [X] T157 Add shell completion support for bash/zsh
+- [X] T158 Improve progress indicators with richer formatting
 
 **Quickstart Validation**
 
@@ -397,9 +397,9 @@
 
 **Final Pre-Commit Validation**
 
-- [ ] T161 Run complete pre-commit workflow: `uv run ruff format . && uv run ruff check --fix . && uv run pytest`
-- [ ] T162 Verify all tests pass and code quality checks succeed
-- [ ] T163 Review git status and ensure no unintended files are staged
+- [X] T161 Run complete pre-commit workflow: `uv run ruff format . && uv run ruff check --fix . && uv run pytest`
+- [X] T162 Verify all tests pass and code quality checks succeed
+- [X] T163 Review git status and ensure no unintended files are staged
 
 ---
 
