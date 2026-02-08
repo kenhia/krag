@@ -102,8 +102,10 @@ class QdrantVectorStore(VectorStore):
             for vec in vectors
         ]
 
-        # Upsert to collection
-        self.client.upsert(collection_name=self.collection_name, points=points)
+        # Upsert to collection (suppress large collection warning)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            self.client.upsert(collection_name=self.collection_name, points=points)
 
         logger.info(f"Upserted {len(points)} vectors to {self.collection_name}")
 
@@ -150,8 +152,10 @@ class QdrantVectorStore(VectorStore):
         # Convert string IDs to integer hashes
         int_ids = [self._id_to_int(id_) for id_ in ids]
 
-        # Delete from collection
-        self.client.delete(collection_name=self.collection_name, points_selector=int_ids)
+        # Delete from collection (suppress large collection warning)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            self.client.delete(collection_name=self.collection_name, points_selector=int_ids)
 
         logger.info(f"Deleted {len(ids)} vectors from {self.collection_name}")
 
@@ -172,9 +176,11 @@ class QdrantVectorStore(VectorStore):
             logger.warning("No filter conditions provided")
             return
 
-        # Delete using filter
+        # Delete using filter (suppress large collection warning)
         filter_obj = Filter(must=conditions)
-        self.client.delete(collection_name=self.collection_name, points_selector=filter_obj)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            self.client.delete(collection_name=self.collection_name, points_selector=filter_obj)
 
         logger.info(f"Deleted vectors matching filter {filter_dict} from {self.collection_name}")
 
@@ -184,7 +190,9 @@ class QdrantVectorStore(VectorStore):
         Returns:
             Dictionary with collection statistics
         """
-        collection_info = self.client.get_collection(self.collection_name)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            collection_info = self.client.get_collection(self.collection_name)
 
         # Extract count from collection info
         count = 0

@@ -372,9 +372,9 @@
 
 - [X] T146 Run `uv run ruff format .` and verify all code is formatted
 - [X] T147 Run `uv run ruff check --fix .` and fix all linting issues
-- [ ] T148 Run `uv run mypy src/` and fix all type errors
+- [X] T148 Run `uv run mypy src/` and fix all type errors
 - [X] T149 Run `uv run pytest` and ensure all tests pass
-- [ ] T150 Review and refactor any code smells or duplication
+- [X] T150 Review and refactor any code smells or duplication
 
 **Error Handling & Logging**
 
