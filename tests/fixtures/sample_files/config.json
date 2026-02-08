@@ -1,0 +1,21 @@
+{
+  "application": {
+    "name": "krag",
+    "version": "1.0.0",
+    "description": "Personal multimodal RAG system"
+  },
+  "embedding": {
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "dimension": 384,
+    "batch_size": 32
+  },
+  "vector_store": {
+    "type": "qdrant",
+    "collection": "krag_embeddings",
+    "distance_metric": "cosine"
+  },
+  "chunking": {
+    "chunk_size": 512,
+    "overlap": 50
+  }
+}
