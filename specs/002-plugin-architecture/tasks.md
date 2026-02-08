@@ -24,12 +24,12 @@ Tasks follow strict checklist format:
 
 **Purpose**: Establish plugin system foundation structure
 
-- [ ] T001 Create `src/krag/plugins/` module directory structure
-- [ ] T002 Create `src/krag/plugins/__init__.py` with module exports
-- [ ] T003 [P] Create `tests/unit/plugins/` directory for plugin system unit tests
-- [ ] T004 [P] Create `tests/contract/` plugin contract test files structure
-- [ ] T005 [P] Create `tests/integration/` plugin integration test directories
-- [ ] T006 Perform pre-commit checks using "python-precommit" skill; commit changes
+- [X] T001 Create `src/krag/plugins/` module directory structure
+- [X] T002 Create `src/krag/plugins/__init__.py` with module exports
+- [X] T003 [P] Create `tests/unit/plugins/` directory for plugin system unit tests
+- [X] T004 [P] Create `tests/contract/` plugin contract test files structure
+- [X] T005 [P] Create `tests/integration/` plugin integration test directories
+- [X] T006 Perform pre-commit checks using "python-precommit" skill; commit changes
 
 ---
 
@@ -41,11 +41,11 @@ Tasks follow strict checklist format:
 
 ### Core Plugin Interfaces & Models
 
-- [ ] T007 Create `ChunkingStrategy` enum in `src/krag/plugins/interfaces.py`
-- [ ] T008 Create `FileTypeHandler` abstract base class in `src/krag/plugins/interfaces.py` (including optional `config_schema()` method)
-- [ ] T009 Create `PluginMetadata` Pydantic model in `src/krag/models/configuration.py`
-- [ ] T010 Create `PluginConfiguration` Pydantic model in `src/krag/models/configuration.py` (with per-extension override support for conflict resolution)
-- [ ] T011 [P] Create plugin exception hierarchy in `src/krag/plugins/exceptions.py` (include `PluginDisabledError`)
+- [X] T007 Create `ChunkingStrategy` enum in `src/krag/plugins/interfaces.py`
+- [X] T008 Create `FileTypeHandler` abstract base class in `src/krag/plugins/interfaces.py` (including optional `config_schema()` method)
+- [X] T009 Create `PluginMetadata` Pydantic model in `src/krag/models/configuration.py`
+- [X] T010 Create `PluginConfiguration` Pydantic model in `src/krag/models/configuration.py` (with per-extension override support for conflict resolution)
+- [X] T011 [P] Create plugin exception hierarchy in `src/krag/plugins/exceptions.py` (include `PluginDisabledError`)
 
 ### Plugin Context (FR-009)
 

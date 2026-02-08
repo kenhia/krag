@@ -1,8 +1,9 @@
 """Configuration model."""
 
 from pathlib import Path
+from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +23,83 @@ def _get_default_llm_model() -> str:
     Uses Phi-3 Mini, a capable 3.8B parameter model suitable for CPU inference.
     """
     return "microsoft/Phi-3-mini-4k-instruct-gguf"
+
+
+class PluginMetadata(BaseModel):
+    """Metadata about an installed plugin discovered via entry points.
+
+    Represents a plugin's identity, capabilities, and current state in the
+    plugin system.
+    """
+
+    name: str = Field(..., description="Plugin identifier (e.g., 'pdf', 'docx')")
+    version: str = Field(..., description="Plugin version from package metadata")
+    entry_point: str = Field(
+        ..., description="Full entry point reference (e.g., 'krag_plugin_pdf.handler:PDFHandler')"
+    )
+    supported_extensions: list[str] = Field(
+        ..., description="File extensions this plugin handles (e.g., ['.pdf', '.PDF'])"
+    )
+    description: str | None = Field(None, description="Human-readable plugin description")
+    author: str | None = Field(None, description="Plugin author from package metadata")
+    required_api_version: str = Field(
+        ..., description="Minimum plugin API version required (semver)"
+    )
+    is_enabled: bool = Field(default=True, description="Whether plugin is currently enabled")
+    is_loaded: bool = Field(
+        default=False, description="Whether plugin has been imported and instantiated"
+    )
+    load_error: str | None = Field(None, description="Error message if plugin failed to load")
+
+    @field_validator("name")
+    @classmethod
+    def name_is_valid_identifier(cls, v: str) -> str:
+        """Ensure plugin name is a valid Python identifier."""
+        if not v.replace("_", "").isalnum():
+            raise ValueError(f"Plugin name must be alphanumeric + underscore, got: {v}")
+        return v
+
+    @field_validator("supported_extensions")
+    @classmethod
+    def extensions_not_empty(cls, v: list[str]) -> list[str]:
+        """Ensure plugin supports at least one extension."""
+        if not v:
+            raise ValueError("supported_extensions must not be empty")
+        return v
+
+
+class PluginConfiguration(BaseModel):
+    """Configuration for the plugin system.
+
+    Defines which plugins are enabled/disabled and provides per-plugin settings
+    that are validated against each plugin's config_schema().
+    """
+
+    enabled_plugins: list[str] = Field(
+        default_factory=list,
+        description="List of plugin names to enable (empty = all discovered)",
+    )
+    disabled_plugins: list[str] = Field(
+        default_factory=list, description="List of plugin names to explicitly disable"
+    )
+    plugin_settings: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Per-plugin configuration (validated against plugin's config_schema)",
+    )
+
+    @field_validator("enabled_plugins", "disabled_plugins")
+    @classmethod
+    def no_overlap(cls, v: list[str], info: dict) -> list[str]:
+        """Ensure enabled and disabled plugin lists do not overlap."""
+        if info.field_name == "disabled_plugins" and "enabled_plugins" in info.data:
+            enabled = set(info.data["enabled_plugins"])
+            disabled = set(v)
+            overlap = enabled & disabled
+            if overlap:
+                raise ValueError(
+                    f"Plugin(s) cannot be both enabled and disabled: {', '.join(overlap)}"
+                )
+        return v
 
 
 class Configuration(BaseSettings):

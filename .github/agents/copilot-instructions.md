@@ -24,6 +24,7 @@ Python 3.11+: Follow standard conventions
 
 ## Recent Changes
 - 002-plugin-architecture: Added Python 3.11+
+- 002-plugin-architecture: Added Python 3.11+
 
 - 001-text-rag-indexing: Added Python 3.11+
 
