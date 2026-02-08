@@ -72,31 +72,32 @@ Advanced users can install plugins that provide specialized text chunking strate
 
 ### Edge Cases
 
-- What happens when a plugin fails during file processing (system continues with remaining files)?
-- How does system handle conflicting plugins that claim the same file extensions?
-- What happens when plugin dependencies are missing or incompatible versions?
-- How does system behave when plugin configuration is invalid or corrupted?
-- What happens during plugin upgrades that change their API interface?
-- How does system handle plugins that consume excessive memory or processing time?
+- **EC-001**: When a plugin fails during file processing, the system MUST log the file failure via the failure-to-index API (see FR-014), disable the plugin for the remainder of the run, and continue processing remaining files without the errant plugin (see FR-008)
+- **EC-002**: When multiple plugins claim the same file extension, the first plugin in configuration file order wins. Configuration MUST allow per-extension overrides to dictate which plugin handles each file type (see FR-007)
+- **EC-003**: When plugin dependencies are missing or incompatible versions are detected, the system MUST log a warning and disable the plugin for the current run (see FR-010)
+- **EC-004**: When plugin configuration is invalid or corrupted, the system MUST log a warning and disable the plugin for the current run (see FR-010)
+- **EC-005**: When a plugin has been upgraded, if the plugin loads successfully and its API version is compatible, it is used normally. Each run treats plugins the same regardless of whether they have been upgraded (see FR-010)
+- **EC-006**: Resource limits (memory, processing time) are out of scope for initial release. May be addressed in future specifications if performance issues arise
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: System MUST provide a mechanism to discover and register installed plugins automatically
+- **FR-001**: System MUST provide a mechanism to discover and register installed plugins. Discovery occurs during `krag plugin add`, which queries the plugin for its supported file types and records them in configuration. At runtime, the system reads plugin file type mappings from configuration and loads plugins lazily (only when a file matching a plugin's registered extensions is encountered)
 - **FR-002**: System MUST define standard interfaces for file type handlers that specify text extraction and metadata handling capabilities
 - **FR-003**: System MUST allow plugins to register supported file extensions and media types for automatic file routing
 - **FR-004**: System MUST provide plugin lifecycle hooks for initialization, configuration validation, and cleanup operations
 - **FR-005**: System MUST integrate plugin-extracted content into the existing indexing pipeline without requiring modifications to core indexing logic
 - **FR-006**: System MUST support plugin-specific configuration within the main configuration system
-- **FR-007**: System MUST provide commands for plugin management including install, remove, enable, disable, list, and status operations
-- **FR-008**: System MUST handle plugin failures gracefully by logging errors and continuing processing with remaining plugins and files
+- **FR-007**: System MUST provide CLI commands for plugin configuration management: `krag plugin add <name>` (discover installed plugin package, query it for supported file types, and add to configuration), `krag plugin remove <name>` (remove plugin entry from configuration), `krag plugin enable <name>`, `krag plugin disable <name>`, `krag plugin list` (show all configured plugins with status and file types), and `krag plugin info <name>` (show plugin details). Plugin package installation is performed separately via `uv pip install` or `pip install`
+- **FR-008**: System MUST handle plugin failures through graceful degradation: (1) log the error with full context, (2) record the file via the failure-to-index API (see FR-014), (3) if a plugin raises an unhandled exception, disable it for the remainder of the current run, and (4) continue processing remaining files with remaining enabled plugins. Plugins SHOULD handle their own recoverable errors internally and use the failure-to-index API to report files they could not process
 - **FR-009**: System MUST provide plugin access to text chunking, embedding generation, and vector storage capabilities
-- **FR-010**: System MUST validate plugin compatibility and dependencies before activation
-- **FR-011**: System MUST allow plugins to either provide custom chunking strategies or select from available krag base chunkers
-- **FR-012**: System MUST provide plugin API that enables plugins to specify which chunking strategy to use (custom or base krag chunker)
-- **FR-013**: System MUST provide API documentation with two complete working examples: one showing a plugin using krag's existing chunking, and one showing a plugin providing custom chunking
-- **FR-014**: System MUST design the chunking selection API to accommodate future expansion of base chunking strategies in krag
+- **FR-010**: System MUST validate plugin compatibility and dependencies before activation by: (1) checking plugin's `required_api_version` against krag's plugin API version using semver major-version compatibility, and (2) attempting plugin import to verify all dependencies are installed. All plugin calls MUST be wrapped in try-catch; if a plugin passes initial validation but raises an exception during use, it MUST be disabled for the remainder of the run (see EC-001, EC-003, EC-004)
+- **FR-011**: System MUST provide a plugin API for specifying chunking strategy: plugins return a `ChunkingStrategy` enum value (to select a krag base chunker), a custom `TextChunker` instance, or `None` (to use the default chunker)
+- **FR-012**: System MUST provide API documentation with two complete working examples: one showing a plugin using krag's existing chunking, and one showing a plugin providing custom chunking
+- **FR-013**: System MUST design the chunking selection API to accommodate future expansion of base chunking strategies in krag
+- **FR-014**: System MUST provide a failure-to-index reporting API that both the core system and plugins can call to record files that could not be processed, including the reason for failure. This API MUST support generating a summary report of all indexing failures for the user (e.g., via a CLI command or post-indexing summary)
+- **FR-015**: System MUST provide a `krag plugin install -e <path>` command (or equivalent) enabling plugin developers to install a plugin from an editable local source for development, similar to `uv tool install -e .`
 
 ### Key Entities
 
@@ -109,22 +110,22 @@ Advanced users can install plugins that provide specialized text chunking strate
 
 ### Measurable Outcomes
 
-- **SC-001**: Plugin developers can create a functional file type plugin in under 4 hours using provided documentation and examples
+- **SC-001**: Plugin API documentation and examples are comprehensive enough that a reasonably proficient Python developer can implement a functional file type plugin without needing to read krag source code
 - **SC-002**: End users can install and configure plugins without needing technical programming knowledge or understanding of system internals
 - **SC-003**: Plugin system adds less than 5% overhead to indexing performance when no plugins are installed
 - **SC-004**: Plugin failures do not crash the indexing process - system continues processing remaining files and logs plugin errors
 - **SC-005**: Plugin API is stable enough that plugins written for initial release work without modification through at least 2 minor version updates
-- **SC-006**: Common file types (PDF, DOCX, code files) can be supported through plugins that achieve 90%+ content extraction accuracy compared to manual copy-paste
+- **SC-006**: Common file types (PDF, DOCX, code files) can be supported through plugins that achieve 90%+ content extraction accuracy compared to manual copy-paste, as measured by character-level similarity (Levenshtein ratio) between plugin-extracted text and text manually copied from the native application
 
 ## Assumptions *(mandatory)*
 
 ### Technical Assumptions
 
-- **A-001**: Plugins will be distributed as Python packages installable via pip or similar package managers
+- **A-001**: Plugins will be distributed as Python packages installable via `uv pip install` or `pip install`
 - **A-002**: Plugin discovery will use Python entry points mechanism for automatic registration
 - **A-003**: Existing krag architecture interfaces (VectorStore, EmbeddingGenerator, TextExtractor) provide sufficient extension points for plugin integration
 - **A-004**: Plugin configuration will be integrated into krag's existing TOML configuration system
-- **A-005**: Plugin development will target Python 3.8+ compatibility to match krag's Python requirements
+- **A-005**: Plugin development will target Python 3.11+ compatibility to match krag's Python requirements
 
 ### Business Assumptions
 
@@ -162,9 +163,11 @@ Advanced users can install plugins that provide specialized text chunking strate
 - Plugin lifecycle management (load, initialize, configure, cleanup)
 - CLI commands for plugin management
 - Plugin-specific configuration integration
-- Error handling and graceful degradation when plugins fail
-- Developer documentation and example plugin
+- Error handling and graceful degradation when plugins fail (see FR-008 for definition)
+- Failure-to-index reporting API for both core system and plugins (see FR-014)
+- Developer documentation and example plugins
 - Integration with existing indexing pipeline
+- Contract tests to verify plugin interface compliance (required methods present, correct type signatures, error handling contracts, lifecycle hook behavior)
 
 ### Out of Scope
 

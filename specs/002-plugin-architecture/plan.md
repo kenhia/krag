@@ -7,7 +7,7 @@
 
 ## Summary
 
-Extend krag with a plugin system that enables file type handlers to be added without modifying core code. Plugins can extract text from specialized file formats (PDF, DOCX, code files, etc.) and integrate seamlessly into the existing indexing pipeline. The system provides plugin discovery via Python entry points, lifecycle management (load, initialize, configure, cleanup), and flexible chunking where plugins can either provide custom chunking strategies or select from krag's available base chunkers. CLI commands enable plugin management (install, list, enable, disable, configure). Architecture maintains backward compatibility with core text-only system while providing extensibility for third-party plugin development.
+Extend krag with a plugin system that enables file type handlers to be added without modifying core code. Plugins can extract text from specialized file formats (PDF, DOCX, code files, etc.) and integrate seamlessly into the existing indexing pipeline. Plugin packages are installed via `uv pip install` / `pip install` and registered via `krag plugin add`, which queries the plugin for its supported file types and records them in TOML configuration. At runtime, plugins are loaded lazily — only when a file matching a registered extension is encountered. The system provides lifecycle management (load, initialize with PluginContext, configure, cleanup), flexible chunking where plugins can either provide custom chunking strategies or select from krag's available base chunkers, and a failure-to-index reporting API for both core system and plugins. CLI commands enable plugin configuration management (add, remove, enable, disable, list, info). Architecture maintains backward compatibility with core text-only system while providing extensibility for third-party plugin development.
 
 ## Technical Context
 
@@ -22,8 +22,8 @@ Extend krag with a plugin system that enables file type handlers to be added wit
 **Target Platform**: Same as core krag (Linux/macOS/Windows desktop)
 **Project Type**: Single project (extension to existing CLI application)
 **Performance Goals**: 
-- Plugin discovery and registration adds <1 second to startup time
-- Plugin system overhead <5% when no plugins installed
+- Plugin system overhead <5% when no plugins are installed
+- Plugin operations should feel responsive as measured by manual testing (if noticeably slow, investigate optimization)
 - Plugin-extracted content indexed at rates comparable to native text files (within 20%)
 
 **Constraints**: 
@@ -108,6 +108,8 @@ src/krag/
 │   ├── interfaces.py          # FileTypeHandler ABC and plugin contracts
 │   ├── loader.py              # Plugin loading and validation
 │   ├── chunking.py            # Chunking strategy selection and plugin chunker wrapper
+│   ├── context.py             # NEW: PluginContext (exposes embedding, vector store, failure API)
+│   ├── failures.py            # NEW: IndexingFailureCollector and failure-to-index API
 │   └── exceptions.py          # Plugin-specific exceptions
 │
 ├── cli/

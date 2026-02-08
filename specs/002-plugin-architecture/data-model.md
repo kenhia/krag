@@ -30,7 +30,7 @@ Represents metadata about an installed plugin discovered via entry points.
 - `name` must be valid Python identifier (alphanumeric + underscore)
 - `version` must be valid semantic version string
 - `supported_extensions` must not be empty
-- `required_api_version` must match supported API version range
+- `required_api_version` must match supported API version range using **semver major-version compatibility**: plugins are compatible with the same major version of the plugin API (e.g., a plugin requiring `1.2.0` works with API `1.5.0`, but not `2.0.0`). Breaking changes increment the major version.
 
 **Relationships**:
 - One PluginMetadata → Many FileMetadata (plugin processes files)
@@ -56,6 +56,7 @@ Abstract base class that all file type plugins must implement.
 **Lifecycle Hooks** (optional):
 - `initialize(config: dict[str, Any]) -> None` - Called once after loading
 - `cleanup() -> None` - Called at shutdown for resource cleanup
+- `config_schema() -> type[BaseModel] | None` - Returns Pydantic model class for validating plugin-specific settings. If provided, `PluginConfiguration` validates the plugin's settings against this model before calling `initialize()`. Returns `None` if plugin has no configurable settings.
 
 **Error Handling**:
 - Raises `PluginExtractionError` if file cannot be processed
@@ -114,7 +115,7 @@ include_headers_footers = true
 **Validation Rules**:
 - `enabled_plugins` and `disabled_plugins` cannot have overlapping entries
 - Plugin names must match discovered plugins
-- Per-plugin settings validated against plugin's config schema (if provided)
+- Per-plugin settings validated against plugin's `config_schema()` Pydantic model (if provided by the plugin). When a plugin defines `config_schema()`, its settings from config.toml are validated against the returned Pydantic model before `initialize()` is called. Validation errors disable the plugin with a logged warning.
 
 ---
 
@@ -130,13 +131,16 @@ Central registry that manages plugin discovery, loading, and lifecycle.
 - `_api_version: str` - Current plugin API version
 
 **Methods**:
-- `discover_plugins() -> list[PluginMetadata]` - Scan entry points
-- `validate_plugins() -> list[str]` - Check compatibility and dependencies
-- `load_plugin(name: str) -> FileTypeHandler` - Load and initialize plugin
-- `get_handler_for_extension(ext: str) -> FileTypeHandler | None` - Retrieve handler
-- `reload_plugin(name: str) -> None` - Reload plugin (for development)
+- `discover_plugins() -> list[PluginMetadata]` - Scan entry points for installed plugin packages
+- `validate_plugins() -> list[str]` - Check API version compatibility and attempt import
+- `load_plugin(name: str) -> FileTypeHandler` - Import, instantiate, and initialize plugin
+- `get_handler_for_extension(ext: str) -> FileTypeHandler | None` - Retrieve handler (lazy load on first access)
 - `unload_plugin(name: str) -> None` - Cleanup and unload plugin
 - `list_plugins(filter: str | None) -> list[PluginMetadata]` - List plugins by filter
+- `add_plugin(name: str) -> PluginMetadata` - Discover installed plugin package, query file types, add to config
+- `remove_plugin(name: str) -> None` - Remove plugin entry from configuration
+- `enable_plugin(name: str) -> None` - Enable plugin in configuration
+- `disable_plugin(name: str) -> None` - Disable plugin in configuration and unload
 
 **State Transitions**:
 1. **Discovered** → Plugin found via entry point, metadata loaded
@@ -144,6 +148,7 @@ Central registry that manages plugin discovery, loading, and lifecycle.
 3. **Loaded** → Module imported, handler instantiated
 4. **Initialized** → Configuration applied, ready for use
 5. **Error** → Load or validation failed, marked unavailable
+6. **Disabled** → Plugin disabled by user or by runtime error (see FR-008)
 
 ---
 
@@ -161,11 +166,63 @@ Exception types for plugin system error handling.
 - `PluginExtractionError` - Plugin failed to extract content from file
 - `PluginAPIVersionError` - Plugin requires unsupported API version
 - `PluginDependencyError` - Plugin missing required dependencies
+- `PluginDisabledError` - Plugin was disabled during runtime due to failure
 
 **Error Attributes**:
 - `plugin_name: str` - Name of plugin that raised error
 - `file_path: Path | None` - File being processed (if applicable)
 - `original_exception: Exception | None` - Underlying exception
+
+---
+
+### 7. PluginContext
+
+Context object passed to plugins providing access to krag's core capabilities (see FR-009).
+
+**Attributes**:
+- `embedding_generator: EmbeddingGenerator` - Access to krag's embedding generation service
+- `vector_store: VectorStore` - Access to krag's vector storage for query/upsert operations
+- `chunker: TextChunker` - Access to krag's default text chunker
+- `logger: Logger` - Plugin-scoped structured logger
+- `report_indexing_failure: Callable[[Path, str], None]` - Failure-to-index reporting API (see FR-014)
+
+**Usage**:
+```python
+# Passed to plugin during initialization
+def initialize(self, config: dict[str, Any], context: PluginContext) -> None:
+    self._context = context
+
+# Plugin can report files it cannot process
+def extract_text(self, file_path: Path) -> str:
+    try:
+        return self._do_extraction(file_path)
+    except CorruptedFileError:
+        self._context.report_indexing_failure(file_path, "File is corrupted")
+        return ""
+```
+
+**Notes**:
+- PluginContext is created by the orchestrator and passed to `initialize()`
+- Plugins that only need text extraction/metadata do not need to use context services
+- The `report_indexing_failure()` function is also available to the core system for its own failures
+
+---
+
+### 8. IndexingFailureRecord
+
+Records files that could not be indexed, for user reporting (see FR-014).
+
+**Attributes**:
+- `file_path: Path` - Path of the file that failed
+- `plugin_name: str | None` - Plugin that reported the failure (None for core system)
+- `reason: str` - Human-readable failure description
+- `timestamp: datetime` - When the failure occurred
+- `exception_type: str | None` - Exception class name if caused by exception
+
+**Usage**:
+- Collected during indexing runs
+- Summarized in post-indexing output
+- Queryable via CLI command (e.g., `krag index --show-failures` or `krag plugin failures`)
 
 ---
 
@@ -283,46 +340,64 @@ classDiagram
 
 ## Data Flow
 
-### Plugin Discovery and Loading
+### Plugin Discovery and Registration
 
 ```
-1. Startup
+1. User installs plugin package (`uv pip install krag-plugin-pdf`)
    ↓
-2. PluginRegistry.discover_plugins()
+2. User runs `krag plugin add pdf`
    ↓
-3. Scan entry points → Create PluginMetadata for each
+3. PluginRegistry.add_plugin("pdf")
    ↓
-4. Load PluginConfiguration from config.toml
+4. Scan entry points → Find plugin → Query supported_extensions()
    ↓
-5. Validate plugins (API version, dependencies)
+5. Write plugin entry + file type mappings to config.toml
    ↓
-6. Build extension_map (extension → plugin_name)
-   ↓
-7. Registry ready (plugins not yet loaded)
+6. Plugin is now configured (but not loaded)
 ```
 
-### File Processing with Plugin
+### Runtime Plugin Loading (Lazy)
 
 ```
-1. Scanner encounters file.pdf
+1. User runs `krag index <directory>`
    ↓
-2. Registry.get_handler_for_extension(".pdf")
+2. Read plugin configuration from config.toml (extension → plugin mappings)
    ↓
-3. Check if "pdf" plugin loaded
+3. Scanner encounters file.pdf
    ↓
-4. If not: load_plugin("pdf") → Import → Initialize
+4. Check extension_map: ".pdf" → "pdf" plugin
    ↓
-5. handler.extract_text(file.pdf) → text
+5. Lazy load: import plugin module → instantiate → validate API version → initialize(config, context)
    ↓
-6. handler.extract_metadata(file.pdf) → metadata
+6. handler.extract_text(file.pdf) → text  [wrapped in try-catch]
    ↓
-7. handler.get_chunking_strategy() → ChunkingStrategy or TextChunker
+7. handler.extract_metadata(file.pdf) → metadata  [wrapped in try-catch]
    ↓
-8. Apply chunking strategy → TextChunks
+8. handler.get_chunking_strategy() → ChunkingStrategy or TextChunker
    ↓
-9. Create FileMetadata with handler_plugin="pdf"
+9. Apply chunking strategy → TextChunks
    ↓
-10. Continue indexing pipeline
+10. Create FileMetadata with handler_plugin="pdf"
+   ↓
+11. Continue indexing pipeline
+```
+
+### Plugin Error During Processing
+
+```
+1. Plugin raises unhandled exception during extract_text() or extract_metadata()
+   ↓
+2. Catch exception → Log error with context
+   ↓
+3. Record via report_indexing_failure(file_path, reason)
+   ↓
+4. Disable plugin for remainder of run
+   ↓
+5. Skip remaining files for this plugin's extensions
+   ↓
+6. Continue processing with other enabled plugins
+   ↓
+7. Include failure summary in post-indexing output
 ```
 
 ---
@@ -363,14 +438,15 @@ FileMetadata includes `handler_plugin` field stored in Qdrant:
 - Supported extensions must not conflict with other enabled plugins
 
 ### Plugin Loading
-- Plugin API version must be compatible (`1.x.x` for current `1.0.0`)
-- Plugin dependencies must be installed
+- Plugin API version must be compatible (semver major-version: `1.x.x` compatible with current `1.0.0`, `2.x.x` not compatible)
+- Plugin dependencies must be installed (verified by attempting import)
+- All plugin calls wrapped in try-catch; unhandled exceptions disable the plugin for the current run
 - Plugin must implement all required FileTypeHandler methods
 
 ### Configuration
 - enabled_plugins and disabled_plugins must not overlap
-- Plugin-specific settings must be valid for that plugin
-- File extension mappings must be unambiguous
+- Plugin-specific settings validated against plugin's `config_schema()` Pydantic model (if provided)
+- File extension mappings must be unambiguous; conflicts resolved by config file order with per-extension overrides
 
 ### File Processing
 - File must have supported extension
@@ -388,6 +464,7 @@ FileMetadata includes `handler_plugin` field stored in Qdrant:
 - **Plugin sandboxing**: Security constraints on plugin operations
 - **Streaming extraction**: Support large file processing without full load
 - **Multi-format handlers**: Single plugin supporting multiple related formats
+- **Resource limits**: Memory and processing time constraints for plugin operations
 
 ---
 
