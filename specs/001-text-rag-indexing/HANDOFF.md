@@ -145,7 +145,56 @@ When starting the 002-plugin-architecture spec:
 ## Repository Status
 
 **Current Branch**: `001-text-rag-indexing` (ready for merge)  
-**Next Branch**: `002-plugin-architecture` (to be created)
+**Next Branch**: `002-plugin-architecture` (created on 2026-02-07)
 **Main Branch**: Ready to receive the completed text-based RAG system
+
+---
+
+## UPDATE: 002-plugin-architecture Spec Created (2026-02-07)
+
+The plugin architecture specification has been created and validated. Task traceability mapping:
+
+### Core Plugin System Tasks → Spec Requirements
+
+- **T179** (Create spec.md) → ✅ **COMPLETED**: Spec created at `specs/002-plugin-architecture/spec.md`
+- **T180** (Document plugin interfaces) → **FR-002, FR-012**: Standard interfaces for file handlers, chunking plugin API
+- **T181** (Design plugin discovery) → **FR-001**: Automatic plugin discovery and registration mechanism
+- **T182** (Define API contracts and lifecycle) → **FR-004, FR-010**: Plugin lifecycle hooks and compatibility validation
+- **T183** (Create example plugin) → **FR-013**: Two complete working examples (one with krag chunking, one with custom chunking)
+
+### Polish Tasks → Deferred to Implementation Planning
+
+These tasks will receive new task numbers when the plugin spec enters planning phase (`/speckit.plan`):
+
+**Documentation Tasks**:
+- **T135** (Comprehensive README) → Will be included in plugin spec implementation
+- **T138** (Configuration guide) → Will be included in plugin spec implementation
+- **T139** (Troubleshooting guide) → Will be included in plugin spec implementation
+
+**Testing & Quality Tasks**:
+- **T140** (Unit test coverage) → Will be included in plugin spec testing phase
+- **T141** (Edge case tests) → Addressed by edge cases in spec (6 scenarios identified)
+- **T142** (80% coverage goal) → Will be included in plugin spec testing phase
+- **T143** (Performance tests) → Will be included in plugin spec testing phase
+- **T144** (Accuracy validation) → Will be included in plugin spec testing phase (SC-006)
+- **T145** (Memory profiling) → Will be included in plugin spec testing phase
+
+**Error Handling & Logging Tasks**:
+- **T151** (Consistent error handling) → **FR-008**: Graceful plugin failure handling
+- **T152** (User-friendly error messages) → Will be included in CLI implementation
+- **T153** (Log rotation config) → Will be included in plugin spec implementation
+- **T154** (Structured logging) → Will be included in plugin spec implementation
+
+### Key Decisions Made
+
+1. **Chunking Plugin Scope**: Plugins can provide custom chunking strategies OR select from krag's base chunkers, with API designed to accommodate future chunker expansion
+2. **Documentation Depth**: API documentation with two complete examples (minimal viable documentation)
+3. **Plugin Focus**: Initial implementation focuses on file type handlers only; other plugin types (vector stores, embedding models) deferred
+
+### Next Steps
+
+- Run `/speckit.plan` on the 002-plugin-architecture spec to generate detailed task breakdown
+- New tasks will be numbered T001, T002, etc. within the plugin architecture spec
+- Spec validation complete - all quality checks passed
 
 The handoff is complete and the foundation is solid. The plugin system can now be built on this robust base! 🚀
