@@ -49,26 +49,26 @@ Tasks follow strict checklist format:
 
 ### Plugin Context (FR-009)
 
-- [ ] T012 Create `PluginContext` class in `src/krag/plugins/context.py` exposing embedding generator, vector store, chunker, logger, and `report_indexing_failure()` API
-- [ ] T013 Create `IndexingFailureRecord` model in `src/krag/models/indexing_job.py`
-- [ ] T014 [P] Create `IndexingFailureCollector` in `src/krag/plugins/failures.py` for aggregating failure records
-- [ ] T015 [P] Add contract test for `PluginContext` API in `tests/contract/test_plugin_context_contract.py`
+- [X] T012 Create `PluginContext` class in `src/krag/plugins/context.py` exposing embedding generator, vector store, chunker, logger, and `report_indexing_failure()` API
+- [X] T013 Create `IndexingFailureRecord` model in `src/krag/models/indexing_job.py`
+- [X] T014 [P] Create `IndexingFailureCollector` in `src/krag/plugins/failures.py` for aggregating failure records
+- [X] T015 [P] Add contract test for `PluginContext` API in `tests/contract/test_plugin_context_contract.py`
 
 ### Plugin Registry Core
 
-- [ ] T016 Create `PluginRegistry` class skeleton in `src/krag/plugins/registry.py`
-- [ ] T017 Implement `discover_plugins()` method using entry points in `src/krag/plugins/registry.py`
-- [ ] T018 Implement `_build_extension_map()` from configuration (config-driven, not runtime scan) in `src/krag/plugins/registry.py`
-- [ ] T019 Implement `list_plugins()` with status filtering in `src/krag/plugins/registry.py`
-- [ ] T020 Implement `get_plugin_info()` method in `src/krag/plugins/registry.py`
+- [X] T016 Create `PluginRegistry` class skeleton in `src/krag/plugins/registry.py`
+- [X] T017 Implement `discover_plugins()` method using entry points in `src/krag/plugins/registry.py`
+- [X] T018 Implement `_build_extension_map()` from configuration (config-driven, not runtime scan) in `src/krag/plugins/registry.py`
+- [X] T019 Implement `list_plugins()` with status filtering in `src/krag/plugins/registry.py`
+- [X] T020 Implement `get_plugin_info()` method in `src/krag/plugins/registry.py`
 
 ### Plugin Loading & Validation
 
-- [ ] T021 Create `PluginLoader` class in `src/krag/plugins/loader.py`
-- [ ] T022 Implement plugin import and instantiation in `src/krag/plugins/loader.py`
-- [ ] T023 Implement API version compatibility checking using semver major-version match in `src/krag/plugins/loader.py`
-- [ ] T024 Implement `validate_plugins()` method in `src/krag/plugins/registry.py` (attempt import, check API version, validate config_schema)
-- [ ] T025 Implement `check_extension_conflict()` validation in `src/krag/plugins/registry.py` (first in config order wins, per-extension overrides)
+- [X] T021 Create `PluginLoader` class in `src/krag/plugins/loader.py`
+- [X] T022 Implement plugin import and instantiation in `src/krag/plugins/loader.py`
+- [X] T023 Implement API version compatibility checking using semver major-version match in `src/krag/plugins/loader.py`
+- [X] T024 Implement `validate_plugins()` method in `src/krag/plugins/registry.py` (attempt import, check API version, validate config_schema)
+- [X] T025 Implement `check_extension_conflict()` validation in `src/krag/plugins/registry.py` (first in config order wins, per-extension overrides)
 
 ### Configuration Integration
 
