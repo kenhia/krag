@@ -3,11 +3,12 @@
 # Use built-in tomllib for Python 3.11+, fallback to tomli for older versions
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import tomli_w  # For writing TOML
 import yaml
 
-from krag.models.configuration import Configuration
+from krag.models.configuration import Configuration, PluginConfiguration
 
 
 class ConfigManager:
@@ -132,6 +133,29 @@ class ConfigManager:
             pr_section = toml_data["path_reductions"]
             if "aliases" in pr_section:
                 config_dict["path_aliases"] = pr_section["aliases"]
+
+        # [plugins] section (T028: plugin configuration parsing)
+        if "plugins" in toml_data:
+            plugin_section = toml_data["plugins"]
+            plugin_config_dict: dict[str, Any] = {}
+
+            if "enabled" in plugin_section:
+                plugin_config_dict["enabled_plugins"] = plugin_section["enabled"]
+            if "disabled" in plugin_section:
+                plugin_config_dict["disabled_plugins"] = plugin_section["disabled"]
+
+            # Collect per-plugin settings from [plugins.<plugin_name>] sections
+            plugin_settings: dict[str, dict[str, Any]] = {}
+            for key, value in toml_data.items():
+                if key.startswith("plugins.") and isinstance(value, dict):
+                    plugin_name = key.split(".", 1)[1]
+                    plugin_settings[plugin_name] = value
+
+            if plugin_settings:
+                plugin_config_dict["plugin_settings"] = plugin_settings
+
+            # Create PluginConfiguration and validate (T029: validation happens here)
+            config_dict["plugins"] = PluginConfiguration(**plugin_config_dict)
 
         return Configuration(**config_dict)
 

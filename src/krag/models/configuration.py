@@ -209,6 +209,12 @@ class Configuration(BaseSettings):
         description="Path display aliases in 'full_path:alias' format, e.g., '/home/ken:~'",
     )
 
+    # Plugin System
+    plugins: PluginConfiguration = Field(
+        default_factory=PluginConfiguration,
+        description="Plugin system configuration",
+    )
+
     @field_validator("directory_paths")
     @classmethod
     def directory_paths_not_empty(cls, v: list[Path]) -> list[Path]:

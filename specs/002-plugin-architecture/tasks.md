@@ -72,15 +72,15 @@ Tasks follow strict checklist format:
 
 ### Configuration Integration
 
-- [ ] T026 Extend `Configuration` model in `src/krag/models/configuration.py` with `plugins: PluginConfiguration`
-- [ ] T027 Add plugin configuration defaults in `src/krag/config/defaults.py`
-- [ ] T028 Update configuration loading in `src/krag/config/settings.py` to parse plugin sections (including per-extension overrides)
-- [ ] T029 Add plugin configuration validation (validate against `config_schema()` Pydantic model) in `src/krag/config/settings.py`
+- [X] T026 Extend `Configuration` model in `src/krag/models/configuration.py` with `plugins: PluginConfiguration`
+- [X] T027 Add plugin configuration defaults in `src/krag/config/defaults.py`
+- [X] T028 Update configuration loading in `src/krag/config/settings.py` to parse plugin sections (including per-extension overrides)
+- [X] T029 Add plugin configuration validation (validate against `config_schema()` Pydantic model) in `src/krag/config/settings.py`
 
 ### Extended File Metadata
 
-- [ ] T030 Add `handler_plugin: str | None` field to `FileMetadata` in `src/krag/models/file_metadata.py`
-- [ ] T031 Add `plugin_metadata: dict[str, Any] | None` field to `FileMetadata` in `src/krag/models/file_metadata.py`
+- [X] T030 Add `handler_plugin: str | None` field to `FileMetadata` in `src/krag/models/file_metadata.py`
+- [X] T031 Add `plugin_metadata: dict[str, Any] | None` field to `FileMetadata` in `src/krag/models/file_metadata.py`
 
 - [ ] T032 Perform pre-commit checks using "python-precommit" skill; commit changes
 
