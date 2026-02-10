@@ -82,7 +82,7 @@ Tasks follow strict checklist format:
 - [X] T030 Add `handler_plugin: str | None` field to `FileMetadata` in `src/krag/models/file_metadata.py`
 - [X] T031 Add `plugin_metadata: dict[str, Any] | None` field to `FileMetadata` in `src/krag/models/file_metadata.py`
 
-- [ ] T032 Perform pre-commit checks using "python-precommit" skill; commit changes
+- [X] T032 Perform pre-commit checks using "python-precommit" skill; commit changes
 
 **Checkpoint**: Foundation complete - user stories can now be implemented independently
 
@@ -96,9 +96,9 @@ Tasks follow strict checklist format:
 
 ### Contract Tests for US1
 
-- [ ] T033 [P] [US1] Create contract test for `FileTypeHandler` interface in `tests/contract/test_plugin_interface_contract.py`
-- [ ] T034 [P] [US1] Create contract test for `PluginRegistry` API in `tests/contract/test_plugin_registry_contract.py`
-- [ ] T035 [P] [US1] Create mock plugin fixture for testing in `tests/fixtures/mock_plugin.py`
+- [X] T033 [P] [US1] Create contract test for `FileTypeHandler` interface in `tests/contract/test_plugin_interface_contract.py`
+- [X] T034 [P] [US1] Create contract test for `PluginRegistry` API in `tests/contract/test_plugin_registry_contract.py`
+- [X] T035 [P] [US1] Create mock plugin fixture for testing in `tests/fixtures/mock_plugin.py`
 
 ### Plugin Loading & Lifecycle for US1
 
