@@ -102,11 +102,11 @@ Tasks follow strict checklist format:
 
 ### Plugin Loading & Lifecycle for US1
 
-- [ ] T036 [US1] Implement `load_plugin()` method in `src/krag/plugins/registry.py` (all calls wrapped in try-catch; disable plugin on exception)
-- [ ] T037 [US1] Implement `unload_plugin()` method with cleanup hooks in `src/krag/plugins/registry.py`
-- [ ] T038 [US1] Implement `get_handler_for_extension()` with lazy loading in `src/krag/plugins/registry.py`
-- [ ] T039 [US1] Implement `get_handler_for_file()` method in `src/krag/plugins/registry.py`
-- [ ] T040 [US1] Implement plugin lifecycle hooks (`initialize(config, context)`, `cleanup`) support in `src/krag/plugins/loader.py`
+- [X] T036 [US1] Implement `load_plugin()` method in `src/krag/plugins/registry.py` (all calls wrapped in try-catch; disable plugin on exception)
+- [X] T037 [US1] Implement `unload_plugin()` method with cleanup hooks in `src/krag/plugins/registry.py`
+- [X] T038 [US1] Implement `get_handler_for_extension()` with lazy loading in `src/krag/plugins/registry.py`
+- [X] T039 [US1] Implement `get_handler_for_file()` method in `src/krag/plugins/registry.py`
+- [X] T040 [US1] Implement plugin lifecycle hooks (`initialize(config, context)`, `cleanup`) support in `src/krag/plugins/loader.py`
 
 ### Chunking Strategy Integration for US1
 

@@ -4,13 +4,20 @@ This module provides the PluginRegistry class that handles plugin discovery,
 loading, validation, and lifecycle management for the plugin system.
 """
 
+from __future__ import annotations
+
 import logging
 from importlib.metadata import entry_points
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from krag.models.configuration import PluginConfiguration, PluginMetadata
 from krag.plugins.exceptions import PluginNotFoundError
 from krag.plugins.interfaces import FileTypeHandler
 from krag.plugins.loader import PluginLoader
+
+if TYPE_CHECKING:
+    from krag.plugins.context import PluginContext
 
 logger = logging.getLogger(__name__)
 
@@ -190,31 +197,197 @@ class PluginRegistry:
 
         return self._discovered[name]
 
-    def get_handler_for_extension(self, ext: str) -> FileTypeHandler | None:
+    def load_plugin(
+        self, name: str, context: PluginContext | None = None
+    ) -> FileTypeHandler | None:
+        """Load, instantiate, and initialize a plugin.
+
+        All operations wrapped in try-catch. On exception, plugin is disabled and
+        None is returned to enable graceful degradation.
+
+        Args:
+            name: Plugin name to load
+            context: Plugin context for initialization (optional)
+
+        Returns:
+            FileTypeHandler | None: Loaded handler instance, or None if load failed
+
+        Note:
+            If plugin fails to load, it is automatically disabled and error is logged.
+            Subsequent calls to load this plugin will return None immediately.
+
+        Example:
+            >>> handler = registry.load_plugin("pdf", context)
+            >>> if handler:
+            ...     text = handler.extract_text(Path("document.pdf"))
+        """
+        # Check if plugin is discovered
+        if name not in self._discovered:
+            logger.warning(f"Cannot load unknown plugin: {name}")
+            return None
+
+        metadata = self._discovered[name]
+
+        # Check if already loaded
+        if name in self._loaded:
+            logger.debug(f"Plugin '{name}' already loaded")
+            return self._loaded[name]
+
+        # Check if plugin is enabled
+        if not metadata.is_enabled:
+            logger.debug(f"Plugin '{name}' is disabled, not loading")
+            return None
+
+        # Check if plugin previously failed to load
+        if metadata.load_error is not None:
+            logger.debug(f"Plugin '{name}' previously failed to load: {metadata.load_error}")
+            return None
+
+        try:
+            # Load plugin class
+            handler_class = self._loader.load_plugin_class(name)
+
+            # Instantiate plugin
+            handler = self._loader.instantiate_plugin(handler_class)
+
+            # Check API compatibility
+            self._loader.check_api_compatibility(handler.required_api_version, name)
+
+            # Get plugin configuration
+            plugin_config = self._config.plugin_settings.get(name, {})
+
+            # Initialize plugin with config and context
+            self._loader.initialize_plugin(handler, plugin_config, context)
+
+            # Cache loaded handler
+            self._loaded[name] = handler
+
+            # Update metadata
+            metadata.version = handler.version
+            metadata.required_api_version = handler.required_api_version
+            metadata.supported_extensions = handler.supported_extensions()
+            metadata.is_loaded = True
+
+            logger.info(f"Successfully loaded plugin: {name} v{handler.version}")
+            return handler
+
+        except Exception as e:
+            # Disable plugin on load failure
+            error_msg = str(e)
+            logger.error(f"Failed to load plugin '{name}': {error_msg}")
+            metadata.is_enabled = False
+            metadata.load_error = error_msg
+            return None
+
+    def unload_plugin(self, name: str) -> None:
+        """Unload plugin and clean up resources.
+
+        Calls plugin's cleanup() hook and removes from loaded cache.
+        Safe to call on plugins that are not loaded.
+
+        Args:
+            name: Plugin name to unload
+
+        Example:
+            >>> registry.unload_plugin("pdf")
+        """
+        if name not in self._loaded:
+            logger.debug(f"Plugin '{name}' is not loaded, nothing to unload")
+            return
+
+        try:
+            handler = self._loaded[name]
+            self._loader.cleanup_plugin(handler)
+            del self._loaded[name]
+
+            # Update metadata
+            if name in self._discovered:
+                self._discovered[name].is_loaded = False
+
+            logger.info(f"Unloaded plugin: {name}")
+
+        except Exception as e:
+            logger.error(f"Error unloading plugin '{name}': {e}")
+
+    def get_handler_for_extension(
+        self, ext: str, context: PluginContext | None = None
+    ) -> FileTypeHandler | None:
         """Get handler for a file extension (lazy load).
+
+        Performs lazy loading: if handler not yet loaded, loads it on first access.
+        Returns None if no handler is registered for the extension or if loading fails.
 
         Args:
             ext: File extension (e.g., '.pdf')
+            context: Plugin context for initialization if lazy loading (optional)
 
         Returns:
             FileTypeHandler | None: Handler instance or None if no handler available
 
         Note:
-            This method will be fully implemented in later tasks (T021-T025)
-            when plugin loading is complete.
+            Extensions are matched case-insensitively. If extension has conflicts
+            (multiple plugins claim it), first enabled plugin in config order wins.
+
+        Example:
+            >>> handler = registry.get_handler_for_extension(".pdf", context)
+            >>> if handler:
+            ...     text = handler.extract_text(file_path)
         """
-        # TODO: Implement lazy loading in T021-T025
+        # Check extension map
         plugin_name = self._extension_map.get(ext)
         if plugin_name is None:
+            logger.debug(f"No handler registered for extension: {ext}")
             return None
 
         # Check if already loaded
         if plugin_name in self._loaded:
             return self._loaded[plugin_name]
 
-        # Lazy loading will be implemented later
-        logger.debug(f"Handler for {ext} -> {plugin_name} not yet loaded")
-        return None
+        # Lazy load the plugin
+        logger.debug(f"Lazy loading handler for {ext} -> {plugin_name}")
+        return self.load_plugin(plugin_name, context)
+
+    def get_handler_for_file(
+        self, file_path: Path, context: PluginContext | None = None
+    ) -> FileTypeHandler | None:
+        """Get handler for a specific file.
+
+        Resolves handler via file extension, then calls plugin's can_handle_file()
+        for additional validation (e.g., magic bytes check).
+
+        Args:
+            file_path: Path to file needing handler
+            context: Plugin context for initialization if lazy loading (optional)
+
+        Returns:
+            FileTypeHandler | None: Handler that can process this file, or None
+
+        Example:
+            >>> handler = registry.get_handler_for_file(Path("doc.pdf"), context)
+            >>> if handler:
+            ...     text = handler.extract_text(file_path)
+        """
+        # Get extension
+        ext = file_path.suffix.lower()
+        if not ext:
+            logger.debug(f"File has no extension: {file_path}")
+            return None
+
+        # Get handler for extension
+        handler = self.get_handler_for_extension(ext, context)
+        if handler is None:
+            return None
+
+        # Additional validation via plugin's can_handle_file
+        try:
+            if not handler.can_handle_file(file_path):
+                logger.debug(f"Plugin '{handler.name}' cannot handle file: {file_path}")
+                return None
+        except Exception as e:
+            logger.warning(f"Error in can_handle_file for '{handler.name}': {e}")
+            return None
+
+        return handler
 
     def validate_plugins(self) -> list[str]:
         """Validate discovered plugins for API compatibility and dependencies.

@@ -4,12 +4,17 @@ This module defines the abstract base class that all file type plugins must impl
 along with the chunking strategy enum for specifying chunking preferences.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from krag.plugins.context import PluginContext
 
 
 class ChunkingStrategy(Enum):
@@ -143,7 +148,7 @@ class FileTypeHandler(ABC):
         """
 
     @abstractmethod
-    def get_chunking_strategy(self) -> "ChunkingStrategy | Any | None":
+    def get_chunking_strategy(self) -> ChunkingStrategy | Any | None:
         """Return preferred chunking strategy for this file type.
 
         Returns:
@@ -162,7 +167,7 @@ class FileTypeHandler(ABC):
             ChunkingStrategy.DEFAULT
         """
 
-    def initialize(self, config: dict[str, Any]) -> None:  # noqa: B027
+    def initialize(self, config: dict[str, Any], context: PluginContext | None = None) -> None:  # noqa: B027
         """Called once after plugin is loaded, before first use.
 
         Optional lifecycle hook for plugin initialization. Default implementation
@@ -170,6 +175,7 @@ class FileTypeHandler(ABC):
 
         Args:
             config: Plugin-specific configuration from config.toml
+            context: Plugin context providing access to krag services (optional)
 
         Raises:
             PluginConfigurationError: If configuration is invalid
@@ -178,6 +184,8 @@ class FileTypeHandler(ABC):
             - Should validate configuration
             - Should initialize any stateful resources
             - Should not perform expensive operations (defer to first extract call)
+            - Context parameter provides access to embedding_generator, vector_store,
+              chunker, logger, and report_indexing_failure callback
         """
         pass
 

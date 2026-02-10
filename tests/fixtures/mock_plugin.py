@@ -125,11 +125,12 @@ class MockFileTypeHandler(FileTypeHandler):
         """Return the chunking strategy for this file type."""
         return ChunkingStrategy.DEFAULT
 
-    def initialize(self, config: dict[str, Any]) -> None:
+    def initialize(self, config: dict[str, Any], context: Any = None) -> None:
         """Initialize the plugin with configuration.
 
         Args:
             config: Plugin configuration dictionary
+            context: Optional plugin context for accessing krag services
         """
         self._config = config
         self._initialized = True

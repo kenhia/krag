@@ -4,8 +4,11 @@ This module provides the PluginLoader class that handles plugin import,
 instantiation, and API version compatibility checking.
 """
 
+from __future__ import annotations
+
 import logging
 from importlib.metadata import entry_points
+from typing import TYPE_CHECKING, Any
 
 from krag.plugins.exceptions import (
     PluginAPIVersionError,
@@ -13,6 +16,9 @@ from krag.plugins.exceptions import (
     PluginLoadError,
 )
 from krag.plugins.interfaces import FileTypeHandler
+
+if TYPE_CHECKING:
+    from krag.plugins.context import PluginContext
 
 logger = logging.getLogger(__name__)
 
@@ -192,3 +198,59 @@ class PluginLoader:
                 plugin_name=plugin_name,
                 original_exception=e,
             ) from e
+
+    def initialize_plugin(
+        self,
+        handler: FileTypeHandler,
+        config: dict[str, Any],
+        context: PluginContext | None = None,
+    ) -> None:
+        """Initialize plugin with configuration and context.
+
+        Args:
+            handler: Plugin handler instance
+            config: Plugin-specific configuration
+            context: Plugin context providing access to krag services (optional)
+
+        Raises:
+            PluginLoadError: If initialization fails
+
+        Note:
+            The context parameter is optional to support plugins that don't need
+            access to krag services. Plugins can ignore the context parameter.
+        """
+        try:
+            # Call initialize with context if plugin supports it
+            import inspect
+
+            sig = inspect.signature(handler.initialize)
+            if "context" in sig.parameters:
+                handler.initialize(config, context=context)
+            else:
+                handler.initialize(config)
+
+            logger.info(f"Initialized plugin: {handler.name} v{handler.version}")
+
+        except Exception as e:
+            raise PluginLoadError(
+                f"Failed to initialize plugin '{handler.name}': {e}",
+                plugin_name=handler.name,
+                original_exception=e,
+            ) from e
+
+    def cleanup_plugin(self, handler: FileTypeHandler) -> None:
+        """Clean up plugin resources.
+
+        Args:
+            handler: Plugin handler instance to clean up
+
+        Note:
+            Exceptions during cleanup are logged but not raised to ensure
+            graceful shutdown even if plugins misbehave.
+        """
+        try:
+            handler.cleanup()
+            logger.info(f"Cleaned up plugin: {handler.name}")
+
+        except Exception as e:
+            logger.warning(f"Error during cleanup of plugin '{handler.name}': {e}")
