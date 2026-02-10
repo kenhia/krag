@@ -387,8 +387,7 @@ class IndexingOrchestrator:
                                 file_metadata.file_path
                             )
                             logger.debug(
-                                f"Extracted metadata from plugin: "
-                                f"{list(plugin_metadata.keys())}"
+                                f"Extracted metadata from plugin: {list(plugin_metadata.keys())}"
                             )
                         except Exception as e:
                             logger.warning(
@@ -400,9 +399,7 @@ class IndexingOrchestrator:
 
                     except Exception as e:
                         # T051: Plugin error handling and graceful degradation
-                        logger.error(
-                            f"Plugin extraction failed for {file_metadata.file_path}: {e}"
-                        )
+                        logger.error(f"Plugin extraction failed for {file_metadata.file_path}: {e}")
 
                         # Record failure if failure collector is available
                         if self.failure_collector is not None:
@@ -462,9 +459,7 @@ class IndexingOrchestrator:
                         chunks = chunker.chunk(
                             text, file_path=file_metadata.file_path, file_type=file_type
                         )
-                        logger.debug(
-                            f"Used plugin chunking strategy for {file_metadata.file_path}"
-                        )
+                        logger.debug(f"Used plugin chunking strategy for {file_metadata.file_path}")
                     except Exception as e:
                         # T051: Graceful degradation on chunking error
                         logger.warning(
@@ -564,6 +559,11 @@ class IndexingOrchestrator:
             f"{job.chunks_generated} chunks, {job.embeddings_created} embeddings, "
             f"{job.files_errored} errors"
         )
+
+        # T053: Output failure summary if there were plugin failures
+        if self.failure_collector is not None and self.failure_collector.total_failures() > 0:
+            failure_summary = self.failure_collector.format_summary()
+            logger.warning(f"\n{failure_summary}")
 
         # Save metadata for incremental indexing
         self._save_metadata()
@@ -686,9 +686,7 @@ class IndexingOrchestrator:
                             )
 
                     except Exception as e:
-                        logger.error(
-                            f"Plugin extraction failed for {file_metadata.file_path}: {e}"
-                        )
+                        logger.error(f"Plugin extraction failed for {file_metadata.file_path}: {e}")
 
                         if self.failure_collector is not None:
                             self.failure_collector.record_failure(
@@ -724,9 +722,7 @@ class IndexingOrchestrator:
                             text, file_path=file_metadata.file_path, file_type=file_type
                         )
                     except Exception as e:
-                        logger.warning(
-                            f"Plugin chunking failed for {file_metadata.file_path}: {e}"
-                        )
+                        logger.warning(f"Plugin chunking failed for {file_metadata.file_path}: {e}")
                         file_type = file_metadata.file_type or "text"
                         chunks = self.chunker.chunk(
                             text, file_path=file_metadata.file_path, file_type=file_type
@@ -816,6 +812,11 @@ class IndexingOrchestrator:
             f"{job.files_deleted} deleted, {job.files_skipped} skipped, "
             f"{job.chunks_generated} chunks, {job.embeddings_created} embeddings"
         )
+
+        # T053: Output failure summary if there were plugin failures
+        if self.failure_collector is not None and self.failure_collector.total_failures() > 0:
+            failure_summary = self.failure_collector.format_summary()
+            logger.warning(f"\n{failure_summary}")
 
         # Save metadata for next incremental run
         self._save_metadata()

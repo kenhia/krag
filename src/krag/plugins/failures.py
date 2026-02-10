@@ -2,11 +2,15 @@
 
 This module provides the IndexingFailureCollector for tracking files that could
 not be indexed during a run, supporting both core system and plugin failures.
+It also provides a public report_indexing_failure() API for use by plugins.
 """
 
+import logging
 from pathlib import Path
 
 from krag.models.indexing_job import IndexingFailureRecord
+
+logger = logging.getLogger(__name__)
 
 
 class IndexingFailureCollector:
@@ -90,3 +94,76 @@ class IndexingFailureCollector:
     def clear(self) -> None:
         """Clear all recorded failures."""
         self._failures.clear()
+
+    def format_summary(self) -> str:
+        """Generate human-readable failure summary.
+
+        Returns:
+            str: Formatted summary of all failures, grouped by plugin
+
+        Example:
+            >>> print(collector.format_summary())
+            Indexing Failures Summary:
+            - Core system: 2 failures
+            - Plugin 'pdf': 3 failures
+        """
+        if not self._failures:
+            return "No indexing failures recorded."
+
+        lines = ["Indexing Failures Summary:"]
+        lines.append(f"Total failures: {self.total_failures()}")
+        lines.append("")
+
+        # Group by plugin
+        by_plugin = self.failures_by_plugin()
+
+        # Core system failures first
+        if None in by_plugin:
+            lines.append(f"Core system: {by_plugin[None]} failure(s)")
+            for failure in [f for f in self._failures if f.plugin_name is None]:
+                lines.append(f"  - {failure.file_path}: {failure.reason}")
+            lines.append("")
+
+        # Plugin failures
+        for plugin_name, count in sorted(by_plugin.items()):
+            if plugin_name is not None:
+                lines.append(f"Plugin '{plugin_name}': {count} failure(s)")
+                for failure in [f for f in self._failures if f.plugin_name == plugin_name]:
+                    lines.append(f"  - {failure.file_path}: {failure.reason}")
+                lines.append("")
+
+        return "\n".join(lines)
+
+
+def report_indexing_failure(
+    file_path: Path,
+    reason: str,
+    plugin_name: str | None = None,
+    exception_type: str | None = None,
+) -> None:
+    """Public API for reporting indexing failures.
+
+    This function provides a standalone API for reporting files that could not
+    be indexed. It's intended to be used within a context where an
+    IndexingFailureCollector has been set up.
+
+    Note: This function logs the failure but does not directly record it to a
+    collector. The actual recording should be done by wrapping this in a closure
+    that has access to the active collector instance (as done in IndexingOrchestrator).
+
+    Args:
+        file_path: Path of the file that failed to index
+        reason: Human-readable description of the failure
+        plugin_name: Name of plugin reporting failure (None for core system)
+        exception_type: Exception class name if applicable
+
+    Example:
+        >>> report_indexing_failure(
+        ...     Path("/docs/bad.pdf"),
+        ...     "File appears to be corrupted",
+        ...     plugin_name="pdf"
+        ... )
+    """
+    logger.warning(
+        f"Indexing failure reported: {file_path} (plugin={plugin_name or 'core'}): {reason}"
+    )

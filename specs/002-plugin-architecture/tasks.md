@@ -127,15 +127,15 @@ Tasks follow strict checklist format:
 
 ### Failure-to-Index Reporting for US1
 
-- [ ] T052 [P] [US1] Implement `report_indexing_failure()` API available to both core system and plugins in `src/krag/plugins/failures.py`
-- [ ] T053 [P] [US1] Add post-indexing failure summary output to indexing orchestrator
-- [ ] T054 [US1] Add indexing failure reporting to plugin error recovery flow in `src/krag/orchestration/indexer.py`
+- [X] T052 [P] [US1] Implement `report_indexing_failure()` API available to both core system and plugins in `src/krag/plugins/failures.py`
+- [X] T053 [P] [US1] Add post-indexing failure summary output to indexing orchestrator
+- [X] T054 [US1] Add indexing failure reporting to plugin error recovery flow in `src/krag/orchestration/indexer.py`
 
 ### Error Handling & Logging for US1
 
-- [ ] T055 [P] [US1] Implement plugin-specific structured logging in `src/krag/plugins/registry.py`
-- [ ] T056 [P] [US1] Add plugin extraction error recovery (catch, log, report failure, disable plugin) in `src/krag/orchestration/indexer.py`
-- [ ] T057 [US1] Add plugin load failure error messages in `src/krag/plugins/loader.py`
+- [X] T055 [P] [US1] Implement plugin-specific structured logging in `src/krag/plugins/registry.py`
+- [X] T056 [P] [US1] Add plugin extraction error recovery (catch, log, report failure, disable plugin) in `src/krag/orchestration/indexer.py`
+- [X] T057 [US1] Add plugin load failure error messages in `src/krag/plugins/loader.py`
 
 ### Unit Tests for US1
 
