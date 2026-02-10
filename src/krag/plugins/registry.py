@@ -179,6 +179,22 @@ class PluginRegistry:
 
         return plugins
 
+    def get_supported_extensions(self) -> list[str]:
+        """Get all file extensions supported by enabled plugins.
+
+        Returns:
+            list[str]: List of file extensions (e.g., ['.pdf', '.docx'])
+
+        Note:
+            Extensions are lowercase with leading dot.
+            Only extensions from enabled plugins are included.
+
+        Example:
+            >>> extensions = registry.get_supported_extensions()
+            >>> print(f"Plugins support: {extensions}")
+        """
+        return list(self._extension_map.keys())
+
     def get_plugin_info(self, name: str) -> PluginMetadata:
         """Get metadata for a specific plugin.
 

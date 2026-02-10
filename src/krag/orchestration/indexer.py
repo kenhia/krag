@@ -14,6 +14,10 @@ from krag.models.configuration import Configuration
 from krag.models.file_metadata import FileMetadata
 from krag.models.indexing_job import IndexingJob, JobStatus, JobType
 from krag.orchestration.incremental import ChangeDetector
+from krag.plugins.chunking import ChunkingStrategyResolver
+from krag.plugins.context import PluginContext
+from krag.plugins.failures import IndexingFailureCollector
+from krag.plugins.registry import PluginRegistry
 from krag.storage.qdrant_impl import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
@@ -118,6 +122,52 @@ class IndexingOrchestrator:
 
         # Initialize change detector for incremental updates
         self.change_detector = ChangeDetector(storage_path=self.vector_store_path or Path("."))
+
+        # Initialize plugin system
+        plugin_config = config.plugins if config is not None else None
+        if plugin_config is not None:
+            logger.info("Initializing plugin system")
+            self.plugin_registry = PluginRegistry(plugin_config)
+            self.plugin_registry.discover_plugins()
+            self.plugin_registry._build_extension_map()
+
+            # Initialize failure collector first (needed for context)
+            self.failure_collector = IndexingFailureCollector()
+
+            # Create wrapper for plugin failure reporting
+            def report_plugin_failure(file_path: Path, reason: str) -> None:
+                """Wrapper for plugin failure reporting."""
+                self.failure_collector.record_failure(
+                    file_path=file_path,
+                    reason=reason,
+                    plugin_name=None,  # Will be set by specific plugin calls
+                )
+
+            # Initialize plugin context with access to krag services
+            self.plugin_context = PluginContext(
+                embedding_generator=self.embedding_generator,
+                vector_store=self.vector_store,
+                chunker=self.chunker,
+                logger=logging.getLogger("krag.plugins"),
+                report_indexing_failure=report_plugin_failure,
+            )
+
+            # Initialize chunking strategy resolver
+            self.chunking_resolver = ChunkingStrategyResolver(
+                default_chunk_size=chunk_size,
+                default_chunk_overlap=chunk_overlap,
+            )
+
+            logger.info(
+                f"Plugin system initialized: {len(self.plugin_registry.list_plugins())} plugins discovered"
+            )
+        else:
+            # No plugin configuration - plugin system disabled
+            self.plugin_registry = None
+            self.plugin_context = None
+            self.chunking_resolver = None
+            self.failure_collector = None
+            logger.debug("Plugin system disabled (no configuration provided)")
 
         # Track indexed files for incremental updates (metadata storage)
         self.indexed_files: dict[str, FileMetadata] = {}  # path -> FileMetadata
@@ -288,6 +338,7 @@ class IndexingOrchestrator:
             directory_paths=self.directory_paths,
             supported_file_types=self.supported_file_types,
             exclusion_patterns=self.exclusion_patterns,
+            plugin_registry=self.plugin_registry,
         )
 
         all_files = scanner.scan()
@@ -308,32 +359,129 @@ class IndexingOrchestrator:
                 if progress_callback:
                     progress_callback(i + 1, len(all_files), "Processing files")
 
-                # Extract text
-                try:
-                    text = self.extractor.extract(file_metadata.file_path)
-                except Exception as e:
-                    logger.warning(f"Failed to extract {file_metadata.file_path}: {e}")
-                    job.files_errored += 1
-                    from krag.models.indexing_job import FileError
-
-                    job.error_summary.append(
-                        FileError(
-                            file_path=file_metadata.file_path,
-                            error_type="extraction",
-                            error_message=str(e),
-                        )
+                # T047: Check for plugin handler
+                plugin_handler = None
+                if self.plugin_registry is not None:
+                    plugin_handler = self.plugin_registry.get_handler_for_file(
+                        file_metadata.file_path, context=self.plugin_context
                     )
-                    continue
+
+                # Extract text (T048: plugin-based extraction with error handling)
+                text = None
+                plugin_metadata = {}
+
+                if plugin_handler is not None:
+                    # Use plugin for extraction
+                    try:
+                        logger.debug(
+                            f"Using plugin {plugin_handler.__class__.__name__} "
+                            f"for {file_metadata.file_path}"
+                        )
+
+                        # T048: Plugin text extraction with try-catch
+                        text = plugin_handler.extract_text(file_metadata.file_path)
+
+                        # T049: Plugin metadata extraction with try-catch
+                        try:
+                            plugin_metadata = plugin_handler.extract_metadata(
+                                file_metadata.file_path
+                            )
+                            logger.debug(
+                                f"Extracted metadata from plugin: "
+                                f"{list(plugin_metadata.keys())}"
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin metadata extraction failed for "
+                                f"{file_metadata.file_path}: {e}"
+                            )
+                            plugin_metadata = {}
+                            # Continue processing - metadata is not essential
+
+                    except Exception as e:
+                        # T051: Plugin error handling and graceful degradation
+                        logger.error(
+                            f"Plugin extraction failed for {file_metadata.file_path}: {e}"
+                        )
+
+                        # Record failure if failure collector is available
+                        if self.failure_collector is not None:
+                            self.failure_collector.record_failure(
+                                file_path=file_metadata.file_path,
+                                plugin_name=plugin_handler.__class__.__name__,
+                                reason=str(e),
+                                exception_type="extraction",
+                            )
+
+                        # Disable plugin on error
+                        plugin_name = plugin_handler.__class__.__name__.lower()
+                        if self.plugin_registry is not None:
+                            self.plugin_registry.unload_plugin(plugin_name)
+                            logger.warning(f"Disabled plugin {plugin_name} due to extraction error")
+
+                        # Fall back to default extraction
+                        plugin_handler = None
+                        text = None
+
+                # If plugin extraction failed or no plugin, use default extractor
+                if text is None:
+                    try:
+                        text = self.extractor.extract(file_metadata.file_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract {file_metadata.file_path}: {e}")
+                        job.files_errored += 1
+                        from krag.models.indexing_job import FileError
+
+                        job.error_summary.append(
+                            FileError(
+                                file_path=file_metadata.file_path,
+                                error_type="extraction",
+                                error_message=str(e),
+                            )
+                        )
+                        continue
 
                 if not text or not text.strip():
                     logger.debug(f"Skipping empty file: {file_metadata.file_path}")
                     continue
 
-                # Chunk text
-                file_type = file_metadata.file_type or "text"
-                chunks = self.chunker.chunk(
-                    text, file_path=file_metadata.file_path, file_type=file_type
-                )
+                # T050: Integrate plugin chunking strategy selection
+                if plugin_handler is not None and self.chunking_resolver is not None:
+                    try:
+                        # Get chunking strategy from plugin
+                        chunking_strategy = plugin_handler.get_chunking_strategy()
+
+                        # Resolve to actual chunker
+                        chunker = self.chunking_resolver.resolve(
+                            chunking_strategy,
+                            plugin_name=plugin_handler.__class__.__name__,
+                        )
+
+                        # Use resolved chunker
+                        file_type = file_metadata.file_type or "text"
+                        chunks = chunker.chunk(
+                            text, file_path=file_metadata.file_path, file_type=file_type
+                        )
+                        logger.debug(
+                            f"Used plugin chunking strategy for {file_metadata.file_path}"
+                        )
+                    except Exception as e:
+                        # T051: Graceful degradation on chunking error
+                        logger.warning(
+                            f"Plugin chunking failed for {file_metadata.file_path}: {e}, "
+                            f"using default chunker"
+                        )
+                        # Fall back to default chunker
+                        file_type = file_metadata.file_type or "text"
+                        chunks = self.chunker.chunk(
+                            text, file_path=file_metadata.file_path, file_type=file_type
+                        )
+                else:
+                    # No plugin or no chunking resolver - use default chunker
+                    file_type = file_metadata.file_type or "text"
+                    chunks = self.chunker.chunk(
+                        text, file_path=file_metadata.file_path, file_type=file_type
+                    )
 
                 if not chunks:
                     logger.debug(f"No chunks created for {file_metadata.file_path}")
@@ -442,6 +590,7 @@ class IndexingOrchestrator:
             directory_paths=self.directory_paths,
             supported_file_types=self.supported_file_types,
             exclusion_patterns=self.exclusion_patterns,
+            plugin_registry=self.plugin_registry,
         )
 
         all_file_metadata = scanner.scan()
@@ -513,14 +662,80 @@ class IndexingOrchestrator:
                 if progress_callback:
                     progress_callback(i + 1, len(files_to_process), "Processing files")
 
-                text = self.extractor.extract(file_metadata.file_path)
+                # Check for plugin handler
+                plugin_handler = None
+                if self.plugin_registry is not None:
+                    plugin_handler = self.plugin_registry.get_handler_for_file(
+                        file_metadata.file_path, context=self.plugin_context
+                    )
+
+                # Extract text using plugin or default extractor
+                text = None
+
+                if plugin_handler is not None:
+                    try:
+                        text = plugin_handler.extract_text(file_metadata.file_path)
+
+                        try:
+                            # Extract metadata (not yet stored, but validates plugin works)
+                            plugin_handler.extract_metadata(file_metadata.file_path)
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin metadata extraction failed for "
+                                f"{file_metadata.file_path}: {e}"
+                            )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Plugin extraction failed for {file_metadata.file_path}: {e}"
+                        )
+
+                        if self.failure_collector is not None:
+                            self.failure_collector.record_failure(
+                                file_path=file_metadata.file_path,
+                                plugin_name=plugin_handler.__class__.__name__,
+                                reason=str(e),
+                                exception_type="extraction",
+                            )
+
+                        plugin_name = plugin_handler.__class__.__name__.lower()
+                        if self.plugin_registry is not None:
+                            self.plugin_registry.unload_plugin(plugin_name)
+
+                        plugin_handler = None
+                        text = None
+
+                if text is None:
+                    text = self.extractor.extract(file_metadata.file_path)
+
                 if not text or not text.strip():
                     continue
 
-                file_type = file_metadata.file_type or "text"
-                chunks = self.chunker.chunk(
-                    text, file_path=file_metadata.file_path, file_type=file_type
-                )
+                # Use plugin chunking strategy if available
+                if plugin_handler is not None and self.chunking_resolver is not None:
+                    try:
+                        chunking_strategy = plugin_handler.get_chunking_strategy()
+                        chunker = self.chunking_resolver.resolve(
+                            chunking_strategy,
+                            plugin_name=plugin_handler.__class__.__name__,
+                        )
+                        file_type = file_metadata.file_type or "text"
+                        chunks = chunker.chunk(
+                            text, file_path=file_metadata.file_path, file_type=file_type
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Plugin chunking failed for {file_metadata.file_path}: {e}"
+                        )
+                        file_type = file_metadata.file_type or "text"
+                        chunks = self.chunker.chunk(
+                            text, file_path=file_metadata.file_path, file_type=file_type
+                        )
+                else:
+                    file_type = file_metadata.file_type or "text"
+                    chunks = self.chunker.chunk(
+                        text, file_path=file_metadata.file_path, file_type=file_type
+                    )
 
                 if not chunks:
                     continue

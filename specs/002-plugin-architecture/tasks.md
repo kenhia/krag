@@ -117,13 +117,13 @@ Tasks follow strict checklist format:
 
 ### Indexing Pipeline Integration for US1
 
-- [ ] T045 [US1] Modify `FileScanner` in `src/krag/discovery/scanner.py` to read plugin extension mappings from configuration
-- [ ] T046 [US1] Extend `IndexingOrchestrator.__init__()` in `src/krag/orchestration/indexer.py` to initialize plugin registry and `PluginContext`
-- [ ] T047 [US1] Modify file processing loop in `src/krag/orchestration/indexer.py` to check for plugin handlers
-- [ ] T048 [US1] Implement plugin-based text extraction in `src/krag/orchestration/indexer.py` (wrapped in try-catch; disable plugin on exception)
-- [ ] T049 [US1] Implement plugin-based metadata extraction in `src/krag/orchestration/indexer.py` (wrapped in try-catch)
-- [ ] T050 [US1] Integrate plugin chunking strategy selection in `src/krag/orchestration/indexer.py`
-- [ ] T051 [US1] Add plugin error handling and graceful degradation (log, record failure, disable plugin, continue) in `src/krag/orchestration/indexer.py`
+- [X] T045 [US1] Modify `FileScanner` in `src/krag/discovery/scanner.py` to read plugin extension mappings from configuration
+- [X] T046 [US1] Extend `IndexingOrchestrator.__init__()` in `src/krag/orchestration/indexer.py` to initialize plugin registry and `PluginContext`
+- [X] T047 [US1] Modify file processing loop in `src/krag/orchestration/indexer.py` to check for plugin handlers
+- [X] T048 [US1] Implement plugin-based text extraction in `src/krag/orchestration/indexer.py` (wrapped in try-catch; disable plugin on exception)
+- [X] T049 [US1] Implement plugin-based metadata extraction in `src/krag/orchestration/indexer.py` (wrapped in try-catch)
+- [X] T050 [US1] Integrate plugin chunking strategy selection in `src/krag/orchestration/indexer.py`
+- [X] T051 [US1] Add plugin error handling and graceful degradation (log, record failure, disable plugin, continue) in `src/krag/orchestration/indexer.py`
 
 ### Failure-to-Index Reporting for US1
 
