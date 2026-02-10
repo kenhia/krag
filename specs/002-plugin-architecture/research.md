@@ -50,7 +50,10 @@ pdf = "krag_plugin_pdf.handler:PDFFileTypeHandler"
 class FileTypeHandler(ABC):
     @abstractmethod
     def supported_extensions(self) -> list[str]:
-        """Return list of file extensions this handler supports (e.g., ['.pdf', '.PDF'])"""
+        """Return list of file extensions this handler supports (e.g., ['.pdf', '.docx'])
+        
+        Extensions should be lowercase with leading dot. Matching is case-insensitive.
+        """
         
     @abstractmethod
     def extract_text(self, file_path: Path) -> str:

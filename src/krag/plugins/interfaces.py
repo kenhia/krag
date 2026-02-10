@@ -93,15 +93,15 @@ class FileTypeHandler(ABC):
     def supported_extensions(self) -> list[str]:
         """File extensions this plugin handles.
 
-        Must include leading dot (e.g., '.pdf' not 'pdf'). Should include
-        case variations if filesystem is case-sensitive. Must not be empty.
+        Must include leading dot (e.g., '.pdf' not 'pdf'). Extensions should be
+        lowercase as matching is case-insensitive. Must not be empty.
 
         Returns:
-            list[str]: File extensions (e.g., ['.pdf', '.PDF'])
+            list[str]: File extensions (e.g., ['.pdf', '.docx'])
 
         Example:
             >>> handler.supported_extensions()
-            ['.pdf', '.PDF']
+            ['.pdf']
         """
 
     @abstractmethod

@@ -143,14 +143,16 @@ class PluginRegistry:
                 continue
 
             for ext in metadata.supported_extensions:
+                # Normalize to lowercase for case-insensitive matching
+                ext_lower = ext.lower()
                 # First in config order wins for conflicts
-                if ext not in self._extension_map:
-                    self._extension_map[ext] = plugin_name
-                    logger.debug(f"Mapped extension {ext} to plugin {plugin_name}")
+                if ext_lower not in self._extension_map:
+                    self._extension_map[ext_lower] = plugin_name
+                    logger.debug(f"Mapped extension {ext_lower} to plugin {plugin_name}")
                 else:
                     logger.warning(
-                        f"Extension {ext} conflict: {plugin_name} ignored "
-                        f"(already mapped to {self._extension_map[ext]})"
+                        f"Extension {ext_lower} conflict: {plugin_name} ignored "
+                        f"(already mapped to {self._extension_map[ext_lower]})"
                     )
 
     def list_plugins(self, filter_status: str | None = None) -> list[PluginMetadata]:
@@ -333,10 +335,13 @@ class PluginRegistry:
             >>> if handler:
             ...     text = handler.extract_text(file_path)
         """
+        # Normalize to lowercase for case-insensitive matching
+        ext_lower = ext.lower()
+
         # Check extension map
-        plugin_name = self._extension_map.get(ext)
+        plugin_name = self._extension_map.get(ext_lower)
         if plugin_name is None:
-            logger.debug(f"No handler registered for extension: {ext}")
+            logger.debug(f"No handler registered for extension: {ext_lower}")
             return None
 
         # Check if already loaded
