@@ -110,10 +110,10 @@ Tasks follow strict checklist format:
 
 ### Chunking Strategy Integration for US1
 
-- [ ] T041 [P] [US1] Create `ChunkingStrategyResolver` in `src/krag/plugins/chunking.py`
-- [ ] T042 [US1] Implement default chunking strategy selection logic in `src/krag/plugins/chunking.py`
-- [ ] T043 [US1] Implement chunker resolution (enum → actual chunker) in `src/krag/plugins/chunking.py`
-- [ ] T044 [US1] Add fallback logic for invalid chunking strategies in `src/krag/plugins/chunking.py`
+- [X] T041 [P] [US1] Create `ChunkingStrategyResolver` in `src/krag/plugins/chunking.py`
+- [X] T042 [US1] Implement default chunking strategy selection logic in `src/krag/plugins/chunking.py`
+- [X] T043 [US1] Implement chunker resolution (enum → actual chunker) in `src/krag/plugins/chunking.py`
+- [X] T044 [US1] Add fallback logic for invalid chunking strategies in `src/krag/plugins/chunking.py`
 
 ### Indexing Pipeline Integration for US1
 

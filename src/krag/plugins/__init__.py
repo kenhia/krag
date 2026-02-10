@@ -18,6 +18,7 @@ Example Usage:
 """
 
 from krag.models.configuration import PluginConfiguration, PluginMetadata
+from krag.plugins.chunking import ChunkingStrategyResolver
 from krag.plugins.context import PluginContext
 from krag.plugins.exceptions import (
     PluginAPIVersionError,
@@ -37,6 +38,7 @@ from krag.plugins.registry import PLUGIN_API_VERSION, PluginRegistry
 __all__ = [
     "FileTypeHandler",
     "ChunkingStrategy",
+    "ChunkingStrategyResolver",
     "PluginMetadata",
     "PluginConfiguration",
     "PluginContext",
