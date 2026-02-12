@@ -22,10 +22,7 @@ from tests.fixtures.mock_plugin import MockFileTypeHandler
 @pytest.fixture
 def mock_plugin_config():
     """Configuration with mock_plugin enabled."""
-    return PluginConfiguration(
-        enabled_plugins=["mock_plugin"],
-        disabled_plugins=[]
-    )
+    return PluginConfiguration(enabled_plugins=["mock_plugin"], disabled_plugins=[])
 
 
 @pytest.fixture
@@ -77,6 +74,7 @@ class TestEndToEndPluginIndexing:
         """Plugins should be discovered and loaded for indexing."""
         # Setup mock entry point
         from importlib.metadata import EntryPoint
+
         mock_ep = MagicMock(spec=EntryPoint)
         mock_ep.name = "mock_plugin"
         mock_ep.value = "tests.fixtures.mock_plugin:MockFileTypeHandler"
@@ -90,10 +88,7 @@ class TestEndToEndPluginIndexing:
         mock_loader_entry_points.return_value = mock_eps
 
         # Create plugin config
-        plugin_config = PluginConfiguration(
-            enabled_plugins=["mock_plugin"],
-            disabled_plugins=[]
-        )
+        plugin_config = PluginConfiguration(enabled_plugins=["mock_plugin"], disabled_plugins=[])
 
         # Create registry and discover plugins
         registry = PluginRegistry(plugin_config)
@@ -145,7 +140,7 @@ class TestEndToEndPluginIndexing:
             entry_point="dummy:HandlerA",
             supported_extensions=[".a"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
 
         registry._discovered["plugin_b"] = PluginMetadata(
@@ -154,7 +149,7 @@ class TestEndToEndPluginIndexing:
             entry_point="dummy:HandlerB",
             supported_extensions=[".b"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
 
         # Build extension map
@@ -177,20 +172,19 @@ class TestPluginErrorHandling:
         class FailingHandler(MockFileTypeHandler):
             def extract_text(self, file_path: Path) -> str:
                 raise PluginExtractionError(
-                    "Extraction failed",
-                    plugin_name=self.name,
-                    file_path=file_path
+                    "Extraction failed", plugin_name=self.name, file_path=file_path
                 )
 
         # Register the failing plugin
         from krag.models.configuration import PluginMetadata
+
         registry._discovered["failing"] = PluginMetadata(
             name="failing",
             version="1.0.0",
             entry_point="dummy:FailingHandler",
             supported_extensions=[".fail"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
 
         handler = FailingHandler()
@@ -201,21 +195,19 @@ class TestPluginErrorHandling:
 
     def test_disabled_plugin_skipped_in_indexing(self, tmp_path):
         """Disabled plugins should be skipped during indexing."""
-        plugin_config = PluginConfiguration(
-            enabled_plugins=[],
-            disabled_plugins=["bad_plugin"]
-        )
+        plugin_config = PluginConfiguration(enabled_plugins=[], disabled_plugins=["bad_plugin"])
         registry = PluginRegistry(plugin_config)
 
         # Add disabled plugin
         from krag.models.configuration import PluginMetadata
+
         registry._discovered["bad_plugin"] = PluginMetadata(
             name="bad_plugin",
             version="1.0.0",
             entry_point="dummy:BadHandler",
             supported_extensions=[".bad"],
             required_api_version="1.0.0",
-            is_enabled=False
+            is_enabled=False,
         )
 
         registry._build_extension_map()
@@ -232,6 +224,7 @@ class TestPluginErrorHandling:
 
         # Even if plugin fails, core should handle .txt
         from krag.extraction.text_extractor import TextExtractor
+
         extractor = TextExtractor()
 
         # Core extraction should work
@@ -264,15 +257,11 @@ class TestPluginFailureReporting:
 
         # Record some failures
         collector.record_failure(
-            file_path=tmp_path / "bad.pdf",
-            reason="Corrupted file",
-            plugin_name="pdf"
+            file_path=tmp_path / "bad.pdf", reason="Corrupted file", plugin_name="pdf"
         )
 
         collector.record_failure(
-            file_path=tmp_path / "bad.docx",
-            reason="Unsupported version",
-            plugin_name="docx"
+            file_path=tmp_path / "bad.docx", reason="Unsupported version", plugin_name="docx"
         )
 
         # Verify failures recorded
@@ -285,21 +274,9 @@ class TestPluginFailureReporting:
         collector = IndexingFailureCollector()
 
         # Record failures from different plugins
-        collector.record_failure(
-            tmp_path / "file1.pdf",
-            "Error 1",
-            plugin_name="pdf"
-        )
-        collector.record_failure(
-            tmp_path / "file2.pdf",
-            "Error 2",
-            plugin_name="pdf"
-        )
-        collector.record_failure(
-            tmp_path / "file3.docx",
-            "Error 3",
-            plugin_name="docx"
-        )
+        collector.record_failure(tmp_path / "file1.pdf", "Error 1", plugin_name="pdf")
+        collector.record_failure(tmp_path / "file2.pdf", "Error 2", plugin_name="pdf")
+        collector.record_failure(tmp_path / "file3.docx", "Error 3", plugin_name="docx")
 
         # Generate summary
         summary = collector.format_summary()
@@ -325,18 +302,10 @@ class TestPluginFailureReporting:
         collector = IndexingFailureCollector()
 
         # Core failure (no plugin_name)
-        collector.record_failure(
-            tmp_path / "core.txt",
-            "Core error",
-            plugin_name=None
-        )
+        collector.record_failure(tmp_path / "core.txt", "Core error", plugin_name=None)
 
         # Plugin failure
-        collector.record_failure(
-            tmp_path / "plugin.pdf",
-            "Plugin error",
-            plugin_name="pdf"
-        )
+        collector.record_failure(tmp_path / "plugin.pdf", "Plugin error", plugin_name="pdf")
 
         summary = collector.format_summary()
 
@@ -368,7 +337,7 @@ class TestPluginContextIntegration:
             vector_store=vector_store,
             chunker=chunker,
             logger=logger,
-            report_indexing_failure=report_callback
+            report_indexing_failure=report_callback,
         )
 
         # Verify context has expected attributes
@@ -396,9 +365,7 @@ class TestPluginContextIntegration:
         # Plugin would call context.report_indexing_failure
         # which delegates to this function
         report_indexing_failure(
-            file_path=Path("/tmp/bad.pdf"),
-            reason="Test failure",
-            plugin_name="test_plugin"
+            file_path=Path("/tmp/bad.pdf"), reason="Test failure", plugin_name="test_plugin"
         )
 
         # Should not raise exception

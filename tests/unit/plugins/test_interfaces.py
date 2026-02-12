@@ -25,6 +25,7 @@ class TestFileTypeHandlerABC:
 
     def test_must_implement_all_abstract_properties(self):
         """Subclasses must implement all abstract properties."""
+
         class IncompleteHandler(FileTypeHandler):
             # Missing all required properties
             pass
@@ -34,6 +35,7 @@ class TestFileTypeHandlerABC:
 
     def test_must_implement_name_property(self):
         """Subclasses must implement name property."""
+
         class NoNameHandler(FileTypeHandler):
             @property
             def version(self) -> str:
@@ -48,6 +50,7 @@ class TestFileTypeHandlerABC:
 
     def test_must_implement_version_property(self):
         """Subclasses must implement version property."""
+
         class NoVersionHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -62,6 +65,7 @@ class TestFileTypeHandlerABC:
 
     def test_must_implement_required_api_version_property(self):
         """Subclasses must implement required_api_version property."""
+
         class NoAPIVersionHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -80,6 +84,7 @@ class TestValidHandlerImplementation:
 
     def test_minimal_valid_handler(self):
         """A minimal valid handler should be instantiable."""
+
         class MinimalHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -109,6 +114,7 @@ class TestValidHandlerImplementation:
 
     def test_handler_with_all_methods(self):
         """A handler implementing all methods should work correctly."""
+
         class CompleteHandler(FileTypeHandler):
             def __init__(self):
                 self._config = {}
@@ -161,6 +167,7 @@ class TestMethodSignatures:
 
     def test_supported_extensions_returns_list(self):
         """supported_extensions must return list[str]."""
+
         class TestHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -191,6 +198,7 @@ class TestMethodSignatures:
 
     def test_extract_text_accepts_path(self):
         """extract_text must accept Path parameter."""
+
         class TestHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -221,6 +229,7 @@ class TestMethodSignatures:
 
     def test_extract_metadata_returns_dict(self):
         """extract_metadata must return dict[str, Any]."""
+
         class TestHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -250,6 +259,7 @@ class TestMethodSignatures:
 
     def test_get_chunking_strategy_optional(self):
         """get_chunking_strategy is optional with default implementation."""
+
         class MinimalHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -280,6 +290,7 @@ class TestMethodSignatures:
 
     def test_initialize_optional(self):
         """initialize is optional with default implementation."""
+
         class MinimalHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -308,6 +319,7 @@ class TestMethodSignatures:
 
     def test_cleanup_optional(self):
         """cleanup is optional with default implementation."""
+
         class MinimalHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -336,6 +348,7 @@ class TestMethodSignatures:
 
     def test_config_schema_optional(self):
         """config_schema is optional with default implementation."""
+
         class MinimalHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -370,6 +383,7 @@ class TestDefaultImplementations:
 
     def test_can_handle_file_default_checks_extension(self, tmp_path):
         """can_handle_file default implementation should check extension."""
+
         class TestHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -403,6 +417,7 @@ class TestDefaultImplementations:
 
     def test_can_handle_file_case_insensitive(self, tmp_path):
         """can_handle_file should be case-insensitive by default."""
+
         class TestHandler(FileTypeHandler):
             @property
             def name(self) -> str:
@@ -445,6 +460,7 @@ class TestChunkingStrategyEnum:
 
     def test_chunking_strategy_enum_usable(self):
         """ChunkingStrategy enum values should be usable."""
+
         class TestHandler(FileTypeHandler):
             @property
             def name(self) -> str:

@@ -47,7 +47,7 @@ def plugin_context(tmp_path):
         vector_store=vector_store,
         chunker=chunker,
         logger=logger,
-        report_indexing_failure=report_callback
+        report_indexing_failure=report_callback,
     )
 
 
@@ -196,6 +196,7 @@ class TestPluginClassLoading:
     @patch("krag.plugins.loader.entry_points")
     def test_load_plugin_class_validates_handler_subclass(self, mock_entry_points, loader):
         """load_plugin_class should validate that loaded class is FileTypeHandler subclass."""
+
         # Create mock entry point that loads wrong class
         class NotAHandler:
             pass
@@ -279,6 +280,7 @@ class TestPluginInstantiation:
 
     def test_instantiate_plugin_handles_instantiation_errors(self, loader):
         """instantiate_plugin should handle errors during instantiation."""
+
         class BadHandler(FileTypeHandler):
             def __init__(self):
                 raise ValueError("Cannot instantiate")
@@ -327,6 +329,7 @@ class TestPluginInitialization:
 
     def test_initialize_plugin_works_without_context_parameter(self, loader):
         """initialize_plugin should work with plugins that don't accept context."""
+
         class SimpleHandler(FileTypeHandler):
             def __init__(self):
                 self.initialized = False
@@ -368,6 +371,7 @@ class TestPluginInitialization:
 
     def test_initialize_plugin_handles_initialization_errors(self, loader, plugin_context):
         """initialize_plugin should handle errors during initialization."""
+
         class FailingHandler(FileTypeHandler):
             def __init__(self):
                 pass
@@ -421,6 +425,7 @@ class TestPluginCleanup:
 
     def test_cleanup_plugin_handles_errors_gracefully(self, loader):
         """cleanup_plugin should not raise exceptions on cleanup errors."""
+
         class FailingCleanupHandler(FileTypeHandler):
             def __init__(self):
                 pass
@@ -456,6 +461,7 @@ class TestPluginCleanup:
 
     def test_cleanup_plugin_logs_errors(self, loader, caplog):
         """cleanup_plugin should log errors during cleanup."""
+
         class FailingCleanupHandler(FileTypeHandler):
             def __init__(self):
                 pass

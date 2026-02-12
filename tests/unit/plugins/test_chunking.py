@@ -15,19 +15,13 @@ from krag.plugins.interfaces import ChunkingStrategy
 @pytest.fixture
 def resolver():
     """Create a ChunkingStrategyResolver with default settings."""
-    return ChunkingStrategyResolver(
-        default_chunk_size=1000,
-        default_chunk_overlap=200
-    )
+    return ChunkingStrategyResolver(default_chunk_size=1000, default_chunk_overlap=200)
 
 
 @pytest.fixture
 def custom_chunk_size_resolver():
     """Create a resolver with custom chunk size settings."""
-    return ChunkingStrategyResolver(
-        default_chunk_size=500,
-        default_chunk_overlap=100
-    )
+    return ChunkingStrategyResolver(default_chunk_size=500, default_chunk_overlap=100)
 
 
 class MockChunker:
@@ -40,6 +34,7 @@ class MockChunker:
 
 class InvalidChunker:
     """Invalid chunker missing chunk method."""
+
     pass
 
 
@@ -48,10 +43,7 @@ class TestResolverInitialization:
 
     def test_resolver_initializes_with_defaults(self):
         """Resolver should initialize with provided chunk size and overlap."""
-        resolver = ChunkingStrategyResolver(
-            default_chunk_size=800,
-            default_chunk_overlap=150
-        )
+        resolver = ChunkingStrategyResolver(default_chunk_size=800, default_chunk_overlap=150)
 
         assert resolver._default_chunk_size == 800
         assert resolver._default_chunk_overlap == 150
@@ -120,8 +112,10 @@ class TestStrategyResolution:
 
         assert isinstance(chunker, TextChunker)
         # Should log warning about fallback
-        assert any("SEMANTIC" in record.message and "not yet implemented" in record.message
-                   for record in caplog.records)
+        assert any(
+            "SEMANTIC" in record.message and "not yet implemented" in record.message
+            for record in caplog.records
+        )
 
     def test_resolve_code_aware_strategy_falls_back_to_default(self, resolver, caplog):
         """resolve should fall back to default for CODE_AWARE strategy (not implemented)."""
@@ -129,8 +123,10 @@ class TestStrategyResolution:
 
         assert isinstance(chunker, TextChunker)
         # Should log warning about fallback
-        assert any("CODE_AWARE" in record.message and "not yet implemented" in record.message
-                   for record in caplog.records)
+        assert any(
+            "CODE_AWARE" in record.message and "not yet implemented" in record.message
+            for record in caplog.records
+        )
 
     def test_resolve_custom_enum_without_chunker_falls_back(self, resolver, caplog):
         """resolve should fall back when CUSTOM enum provided without actual chunker."""
@@ -138,12 +134,15 @@ class TestStrategyResolution:
 
         assert isinstance(chunker, TextChunker)
         # Should log warning about missing custom chunker
-        assert any("CUSTOM" in record.message and "did not provide" in record.message
-                   for record in caplog.records)
+        assert any(
+            "CUSTOM" in record.message and "did not provide" in record.message
+            for record in caplog.records
+        )
 
     def test_resolve_custom_chunker_returns_it(self, resolver, caplog):
         """resolve should return custom chunker if valid."""
         import logging
+
         caplog.set_level(logging.INFO)
 
         custom = MockChunker()
@@ -162,7 +161,9 @@ class TestStrategyResolution:
 
         assert isinstance(chunker, TextChunker)
         # Should log warning about invalid strategy
-        assert any("invalid chunking strategy" in record.message.lower() for record in caplog.records)
+        assert any(
+            "invalid chunking strategy" in record.message.lower() for record in caplog.records
+        )
 
     def test_resolve_always_returns_chunker_never_none(self, resolver):
         """resolve should always return a chunker, never None."""
@@ -183,39 +184,31 @@ class TestEnumStrategyResolution:
 
     def test_resolve_enum_strategy_default(self, resolver):
         """_resolve_enum_strategy should handle DEFAULT correctly."""
-        chunker = resolver._resolve_enum_strategy(
-            ChunkingStrategy.DEFAULT,
-            "test"
-        )
+        chunker = resolver._resolve_enum_strategy(ChunkingStrategy.DEFAULT, "test")
 
         assert isinstance(chunker, TextChunker)
 
     def test_resolve_enum_strategy_semantic_logs_warning(self, resolver, caplog):
         """_resolve_enum_strategy should log warning for SEMANTIC."""
-        resolver._resolve_enum_strategy(
-            ChunkingStrategy.SEMANTIC,
-            "test_plugin"
-        )
+        resolver._resolve_enum_strategy(ChunkingStrategy.SEMANTIC, "test_plugin")
 
-        assert any("SEMANTIC" in record.message and "test_plugin" in record.message
-                   for record in caplog.records)
+        assert any(
+            "SEMANTIC" in record.message and "test_plugin" in record.message
+            for record in caplog.records
+        )
 
     def test_resolve_enum_strategy_code_aware_logs_warning(self, resolver, caplog):
         """_resolve_enum_strategy should log warning for CODE_AWARE."""
-        resolver._resolve_enum_strategy(
-            ChunkingStrategy.CODE_AWARE,
-            "test_plugin"
-        )
+        resolver._resolve_enum_strategy(ChunkingStrategy.CODE_AWARE, "test_plugin")
 
-        assert any("CODE_AWARE" in record.message and "test_plugin" in record.message
-                   for record in caplog.records)
+        assert any(
+            "CODE_AWARE" in record.message and "test_plugin" in record.message
+            for record in caplog.records
+        )
 
     def test_resolve_enum_strategy_custom_logs_warning(self, resolver, caplog):
         """_resolve_enum_strategy should log warning for CUSTOM without chunker."""
-        resolver._resolve_enum_strategy(
-            ChunkingStrategy.CUSTOM,
-            "test_plugin"
-        )
+        resolver._resolve_enum_strategy(ChunkingStrategy.CUSTOM, "test_plugin")
 
         assert any("CUSTOM" in record.message for record in caplog.records)
 
@@ -250,6 +243,7 @@ class TestChunkerValidation:
 
     def test_is_valid_chunker_rejects_non_callable_chunk(self, resolver):
         """_is_valid_chunker should reject objects with non-callable chunk attribute."""
+
         class BadChunker:
             chunk = "not a method"
 
@@ -272,34 +266,46 @@ class TestLoggingBehavior:
     def test_resolve_logs_debug_for_none(self, resolver, caplog):
         """resolve should log debug message when strategy is None."""
         import logging
+
         caplog.set_level(logging.DEBUG)
 
         resolver.resolve(None, plugin_name="test_plugin")
 
-        assert any("test_plugin" in record.message and "None" in record.message
-                   for record in caplog.records if record.levelname == "DEBUG")
+        assert any(
+            "test_plugin" in record.message and "None" in record.message
+            for record in caplog.records
+            if record.levelname == "DEBUG"
+        )
 
     def test_resolve_logs_info_for_custom_chunker(self, resolver, caplog):
         """resolve should log info message when custom chunker is provided."""
         import logging
+
         caplog.set_level(logging.INFO)
 
         custom = MockChunker()
         resolver.resolve(custom, plugin_name="test_plugin")
 
-        assert any("test_plugin" in record.message and "custom chunker" in record.message
-                   for record in caplog.records if record.levelname == "INFO")
+        assert any(
+            "test_plugin" in record.message and "custom chunker" in record.message
+            for record in caplog.records
+            if record.levelname == "INFO"
+        )
 
     def test_resolve_logs_warning_for_invalid(self, resolver, caplog):
         """resolve should log warning for invalid strategies."""
         resolver.resolve("invalid", plugin_name="test_plugin")
 
-        assert any("invalid chunking strategy" in record.message.lower()
-                   for record in caplog.records if record.levelname == "WARNING")
+        assert any(
+            "invalid chunking strategy" in record.message.lower()
+            for record in caplog.records
+            if record.levelname == "WARNING"
+        )
 
     def test_resolve_handles_missing_plugin_name_in_logs(self, resolver, caplog):
         """resolve should handle missing plugin_name in log messages."""
         import logging
+
         caplog.set_level(logging.DEBUG)
 
         resolver.resolve(None)
@@ -313,6 +319,7 @@ class TestEdgeCases:
 
     def test_resolve_handles_unknown_enum_value(self, resolver, caplog):
         """resolve should handle unknown enum values gracefully."""
+
         # Create a mock enum value (simulating future additions)
         class FakeStrategy:
             pass

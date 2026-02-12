@@ -26,14 +26,14 @@ class CustomChunker:
         """Simple chunking by size."""
         chunks = []
         for idx, i in enumerate(range(0, len(text), self.chunk_size)):
-            chunk_text = text[i:i + self.chunk_size]
+            chunk_text = text[i : i + self.chunk_size]
             chunk = TextChunk(
                 file_path=file_path or Path("unknown"),
                 chunk_index=idx,
                 content=chunk_text,
                 start_char=i,
                 end_char=i + len(chunk_text),
-                token_count=len(chunk_text.split())
+                token_count=len(chunk_text.split()),
             )
             chunks.append(chunk)
         return chunks
@@ -42,10 +42,7 @@ class CustomChunker:
 @pytest.fixture
 def resolver():
     """Create a ChunkingStrategyResolver."""
-    return ChunkingStrategyResolver(
-        default_chunk_size=1000,
-        default_chunk_overlap=200
-    )
+    return ChunkingStrategyResolver(default_chunk_size=1000, default_chunk_overlap=200)
 
 
 class TestDefaultChunkingStrategy:
@@ -53,6 +50,7 @@ class TestDefaultChunkingStrategy:
 
     def test_plugin_returning_none_uses_default(self, resolver):
         """Plugin returning None should use default chunker."""
+
         class DefaultPlugin(MockFileTypeHandler):
             def get_chunking_strategy(self):
                 return None
@@ -111,6 +109,7 @@ class TestCustomChunkingStrategy:
 
     def test_custom_chunker_validation(self, resolver):
         """Resolver should validate custom chunker has chunk method."""
+
         class InvalidChunker:
             # Missing chunk method
             pass
@@ -139,6 +138,7 @@ class TestSemanticChunkingStrategy:
 
     def test_semantic_strategy_falls_back_to_default(self, resolver, caplog):
         """SEMANTIC strategy should fall back to DEFAULT (not implemented yet)."""
+
         class SemanticPlugin(MockFileTypeHandler):
             def get_chunking_strategy(self):
                 return ChunkingStrategy.SEMANTIC
@@ -152,8 +152,10 @@ class TestSemanticChunkingStrategy:
         assert isinstance(chunker, TextChunker)
 
         # Should log warning
-        assert any("SEMANTIC" in record.message and "not yet implemented" in record.message
-                   for record in caplog.records)
+        assert any(
+            "SEMANTIC" in record.message and "not yet implemented" in record.message
+            for record in caplog.records
+        )
 
 
 class TestCodeAwareChunkingStrategy:
@@ -161,6 +163,7 @@ class TestCodeAwareChunkingStrategy:
 
     def test_code_aware_strategy_falls_back_to_default(self, resolver, caplog):
         """CODE_AWARE strategy should fall back to DEFAULT (not implemented yet)."""
+
         class CodePlugin(MockFileTypeHandler):
             def get_chunking_strategy(self):
                 return ChunkingStrategy.CODE_AWARE
@@ -174,8 +177,10 @@ class TestCodeAwareChunkingStrategy:
         assert isinstance(chunker, TextChunker)
 
         # Should log warning
-        assert any("CODE_AWARE" in record.message and "not yet implemented" in record.message
-                   for record in caplog.records)
+        assert any(
+            "CODE_AWARE" in record.message and "not yet implemented" in record.message
+            for record in caplog.records
+        )
 
 
 class TestChunkingStrategyInPipeline:
@@ -183,6 +188,7 @@ class TestChunkingStrategyInPipeline:
 
     def test_different_plugins_different_strategies(self, resolver):
         """Different plugins can use different chunking strategies."""
+
         class DefaultPlugin(MockFileTypeHandler):
             def get_chunking_strategy(self):
                 return ChunkingStrategy.DEFAULT
@@ -195,12 +201,10 @@ class TestChunkingStrategyInPipeline:
         custom_plugin = CustomPlugin()
 
         default_chunker = resolver.resolve(
-            default_plugin.get_chunking_strategy(),
-            plugin_name="default"
+            default_plugin.get_chunking_strategy(), plugin_name="default"
         )
         custom_chunker = resolver.resolve(
-            custom_plugin.get_chunking_strategy(),
-            plugin_name="custom"
+            custom_plugin.get_chunking_strategy(), plugin_name="custom"
         )
 
         # Should be different chunkers
@@ -224,12 +228,15 @@ class TestChunkingStrategyInPipeline:
         chunker = resolver.resolve(ChunkingStrategy.DEFAULT, plugin_name="test")
 
         # Create some realistic text
-        text = """This is a test document with multiple paragraphs.
+        text = (
+            """This is a test document with multiple paragraphs.
 
 This is paragraph two with some content that should be chunked appropriately.
 
 And here is paragraph three with even more content to ensure chunking works correctly.
-""" * 10  # Repeat to ensure we get multiple chunks
+"""
+            * 10
+        )  # Repeat to ensure we get multiple chunks
 
         chunks = chunker.chunk(text, Path("/tmp/test.txt"))
 
@@ -237,8 +244,7 @@ And here is paragraph three with even more content to ensure chunking works corr
         assert len(chunks) > 1
 
         # Each chunk should respect size limits
-        assert all(len(c.content) <= chunker.chunk_size + chunker.chunk_overlap
-                   for c in chunks)
+        assert all(len(c.content) <= chunker.chunk_size + chunker.chunk_overlap for c in chunks)
 
 
 class TestChunkingStrategyConfiguration:
@@ -246,14 +252,10 @@ class TestChunkingStrategyConfiguration:
 
     def test_custom_default_chunk_size(self):
         """Resolver should respect custom default chunk sizes."""
-        resolver_small = ChunkingStrategyResolver(
-            default_chunk_size=500,
-            default_chunk_overlap=100
-        )
+        resolver_small = ChunkingStrategyResolver(default_chunk_size=500, default_chunk_overlap=100)
 
         resolver_large = ChunkingStrategyResolver(
-            default_chunk_size=2000,
-            default_chunk_overlap=400
+            default_chunk_size=2000, default_chunk_overlap=400
         )
 
         chunker_small = resolver_small.resolve(None)
@@ -264,10 +266,7 @@ class TestChunkingStrategyConfiguration:
 
     def test_custom_overlap_configuration(self):
         """Resolver should respect custom overlap configuration."""
-        resolver = ChunkingStrategyResolver(
-            default_chunk_size=1000,
-            default_chunk_overlap=300
-        )
+        resolver = ChunkingStrategyResolver(default_chunk_size=1000, default_chunk_overlap=300)
 
         chunker = resolver.resolve(ChunkingStrategy.DEFAULT)
 
@@ -279,6 +278,7 @@ class TestChunkingErrorHandling:
 
     def test_invalid_chunker_falls_back_gracefully(self, resolver, caplog):
         """Invalid chunker should fall back to default with warning."""
+
         class BadChunker:
             # Has chunk but it's not callable
             chunk = "not a method"
@@ -291,11 +291,13 @@ class TestChunkingErrorHandling:
         assert isinstance(chunker, TextChunker)
 
         # Should log warning
-        assert any("invalid chunking strategy" in record.message.lower()
-                   for record in caplog.records)
+        assert any(
+            "invalid chunking strategy" in record.message.lower() for record in caplog.records
+        )
 
     def test_chunker_with_exception_in_chunk_method(self):
         """Chunker that raises exception should propagate error (no silent failure)."""
+
         class FailingChunker:
             def chunk(self, text: str, file_path: Path | None = None):
                 raise RuntimeError("Chunking failed")
@@ -345,6 +347,7 @@ class TestRealWorldScenarios:
 
     def test_pdf_plugin_default_chunking(self, resolver):
         """Simulate PDF plugin using default chunking."""
+
         class PDFPlugin(MockFileTypeHandler):
             @property
             def name(self) -> str:
@@ -365,28 +368,31 @@ class TestRealWorldScenarios:
 
     def test_code_plugin_custom_chunking(self, resolver):
         """Simulate code plugin using custom code-aware chunking."""
+
         # Custom chunker that doesn't split mid-line
         class LineAwareChunker:
             def __init__(self):
                 self.chunk_size = 500
 
             def chunk(self, text: str, file_path: Path | None = None) -> list[TextChunk]:
-                lines = text.split('\n')
+                lines = text.split("\n")
                 chunks = []
                 current_chunk = []
                 current_size = 0
 
                 for line in lines:
                     if current_size + len(line) > self.chunk_size and current_chunk:
-                        chunk_text = '\n'.join(current_chunk)
-                        chunks.append(TextChunk(
-                            file_path=file_path or Path("unknown"),
-                            chunk_index=len(chunks),
-                            content=chunk_text,
-                            start_char=0,
-                            end_char=len(chunk_text),
-                            token_count=len(chunk_text.split())
-                        ))
+                        chunk_text = "\n".join(current_chunk)
+                        chunks.append(
+                            TextChunk(
+                                file_path=file_path or Path("unknown"),
+                                chunk_index=len(chunks),
+                                content=chunk_text,
+                                start_char=0,
+                                end_char=len(chunk_text),
+                                token_count=len(chunk_text.split()),
+                            )
+                        )
                         current_chunk = []
                         current_size = 0
 
@@ -394,15 +400,17 @@ class TestRealWorldScenarios:
                     current_size += len(line)
 
                 if current_chunk:
-                    chunk_text = '\n'.join(current_chunk)
-                    chunks.append(TextChunk(
-                        file_path=file_path or Path("unknown"),
-                        chunk_index=len(chunks),
-                        content=chunk_text,
-                        start_char=0,
-                        end_char=len(chunk_text),
-                        token_count=len(chunk_text.split())
-                    ))
+                    chunk_text = "\n".join(current_chunk)
+                    chunks.append(
+                        TextChunk(
+                            file_path=file_path or Path("unknown"),
+                            chunk_index=len(chunks),
+                            content=chunk_text,
+                            start_char=0,
+                            end_char=len(chunk_text),
+                            token_count=len(chunk_text.split()),
+                        )
+                    )
 
                 return chunks
 

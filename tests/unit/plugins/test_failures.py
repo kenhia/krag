@@ -23,39 +23,31 @@ def populated_collector():
 
     # Add some core failures
     collector.record_failure(
-        file_path=Path("/docs/core1.txt"),
-        reason="File not found",
-        plugin_name=None
+        file_path=Path("/docs/core1.txt"), reason="File not found", plugin_name=None
     )
     collector.record_failure(
         file_path=Path("/docs/core2.txt"),
         reason="Permission denied",
         plugin_name=None,
-        exception_type="PermissionError"
+        exception_type="PermissionError",
     )
 
     # Add some plugin failures
     collector.record_failure(
-        file_path=Path("/docs/doc1.pdf"),
-        reason="Corrupted PDF",
-        plugin_name="pdf"
+        file_path=Path("/docs/doc1.pdf"), reason="Corrupted PDF", plugin_name="pdf"
     )
     collector.record_failure(
-        file_path=Path("/docs/doc2.pdf"),
-        reason="Encrypted PDF",
-        plugin_name="pdf"
+        file_path=Path("/docs/doc2.pdf"), reason="Encrypted PDF", plugin_name="pdf"
     )
     collector.record_failure(
         file_path=Path("/docs/doc3.pdf"),
         reason="Invalid structure",
         plugin_name="pdf",
-        exception_type="PDFStructureError"
+        exception_type="PDFStructureError",
     )
 
     collector.record_failure(
-        file_path=Path("/docs/sheet.xlsx"),
-        reason="Unsupported format version",
-        plugin_name="excel"
+        file_path=Path("/docs/sheet.xlsx"), reason="Unsupported format version", plugin_name="excel"
     )
 
     return collector
@@ -79,10 +71,7 @@ class TestFailureRecording:
 
     def test_record_failure_adds_to_list(self, collector):
         """record_failure should add failure to internal list."""
-        collector.record_failure(
-            file_path=Path("/tmp/test.txt"),
-            reason="Test failure"
-        )
+        collector.record_failure(file_path=Path("/tmp/test.txt"), reason="Test failure")
 
         assert collector.total_failures() == 1
 
@@ -92,7 +81,7 @@ class TestFailureRecording:
             file_path=Path("/tmp/test.pdf"),
             reason="Corrupted file",
             plugin_name="pdf",
-            exception_type="CorruptionError"
+            exception_type="CorruptionError",
         )
 
         failures = collector.get_failures()
@@ -104,10 +93,7 @@ class TestFailureRecording:
 
     def test_record_failure_minimal_fields(self, collector):
         """record_failure should work with minimal required fields."""
-        collector.record_failure(
-            file_path=Path("/tmp/test.txt"),
-            reason="Error"
-        )
+        collector.record_failure(file_path=Path("/tmp/test.txt"), reason="Error")
 
         failures = collector.get_failures()
         assert len(failures) == 1
@@ -304,23 +290,18 @@ class TestReportIndexingFailureAPI:
             file_path=Path("/tmp/test.pdf"),
             reason="Test failure",
             plugin_name="test_plugin",
-            exception_type="TestError"
+            exception_type="TestError",
         )
 
     def test_report_indexing_failure_minimal_params(self):
         """report_indexing_failure should work with minimal parameters."""
         # Should not raise exception
-        report_indexing_failure(
-            file_path=Path("/tmp/test.txt"),
-            reason="Error"
-        )
+        report_indexing_failure(file_path=Path("/tmp/test.txt"), reason="Error")
 
     def test_report_indexing_failure_logs_warning(self, caplog):
         """report_indexing_failure should log warning message."""
         report_indexing_failure(
-            file_path=Path("/tmp/test.pdf"),
-            reason="Test failure",
-            plugin_name="pdf"
+            file_path=Path("/tmp/test.pdf"), reason="Test failure", plugin_name="pdf"
         )
 
         # Should log warning
@@ -330,9 +311,7 @@ class TestReportIndexingFailureAPI:
     def test_report_indexing_failure_includes_details_in_log(self, caplog):
         """report_indexing_failure should include file path and reason in log."""
         report_indexing_failure(
-            file_path=Path("/docs/corrupted.pdf"),
-            reason="File is corrupted",
-            plugin_name="pdf"
+            file_path=Path("/docs/corrupted.pdf"), reason="File is corrupted", plugin_name="pdf"
         )
 
         log_messages = [record.message for record in caplog.records]

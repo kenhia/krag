@@ -74,7 +74,7 @@ def plugin_context(tmp_path):
         vector_store=vector_store,
         chunker=chunker,
         logger=logger,
-        report_indexing_failure=report_callback
+        report_indexing_failure=report_callback,
     )
 
 
@@ -101,7 +101,9 @@ class TestPluginDiscovery:
     """Test plugin discovery mechanisms."""
 
     @patch("krag.plugins.registry.entry_points")
-    def test_discover_plugins_finds_entry_points(self, mock_entry_points, registry_empty, mock_entry_point):
+    def test_discover_plugins_finds_entry_points(
+        self, mock_entry_points, registry_empty, mock_entry_point
+    ):
         """discover_plugins should find plugins registered as entry points."""
         mock_eps = MagicMock()
         mock_eps.select.return_value = [mock_entry_point]
@@ -114,7 +116,9 @@ class TestPluginDiscovery:
         assert "mock_plugin" in registry_empty._discovered
 
     @patch("krag.plugins.registry.entry_points")
-    def test_discover_plugins_handles_legacy_entry_points_api(self, mock_entry_points, registry_empty, mock_entry_point):
+    def test_discover_plugins_handles_legacy_entry_points_api(
+        self, mock_entry_points, registry_empty, mock_entry_point
+    ):
         """discover_plugins should handle legacy entry_points API without select()."""
         mock_eps = {"krag.plugins": [mock_entry_point]}
         mock_entry_points.return_value = mock_eps
@@ -125,7 +129,9 @@ class TestPluginDiscovery:
         assert plugins[0].name == "mock_plugin"
 
     @patch("krag.plugins.registry.entry_points")
-    def test_discover_plugins_applies_enabled_filter(self, mock_entry_points, config_with_enabled, mock_entry_point):
+    def test_discover_plugins_applies_enabled_filter(
+        self, mock_entry_points, config_with_enabled, mock_entry_point
+    ):
         """discover_plugins should mark plugins as enabled based on configuration."""
         mock_eps = MagicMock()
         mock_eps.select.return_value = [mock_entry_point]
@@ -138,7 +144,9 @@ class TestPluginDiscovery:
         assert plugins[0].is_enabled is True
 
     @patch("krag.plugins.registry.entry_points")
-    def test_discover_plugins_applies_disabled_filter(self, mock_entry_points, config_with_disabled, mock_entry_point):
+    def test_discover_plugins_applies_disabled_filter(
+        self, mock_entry_points, config_with_disabled, mock_entry_point
+    ):
         """discover_plugins should mark plugins as disabled based on configuration."""
         mock_eps = MagicMock()
         mock_eps.select.return_value = [mock_entry_point]
@@ -201,7 +209,7 @@ class TestExtensionMapping:
             entry_point="tests.fixtures.mock_plugin:MockFileTypeHandler",
             supported_extensions=[".mock", ".test"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
 
         registry_empty._build_extension_map()
@@ -219,7 +227,7 @@ class TestExtensionMapping:
             entry_point="tests.fixtures.mock_plugin:MockFileTypeHandler",
             supported_extensions=[".MOCK", ".Test"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
 
         registry_empty._build_extension_map()
@@ -235,7 +243,7 @@ class TestExtensionMapping:
             entry_point="dummy:Handler",
             supported_extensions=[".disabled"],
             required_api_version="1.0.0",
-            is_enabled=False
+            is_enabled=False,
         )
 
         registry_empty._build_extension_map()
@@ -250,7 +258,7 @@ class TestExtensionMapping:
             entry_point="dummy:HandlerA",
             supported_extensions=[".conflict"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
         registry_empty._discovered["plugin_b"] = PluginMetadata(
             name="plugin_b",
@@ -258,7 +266,7 @@ class TestExtensionMapping:
             entry_point="dummy:HandlerB",
             supported_extensions=[".conflict"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
 
         registry_empty._build_extension_map()
@@ -283,12 +291,20 @@ class TestPluginListing:
     def test_list_plugins_returns_all_when_no_filter(self, registry_empty):
         """list_plugins should return all plugins when no filter is provided."""
         registry_empty._discovered["plugin1"] = PluginMetadata(
-            name="plugin1", version="1.0.0", entry_point="dummy:H1",
-            supported_extensions=[".p1"], required_api_version="1.0.0", is_enabled=True
+            name="plugin1",
+            version="1.0.0",
+            entry_point="dummy:H1",
+            supported_extensions=[".p1"],
+            required_api_version="1.0.0",
+            is_enabled=True,
         )
         registry_empty._discovered["plugin2"] = PluginMetadata(
-            name="plugin2", version="1.0.0", entry_point="dummy:H2",
-            supported_extensions=[".p2"], required_api_version="1.0.0", is_enabled=False
+            name="plugin2",
+            version="1.0.0",
+            entry_point="dummy:H2",
+            supported_extensions=[".p2"],
+            required_api_version="1.0.0",
+            is_enabled=False,
         )
 
         plugins = registry_empty.list_plugins()
@@ -298,12 +314,20 @@ class TestPluginListing:
     def test_list_plugins_filters_enabled(self, registry_empty):
         """list_plugins should filter for enabled plugins."""
         registry_empty._discovered["enabled"] = PluginMetadata(
-            name="enabled", version="1.0.0", entry_point="dummy:H1",
-            supported_extensions=[".en"], required_api_version="1.0.0", is_enabled=True
+            name="enabled",
+            version="1.0.0",
+            entry_point="dummy:H1",
+            supported_extensions=[".en"],
+            required_api_version="1.0.0",
+            is_enabled=True,
         )
         registry_empty._discovered["disabled"] = PluginMetadata(
-            name="disabled", version="1.0.0", entry_point="dummy:H2",
-            supported_extensions=[".dis"], required_api_version="1.0.0", is_enabled=False
+            name="disabled",
+            version="1.0.0",
+            entry_point="dummy:H2",
+            supported_extensions=[".dis"],
+            required_api_version="1.0.0",
+            is_enabled=False,
         )
 
         plugins = registry_empty.list_plugins(filter_status="enabled")
@@ -314,12 +338,20 @@ class TestPluginListing:
     def test_list_plugins_filters_disabled(self, registry_empty):
         """list_plugins should filter for disabled plugins."""
         registry_empty._discovered["enabled"] = PluginMetadata(
-            name="enabled", version="1.0.0", entry_point="dummy:H1",
-            supported_extensions=[".en"], required_api_version="1.0.0", is_enabled=True
+            name="enabled",
+            version="1.0.0",
+            entry_point="dummy:H1",
+            supported_extensions=[".en"],
+            required_api_version="1.0.0",
+            is_enabled=True,
         )
         registry_empty._discovered["disabled"] = PluginMetadata(
-            name="disabled", version="1.0.0", entry_point="dummy:H2",
-            supported_extensions=[".dis"], required_api_version="1.0.0", is_enabled=False
+            name="disabled",
+            version="1.0.0",
+            entry_point="dummy:H2",
+            supported_extensions=[".dis"],
+            required_api_version="1.0.0",
+            is_enabled=False,
         )
 
         plugins = registry_empty.list_plugins(filter_status="disabled")
@@ -330,14 +362,22 @@ class TestPluginListing:
     def test_list_plugins_filters_loaded(self, registry_empty):
         """list_plugins should filter for loaded plugins."""
         registry_empty._discovered["loaded"] = PluginMetadata(
-            name="loaded", version="1.0.0", entry_point="dummy:H1",
-            supported_extensions=[".ld"], required_api_version="1.0.0",
-            is_enabled=True, is_loaded=True
+            name="loaded",
+            version="1.0.0",
+            entry_point="dummy:H1",
+            supported_extensions=[".ld"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+            is_loaded=True,
         )
         registry_empty._discovered["not_loaded"] = PluginMetadata(
-            name="not_loaded", version="1.0.0", entry_point="dummy:H2",
-            supported_extensions=[".nld"], required_api_version="1.0.0",
-            is_enabled=True, is_loaded=False
+            name="not_loaded",
+            version="1.0.0",
+            entry_point="dummy:H2",
+            supported_extensions=[".nld"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+            is_loaded=False,
         )
 
         plugins = registry_empty.list_plugins(filter_status="loaded")
@@ -352,8 +392,12 @@ class TestPluginInfo:
     def test_get_plugin_info_returns_metadata(self, registry_empty):
         """get_plugin_info should return plugin metadata."""
         metadata = PluginMetadata(
-            name="test_plugin", version="1.0.0", entry_point="dummy:Handler",
-            supported_extensions=[".test"], required_api_version="1.0.0", is_enabled=True
+            name="test_plugin",
+            version="1.0.0",
+            entry_point="dummy:Handler",
+            supported_extensions=[".test"],
+            required_api_version="1.0.0",
+            is_enabled=True,
         )
         registry_empty._discovered["test_plugin"] = metadata
 
@@ -387,7 +431,7 @@ class TestPluginLoading:
             entry_point="tests.fixtures.mock_plugin:MockFileTypeHandler",
             supported_extensions=[".mock"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
 
         # Pre-load a handler
@@ -408,14 +452,16 @@ class TestPluginLoading:
             entry_point="dummy:Handler",
             supported_extensions=[".dis"],
             required_api_version="1.0.0",
-            is_enabled=False
+            is_enabled=False,
         )
 
         handler = registry_empty.load_plugin("disabled")
         assert handler is None
 
     @patch("krag.plugins.registry.PluginLoader")
-    def test_load_plugin_handles_load_errors_gracefully(self, mock_loader_class, registry_empty, plugin_context):
+    def test_load_plugin_handles_load_errors_gracefully(
+        self, mock_loader_class, registry_empty, plugin_context
+    ):
         """load_plugin should handle errors gracefully and disable plugin."""
         # Setup mock loader to raise exception
         mock_loader = MagicMock()
@@ -429,7 +475,7 @@ class TestPluginLoading:
             entry_point="dummy:Handler",
             supported_extensions=[".fail"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
 
         # Should not raise exception
@@ -452,7 +498,7 @@ class TestHandlerRetrieval:
             entry_point="tests.fixtures.mock_plugin:MockFileTypeHandler",
             supported_extensions=[".mock"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
         registry_empty._extension_map = {".mock": "mock_plugin"}
         handler = MockFileTypeHandler()
@@ -467,7 +513,9 @@ class TestHandlerRetrieval:
         assert result2 is handler
         assert result3 is handler
 
-    def test_get_handler_for_extension_returns_none_for_unsupported(self, registry_empty, plugin_context):
+    def test_get_handler_for_extension_returns_none_for_unsupported(
+        self, registry_empty, plugin_context
+    ):
         """get_handler_for_extension should return None for unsupported extensions."""
         result = registry_empty.get_handler_for_extension(".unsupported", plugin_context)
         assert result is None
@@ -480,7 +528,7 @@ class TestHandlerRetrieval:
             entry_point="tests.fixtures.mock_plugin:MockFileTypeHandler",
             supported_extensions=[".mock"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
         registry_empty._extension_map = {".mock": "mock_plugin"}
 
@@ -489,8 +537,9 @@ class TestHandlerRetrieval:
 
         # Mock the load_plugin method to avoid actual loading
         from unittest.mock import patch
+
         mock_handler = MockFileTypeHandler()
-        with patch.object(registry_empty, 'load_plugin', return_value=mock_handler) as mock_load:
+        with patch.object(registry_empty, "load_plugin", return_value=mock_handler) as mock_load:
             handler = registry_empty.get_handler_for_extension(".mock", plugin_context)
 
             # load_plugin should have been called
@@ -508,7 +557,7 @@ class TestHandlerRetrieval:
             entry_point="tests.fixtures.mock_plugin:MockFileTypeHandler",
             supported_extensions=[".mock"],
             required_api_version="1.0.0",
-            is_enabled=True
+            is_enabled=True,
         )
         registry_empty._extension_map = {".mock": "mock_plugin"}
         handler = MockFileTypeHandler()
@@ -530,10 +579,7 @@ class TestPluginCleanup:
         handler1 = MagicMock(spec=MockFileTypeHandler)
         handler2 = MagicMock(spec=MockFileTypeHandler)
 
-        registry_empty._loaded = {
-            "plugin1": handler1,
-            "plugin2": handler2
-        }
+        registry_empty._loaded = {"plugin1": handler1, "plugin2": handler2}
 
         registry_empty.shutdown_all_plugins()
 

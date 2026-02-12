@@ -89,7 +89,9 @@ class PluginRegistry:
                     name=plugin_name,
                     version="0.0.0",  # Will be updated when plugin loads
                     entry_point=f"{entry_point.value}",
-                    supported_extensions=[".__unknown__"],  # Placeholder, will be populated from config or when loaded
+                    supported_extensions=[
+                        ".__unknown__"
+                    ],  # Placeholder, will be populated from config or when loaded
                     description=None,
                     author=None,
                     required_api_version="1.0.0",  # Will be updated when plugin loads

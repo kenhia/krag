@@ -46,15 +46,16 @@ def mock_report_callback():
 
 
 @pytest.fixture
-def context(mock_embedding_generator, mock_vector_store, mock_chunker,
-            mock_logger, mock_report_callback):
+def context(
+    mock_embedding_generator, mock_vector_store, mock_chunker, mock_logger, mock_report_callback
+):
     """Create a PluginContext with all mocks."""
     return PluginContext(
         embedding_generator=mock_embedding_generator,
         vector_store=mock_vector_store,
         chunker=mock_chunker,
         logger=mock_logger,
-        report_indexing_failure=mock_report_callback
+        report_indexing_failure=mock_report_callback,
     )
 
 
@@ -62,8 +63,12 @@ class TestContextInitialization:
     """Test PluginContext initialization."""
 
     def test_context_initializes_with_all_services(
-        self, mock_embedding_generator, mock_vector_store, mock_chunker,
-        mock_logger, mock_report_callback
+        self,
+        mock_embedding_generator,
+        mock_vector_store,
+        mock_chunker,
+        mock_logger,
+        mock_report_callback,
     ):
         """PluginContext should initialize with all provided services."""
         context = PluginContext(
@@ -71,7 +76,7 @@ class TestContextInitialization:
             vector_store=mock_vector_store,
             chunker=mock_chunker,
             logger=mock_logger,
-            report_indexing_failure=mock_report_callback
+            report_indexing_failure=mock_report_callback,
         )
 
         assert context.embedding_generator is mock_embedding_generator
@@ -81,8 +86,12 @@ class TestContextInitialization:
         assert context.report_indexing_failure is mock_report_callback
 
     def test_context_stores_references_not_copies(
-        self, mock_embedding_generator, mock_vector_store, mock_chunker,
-        mock_logger, mock_report_callback
+        self,
+        mock_embedding_generator,
+        mock_vector_store,
+        mock_chunker,
+        mock_logger,
+        mock_report_callback,
     ):
         """PluginContext should store references to services, not copies."""
         context = PluginContext(
@@ -90,7 +99,7 @@ class TestContextInitialization:
             vector_store=mock_vector_store,
             chunker=mock_chunker,
             logger=mock_logger,
-            report_indexing_failure=mock_report_callback
+            report_indexing_failure=mock_report_callback,
         )
 
         # Verify references are identical
@@ -183,8 +192,7 @@ class TestRealInstanceCompatibility:
     """Test compatibility with real service instances."""
 
     def test_context_works_with_real_logger(
-        self, mock_embedding_generator, mock_vector_store, mock_chunker,
-        mock_report_callback
+        self, mock_embedding_generator, mock_vector_store, mock_chunker, mock_report_callback
     ):
         """PluginContext should work with real logger instance."""
         real_logger = logging.getLogger("test_plugin")
@@ -194,7 +202,7 @@ class TestRealInstanceCompatibility:
             vector_store=mock_vector_store,
             chunker=mock_chunker,
             logger=real_logger,
-            report_indexing_failure=mock_report_callback
+            report_indexing_failure=mock_report_callback,
         )
 
         # Should be able to use real logger
@@ -203,8 +211,7 @@ class TestRealInstanceCompatibility:
         context.logger.info("Test message")
 
     def test_context_works_with_real_chunker(
-        self, mock_embedding_generator, mock_vector_store,
-        mock_logger, mock_report_callback
+        self, mock_embedding_generator, mock_vector_store, mock_logger, mock_report_callback
     ):
         """PluginContext should work with real TextChunker instance."""
         real_chunker = TextChunker(chunk_size=500, chunk_overlap=100)
@@ -214,7 +221,7 @@ class TestRealInstanceCompatibility:
             vector_store=mock_vector_store,
             chunker=real_chunker,
             logger=mock_logger,
-            report_indexing_failure=mock_report_callback
+            report_indexing_failure=mock_report_callback,
         )
 
         assert context.chunker is real_chunker
