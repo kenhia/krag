@@ -84,14 +84,17 @@ class PluginRegistry:
 
                 # Create metadata from entry point
                 # Note: We'll need to actually load the plugin to get full metadata
-                # For now, create minimal metadata
+                # For now, create minimal metadata with placeholder
                 metadata = PluginMetadata(
                     name=plugin_name,
                     version="0.0.0",  # Will be updated when plugin loads
                     entry_point=f"{entry_point.value}",
-                    supported_extensions=[],  # Will be populated from config
+                    supported_extensions=[".__unknown__"],  # Placeholder, will be populated from config or when loaded
+                    description=None,
+                    author=None,
                     required_api_version="1.0.0",  # Will be updated when plugin loads
                     is_enabled=self._is_plugin_enabled(plugin_name),
+                    load_error=None,
                 )
 
                 self._discovered[plugin_name] = metadata
@@ -515,3 +518,22 @@ class PluginRegistry:
                 )
 
         return conflicts
+
+    def shutdown_all_plugins(self) -> None:
+        """Shutdown and cleanup all loaded plugins.
+
+        Calls cleanup() on all loaded plugin handlers and clears the loaded
+        plugins dictionary. Handles cleanup errors gracefully by logging them
+        and continuing to clean up remaining plugins.
+
+        Example:
+            >>> registry.shutdown_all_plugins()
+        """
+        for plugin_name, handler in list(self._loaded.items()):
+            try:
+                self._loader.cleanup_plugin(handler)
+            except Exception as e:
+                logger.warning(f"Error cleaning up plugin '{plugin_name}': {e}")
+
+        self._loaded.clear()
+        logger.info("All plugins shutdown successfully")

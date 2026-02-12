@@ -125,7 +125,10 @@ class IndexingFailureCollector:
             lines.append("")
 
         # Plugin failures
-        for plugin_name, count in sorted(by_plugin.items()):
+        for plugin_name, count in sorted(
+            (item for item in by_plugin.items() if item[0] is not None),
+            key=lambda x: x[0]
+        ):
             if plugin_name is not None:
                 lines.append(f"Plugin '{plugin_name}': {count} failure(s)")
                 for failure in [f for f in self._failures if f.plugin_name == plugin_name]:

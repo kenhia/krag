@@ -147,9 +147,10 @@ class FileTypeHandler(ABC):
             - Recommended keys: title, author, creation_date, page_count, language
         """
 
-    @abstractmethod
-    def get_chunking_strategy(self) -> ChunkingStrategy | Any | None:
+    def get_chunking_strategy(self) -> ChunkingStrategy | Any | None:  # noqa: B027
         """Return preferred chunking strategy for this file type.
+
+        Optional method to specify chunking strategy. Default implementation returns None.
 
         Returns:
             ChunkingStrategy | TextChunker | None:
@@ -166,6 +167,7 @@ class FileTypeHandler(ABC):
             >>> handler.get_chunking_strategy()
             ChunkingStrategy.DEFAULT
         """
+        return None
 
     def initialize(self, config: dict[str, Any], context: PluginContext | None = None) -> None:  # noqa: B027
         """Called once after plugin is loaded, before first use.
