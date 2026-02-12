@@ -139,23 +139,23 @@ Tasks follow strict checklist format:
 
 ### Unit Tests for US1
 
-- [ ] T058 [P] [US1] Unit tests for `PluginRegistry.discover_plugins()` in `tests/unit/plugins/test_registry.py`
-- [ ] T059 [P] [US1] Unit tests for `PluginRegistry.load_plugin()` in `tests/unit/plugins/test_registry.py`
-- [ ] T060 [P] [US1] Unit tests for `PluginRegistry.get_handler_for_extension()` in `tests/unit/plugins/test_registry.py`
-- [ ] T061 [P] [US1] Unit tests for `PluginLoader` (including try-catch and auto-disable) in `tests/unit/plugins/test_loader.py`
-- [ ] T062 [P] [US1] Unit tests for `ChunkingStrategyResolver` in `tests/unit/plugins/test_chunking.py`
-- [ ] T063 [P] [US1] Unit tests for `FileTypeHandler` interface validation in `tests/unit/plugins/test_interfaces.py`
-- [ ] T064 [P] [US1] Unit tests for `PluginContext` and `report_indexing_failure()` in `tests/unit/plugins/test_context.py`
-- [ ] T065 [P] [US1] Unit tests for `IndexingFailureCollector` in `tests/unit/plugins/test_failures.py`
+- [X] T058 [P] [US1] Unit tests for `PluginRegistry.discover_plugins()` in `tests/unit/plugins/test_registry.py`
+- [X] T059 [P] [US1] Unit tests for `PluginRegistry.load_plugin()` in `tests/unit/plugins/test_registry.py`
+- [X] T060 [P] [US1] Unit tests for `PluginRegistry.get_handler_for_extension()` in `tests/unit/plugins/test_registry.py`
+- [X] T061 [P] [US1] Unit tests for `PluginLoader` (including try-catch and auto-disable) in `tests/unit/plugins/test_loader.py`
+- [X] T062 [P] [US1] Unit tests for `ChunkingStrategyResolver` in `tests/unit/plugins/test_chunking.py`
+- [X] T063 [P] [US1] Unit tests for `FileTypeHandler` interface validation in `tests/unit/plugins/test_interfaces.py`
+- [X] T064 [P] [US1] Unit tests for `PluginContext` and `report_indexing_failure()` in `tests/unit/plugins/test_context.py`
+- [X] T065 [P] [US1] Unit tests for `IndexingFailureCollector` in `tests/unit/plugins/test_failures.py`
 
 ### Integration Tests for US1
 
-- [ ] T066 [US1] End-to-end test for plugin-based indexing in `tests/integration/test_plugin_indexing_pipeline.py`
-- [ ] T067 [US1] Test plugin error handling during indexing (exception → disable → continue) in `tests/integration/test_plugin_indexing_pipeline.py`
-- [ ] T068 [US1] Test chunking strategy selection during indexing in `tests/integration/test_plugin_chunking_selection.py`
-- [ ] T069 [US1] Test failure-to-index reporting summary in `tests/integration/test_plugin_indexing_pipeline.py`
+- [X] T066 [US1] End-to-end test for plugin-based indexing in `tests/integration/test_plugin_indexing_pipeline.py`
+- [X] T067 [US1] Test plugin error handling during indexing (exception → disable → continue) in `tests/integration/test_plugin_indexing_pipeline.py`
+- [X] T068 [US1] Test chunking strategy selection during indexing in `tests/integration/test_plugin_chunking_selection.py`
+- [X] T069 [US1] Test failure-to-index reporting summary in `tests/integration/test_plugin_indexing_pipeline.py`
 
-- [ ] T070 Perform pre-commit checks using "python-precommit" skill; commit changes
+- [X] T070 Perform pre-commit checks using "python-precommit" skill; commit changes
 
 **Checkpoint US1**: Users can install plugin packages, add them to config, and index files with plugin-supported extensions ✅
 
