@@ -208,7 +208,7 @@ Tasks follow strict checklist format:
 
 **Note**: Both example plugins have extensive unit tests (25 tests for markdown, 45 tests for logs) validating all functionality. Plugins are discovered correctly and pass interface contract tests when instantiated directly.
 
-- [ ] T098 Perform pre-commit checks using "python-precommit" skill; commit changes
+- [X] T098 Perform pre-commit checks using "python-precommit" skill; commit changes
 
 **Checkpoint US2**: Plugin developers can create and test custom file type plugins ✅
 
