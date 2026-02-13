@@ -79,30 +79,55 @@ class PluginRegistry:
 
         for entry_point in plugin_group:
             try:
-                # Load entry point metadata without importing the module yet
                 plugin_name = entry_point.name
 
+                # Try to load plugin class to get metadata
+                # This is a lightweight operation - we instantiate but don't initialize
+                try:
+                    handler_class = self._loader.load_plugin_class(plugin_name)
+                    handler = self._loader.instantiate_plugin(handler_class)
+
+                    # Get metadata from plugin instance
+                    version = handler.version
+                    required_api_version = handler.required_api_version
+                    supported_extensions = handler.supported_extensions()
+                    description = getattr(handler, "description", None)
+                    author = getattr(handler, "author", None)
+                    load_error = None
+
+                    logger.debug(
+                        f"Discovered plugin: {plugin_name} v{version} "
+                        f"(extensions: {', '.join(supported_extensions)})"
+                    )
+
+                except Exception as load_err:
+                    # If plugin fails to load, create placeholder metadata with error
+                    version = "0.0.0"
+                    required_api_version = "1.0.0"
+                    supported_extensions = [".__unknown__"]
+                    description = None
+                    author = None
+                    load_error = str(load_err)
+
+                    logger.warning(
+                        f"Plugin '{plugin_name}' discovered but failed to load: {load_err}"
+                    )
+
                 # Create metadata from entry point
-                # Note: We'll need to actually load the plugin to get full metadata
-                # For now, create minimal metadata with placeholder
                 metadata = PluginMetadata(
                     name=plugin_name,
-                    version="0.0.0",  # Will be updated when plugin loads
+                    version=version,
                     entry_point=f"{entry_point.value}",
-                    supported_extensions=[
-                        ".__unknown__"
-                    ],  # Placeholder, will be populated from config or when loaded
-                    description=None,
-                    author=None,
-                    required_api_version="1.0.0",  # Will be updated when plugin loads
+                    supported_extensions=supported_extensions,
+                    description=description,
+                    author=author,
+                    required_api_version=required_api_version,
                     is_enabled=self._is_plugin_enabled(plugin_name),
-                    load_error=None,
+                    load_error=load_error,
                 )
 
                 self._discovered[plugin_name] = metadata
                 discovered_plugins.append(metadata)
-
-                logger.debug(f"Discovered plugin: {plugin_name} from entry point")
 
             except Exception as e:
                 logger.warning(f"Failed to discover plugin {entry_point.name}: {e}")
