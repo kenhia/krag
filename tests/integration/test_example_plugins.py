@@ -189,8 +189,8 @@ class TestLogPluginIntegration:
         log_file.write_text(
             """2024-02-11 10:00:00 INFO Starting
 2024-02-11 10:00:05 DEBUG Details
-2024-02-11 10:00:10 WARN Warning message
-2024-02-11 10:00:15 ERROR Error message
+2024-02-11 10:00:10 WARN Attention needed
+2024-02-11 10:00:15 ERROR Something went wrong
 2024-02-11 10:00:20 INFO Complete
 """
         )

@@ -131,10 +131,12 @@ class MarkdownFileTypeHandler(FileTypeHandler):
         """
         return None
 
-    def initialize(self) -> None:
+    def initialize(self, config: dict[str, Any] | None = None, context: Any = None) -> None:
         """Initialize the plugin.
 
-        No initialization needed for this simple plugin.
+        Args:
+            config: Plugin-specific configuration (unused by this plugin)
+            context: Plugin context (unused by this plugin)
         """
         logger.debug("Markdown plugin initialized")
 

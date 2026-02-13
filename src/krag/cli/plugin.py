@@ -10,7 +10,7 @@ from rich.table import Table
 
 from krag.config.settings import ConfigManager
 from krag.config.xdg import get_krag_config_dir
-from krag.models.configuration import Configuration, PluginConfiguration
+from krag.models.configuration import Configuration
 from krag.plugins.registry import PluginRegistry
 
 # Create Typer app for plugin commands
@@ -113,10 +113,7 @@ def list_plugins(
         config = ConfigManager.load(config_path)
 
         # Create plugin configuration from config
-        plugin_cfg = PluginConfiguration(
-            enabled_plugins=config.enabled_plugins if hasattr(config, "enabled_plugins") else [],
-            disabled_plugins=config.disabled_plugins if hasattr(config, "disabled_plugins") else [],
-        )
+        plugin_cfg = config.plugins
 
         # Discover plugins
         registry = PluginRegistry(plugin_cfg)

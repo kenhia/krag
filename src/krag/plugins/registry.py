@@ -225,6 +225,28 @@ class PluginRegistry:
         """
         return list(self._extension_map.keys())
 
+    def get_plugins_by_extension(self, extension: str) -> list[PluginMetadata]:
+        """Get plugins that handle a specific file extension.
+
+        Args:
+            extension: File extension to look up (e.g., '.md', '.log')
+
+        Returns:
+            list[PluginMetadata]: Plugin metadata for plugins that handle this extension
+
+        Example:
+            >>> plugins = registry.get_plugins_by_extension(".md")
+            >>> print(f"Markdown handled by: {[p.name for p in plugins]}")
+        """
+        ext_lower = extension.lower()
+        results = []
+        for _plugin_name, metadata in self._discovered.items():
+            if not metadata.is_enabled:
+                continue
+            if ext_lower in [e.lower() for e in metadata.supported_extensions]:
+                results.append(metadata)
+        return results
+
     def get_plugin_info(self, name: str) -> PluginMetadata:
         """Get metadata for a specific plugin.
 

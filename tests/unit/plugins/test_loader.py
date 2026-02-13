@@ -81,9 +81,17 @@ class TestSemverParsing:
     def test_parse_semver_invalid_format_raises_error(self):
         """_parse_semver should raise ValueError for invalid format."""
         with pytest.raises(ValueError) as exc_info:
-            _parse_semver("1.2")
+            _parse_semver("1")
 
         assert "Invalid semver format" in str(exc_info.value)
+
+    def test_parse_semver_two_part_version(self):
+        """_parse_semver should accept two-part versions like '1.0'."""
+        major, minor, patch = _parse_semver("1.2")
+
+        assert major == 1
+        assert minor == 2
+        assert patch == 0
 
     def test_parse_semver_non_numeric_raises_error(self):
         """_parse_semver should raise ValueError for non-numeric versions."""

@@ -181,10 +181,14 @@ class LogFileHandler(FileTypeHandler):
             )
         return self._chunker
 
-    def initialize(self) -> None:
+    def initialize(self, config: dict[str, Any] | None = None, context: Any = None) -> None:
         """Initialize the plugin.
 
         Creates the chunker instance with current configuration.
+
+        Args:
+            config: Plugin-specific configuration (this plugin uses internal _config)
+            context: Plugin context (unused by this plugin)
         """
         self._chunker = LogFileChunker(
             chunk_window_minutes=self._config.chunk_window_minutes,

@@ -27,7 +27,8 @@ def _parse_semver(version: str) -> tuple[int, int, int]:
     """Parse semantic version string.
 
     Args:
-        version: Version string (e.g., '1.2.3' or '2.0.0-beta')
+        version: Version string (e.g., '1.2.3', '1.0', or '2.0.0-beta').
+            Two-part versions like '1.0' are treated as '1.0.0'.
 
     Returns:
         tuple[int, int, int]: Major, minor, patch version numbers
@@ -39,7 +40,9 @@ def _parse_semver(version: str) -> tuple[int, int, int]:
     base_version = version.split("-")[0].split("+")[0]
     parts = base_version.split(".")
 
-    if len(parts) != 3:
+    if len(parts) == 2:
+        parts.append("0")
+    elif len(parts) != 3:
         raise ValueError(f"Invalid semver format: {version}")
 
     try:

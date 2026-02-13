@@ -169,13 +169,13 @@ Tasks follow strict checklist format:
 
 ### Developer Documentation for US2
 
-- [ ] T071 [P] [US2] Create `docs/plugin-development.md` with API overview, requirements, and `PluginContext` usage
-- [ ] T072 [P] [US2] Document `FileTypeHandler` interface contract with method signatures, `config_schema()`, and contracts
-- [ ] T073 [P] [US2] Document plugin lifecycle (`initialize(config, context)`, `cleanup`) in plugin development guide
-- [ ] T074 [P] [US2] Document chunking strategy selection API in plugin development guide
-- [ ] T075 [P] [US2] Document failure-to-index API (`report_indexing_failure()`) usage in plugin development guide
-- [ ] T076 [P] [US2] Document plugin package installation (`uv pip install` / `pip install`) and registration (`krag plugin add`) workflow
-- [ ] T077 [P] [US2] Create plugin development troubleshooting section
+- [X] T071 [P] [US2] Create `docs/plugin-development.md` with API overview, requirements, and `PluginContext` usage
+- [X] T072 [P] [US2] Document `FileTypeHandler` interface contract with method signatures, `config_schema()`, and contracts
+- [X] T073 [P] [US2] Document plugin lifecycle (`initialize(config, context)`, `cleanup`) in plugin development guide
+- [X] T074 [P] [US2] Document chunking strategy selection API in plugin development guide
+- [X] T075 [P] [US2] Document failure-to-index API (`report_indexing_failure()`) usage in plugin development guide
+- [X] T076 [P] [US2] Document plugin package installation (`uv pip install` / `pip install`) and registration (`krag plugin add`) workflow
+- [X] T077 [P] [US2] Create plugin development troubleshooting section
 
 ### Example Plugin 1: Markdown (Uses Default Chunking) for US2
 
@@ -203,8 +203,8 @@ Tasks follow strict checklist format:
 
 - [ ] T094 [US2] Create plugin scaffolding script/template in `.specify/templates/plugin-template/` [DEFERRED - Optional tooling]
 - [X] T095 [US2] Test example plugin installation in development mode (`uv pip install -e` / `krag plugin install -e .`)
-- [ ] T096 [US2] Integration test for example plugins with actual file indexing [DEFERRED - Complex registry mocking needed, consider Claude Opus for broader context]
-- [ ] T097 [US2] Validate example plugins pass contract tests [DEFERRED - Plugin loading via registry needs context setup, consider Claude Opus]
+- [X] T096 [US2] Integration test for example plugins with actual file indexing — 14 tests in `tests/integration/test_example_plugins.py`, all passing
+- [X] T097 [US2] Validate example plugins pass contract tests — Plugins load via registry, handle files, extract metadata, custom chunking verified
 
 **Note**: Both example plugins have extensive unit tests (25 tests for markdown, 45 tests for logs) validating all functionality. Plugins are discovered correctly and pass interface contract tests when instantiated directly.
 
@@ -261,9 +261,7 @@ Tasks follow strict checklist format:
 - [DEFERRED] T123 [P] [US3] Unit tests for `enable_plugin()` in `tests/unit/plugins/test_registry.py` — Method not implemented (functionality in CLI)
 - [DEFERRED] T124 [P] [US3] Unit tests for `disable_plugin()` in `tests/unit/plugins/test_registry.py` — Method not implemented (functionality in CLI)
 - [DEFERRED] T125 [P] [US3] Unit tests for configuration persistence after plugin state changes — Tested manually, config persistence works
-- [X] T126 [P] [US3] CLI command tests for plugin management (add, remove, enable, disable, list, info) in `tests/unit/cli/test_plugin.py` — Created 13 tests, 7 passing (list basic/no-config, info not-found, validate, enable/disable, install package)
-
-**Note on test refinement**: 6 tests need mock isolation improvements (list verbose, info success, validate with errors, install editable/failure) due to real plugin discovery in test environment. CLI functionality verified manually and working correctly.
+- [X] T126 [P] [US3] CLI command tests for plugin management (add, remove, enable, disable, list, info) in `tests/unit/cli/test_plugin.py` — All 13 tests passing (fixed mock isolation: patching `krag.cli.plugin.PluginRegistry` instead of `krag.plugins.registry.PluginRegistry`)
 
 ### Integration Tests for US3
 
