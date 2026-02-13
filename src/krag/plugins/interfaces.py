@@ -21,20 +21,77 @@ class ChunkingStrategy(Enum):
     """Available built-in chunking strategies for plugins.
 
     Plugins can return a ChunkingStrategy value to select from krag's available
-    chunkers, or provide a custom TextChunker instance directly.
+    chunkers, or provide a custom TextChunker instance directly from
+    ``get_chunking_strategy()``.
+
+    Strategy Selection Guide:
+        - Most plugins should use ``DEFAULT`` or return ``None`` (equivalent).
+        - Use ``CUSTOM`` only when the file format requires content-aware
+          boundaries (e.g., log timestamps, code function boundaries).
+        - ``SEMANTIC`` and ``CODE_AWARE`` are reserved for future built-in
+          strategies. Requesting them today falls back to ``DEFAULT`` with a
+          logged warning, so plugins can declare intent for future support.
+
+    Configuration Override:
+        Users can override any plugin's chunking strategy via config.toml::
+
+            [plugins.logs]
+            chunking_strategy = "default"  # Force default instead of custom
+
+        Valid override values: ``default``, ``semantic``, ``code_aware``.
     """
 
     DEFAULT = "default"
-    """Use krag's default TextChunker (current behavior)"""
+    """Use krag's default TextChunker with character-based splitting and overlap.
+
+    This is the recommended strategy for most file types. It splits text into
+    fixed-size chunks with configurable overlap, using sentence boundary
+    awareness when possible.
+
+    Chunk size and overlap are inherited from the global configuration
+    (``chunking.size`` and ``chunking.overlap`` in config.toml).
+    """
 
     SEMANTIC = "semantic"
-    """Reserved for future semantic boundary detection"""
+    """Reserved for future semantic boundary detection.
+
+    When implemented, this strategy will:
+    - Detect paragraph and section boundaries
+    - Preserve complete sentences at chunk edges
+    - Optimize for narrative and article content
+
+    **Status**: Not yet implemented. Falls back to DEFAULT with a warning.
+    Plugins may request this to signal intent for when it becomes available.
+    """
 
     CODE_AWARE = "code_aware"
-    """Reserved for future code-structure-aware chunking"""
+    """Reserved for future code-structure-aware chunking.
+
+    When implemented, this strategy will:
+    - Detect function and class boundaries
+    - Keep syntactic units intact (no mid-function splits)
+    - Preserve import blocks and docstrings
+
+    **Status**: Not yet implemented. Falls back to DEFAULT with a warning.
+    Plugins may request this to signal intent for when it becomes available.
+    """
 
     CUSTOM = "custom"
-    """Plugin provides custom chunker instance"""
+    """Plugin provides a custom TextChunker instance.
+
+    Return this enum value from ``get_chunking_strategy()`` alongside a
+    custom chunker from ``get_custom_chunker()``, or return the custom
+    chunker instance directly from ``get_chunking_strategy()``.
+
+    Custom chunkers must implement either:
+    - ``chunk(text, file_path=None, file_type=None) -> list[TextChunk]``
+    - ``chunk_text(text) -> list[str | dict]`` (will be adapted automatically)
+
+    Example::
+
+        def get_chunking_strategy(self):
+            return LogFileChunker(window_minutes=5)
+    """
 
 
 class FileTypeHandler(ABC):

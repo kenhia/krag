@@ -284,36 +284,36 @@ Tasks follow strict checklist format:
 
 ### Custom Chunking Support for US4
 
-- [ ] T132 [P] [US4] Extend `ChunkingStrategyResolver` to handle custom `TextChunker` instances in `src/krag/plugins/chunking.py`
-- [ ] T133 [P] [US4] Add validation for custom chunker interface compliance in `src/krag/plugins/chunking.py`
-- [ ] T134 [US4] Implement custom chunker error handling and fallback in `src/krag/plugins/chunking.py`
-- [ ] T135 [US4] Update indexer to use resolved custom chunkers in `src/krag/orchestration/indexer.py`
+- [X] T132 [P] [US4] Extend `ChunkingStrategyResolver` to handle custom `TextChunker` instances in `src/krag/plugins/chunking.py`
+- [X] T133 [P] [US4] Add validation for custom chunker interface compliance in `src/krag/plugins/chunking.py`
+- [X] T134 [US4] Implement custom chunker error handling and fallback in `src/krag/plugins/chunking.py`
+- [X] T135 [US4] Update indexer to use resolved custom chunkers in `src/krag/orchestration/indexer.py`
 
 ### Chunking Strategy Enum Extensions for US4
 
-- [ ] T136 [P] [US4] Document future chunking strategies (SEMANTIC, CODE_AWARE) in `ChunkingStrategy` enum docstrings
-- [ ] T137 [P] [US4] Add fallback logic for unimplemented strategies (SEMANTIC → DEFAULT)
-- [ ] T138 [P] [US4] Add plugin API documentation for future strategy selection
+- [X] T136 [P] [US4] Document future chunking strategies (SEMANTIC, CODE_AWARE) in `ChunkingStrategy` enum docstrings
+- [X] T137 [P] [US4] Add fallback logic for unimplemented strategies (SEMANTIC → DEFAULT)
+- [X] T138 [P] [US4] Add plugin API documentation for future strategy selection
 
 ### Plugin Configuration for Chunking for US4
 
-- [ ] T139 [P] [US4] Add chunking strategy configuration options to plugin settings schema
-- [ ] T140 [P] [US4] Implement configuration-based chunking strategy override per plugin
-- [ ] T141 [P] [US4] Document chunking configuration in plugin development guide
+- [X] T139 [P] [US4] Add chunking strategy configuration options to plugin settings schema
+- [X] T140 [P] [US4] Implement configuration-based chunking strategy override per plugin
+- [X] T141 [P] [US4] Document chunking configuration in plugin development guide
 
 ### Unit Tests for US4
 
-- [ ] T142 [P] [US4] Unit tests for custom chunker resolution in `tests/unit/plugins/test_chunking.py`
-- [ ] T143 [P] [US4] Unit tests for chunking strategy validation in `tests/unit/plugins/test_chunking.py`
-- [ ] T144 [P] [US4] Unit tests for chunking fallback logic in `tests/unit/plugins/test_chunking.py`
+- [X] T142 [P] [US4] Unit tests for custom chunker resolution in `tests/unit/plugins/test_chunking.py`
+- [X] T143 [P] [US4] Unit tests for chunking strategy validation in `tests/unit/plugins/test_chunking.py`
+- [X] T144 [P] [US4] Unit tests for chunking fallback logic in `tests/unit/plugins/test_chunking.py`
 
 ### Integration Tests for US4
 
-- [ ] T145 [US4] Integration test for plugin-provided custom chunking in indexing pipeline
-- [ ] T146 [US4] Test default vs custom chunking with same file type
-- [ ] T147 [US4] Test chunking strategy selection based on plugin configuration
+- [X] T145 [US4] Integration test for plugin-provided custom chunking in indexing pipeline
+- [X] T146 [US4] Test default vs custom chunking with same file type
+- [X] T147 [US4] Test chunking strategy selection based on plugin configuration
 
-- [ ] T148 Perform pre-commit checks using "python-precommit" skill; commit changes
+- [X] T148 Perform pre-commit checks using "python-precommit" skill; commit changes
 
 **Checkpoint US4**: Plugins can provide and use custom chunking strategies ✅
 

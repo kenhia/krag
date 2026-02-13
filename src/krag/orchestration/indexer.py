@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from krag.discovery.scanner import FileScanner
 from krag.embeddings.generator import EmbeddingGenerator
@@ -152,10 +153,12 @@ class IndexingOrchestrator:
                 report_indexing_failure=report_plugin_failure,
             )
 
-            # Initialize chunking strategy resolver
+            # Initialize chunking strategy resolver with per-plugin overrides
+            chunking_overrides = self._build_chunking_overrides(plugin_config)
             self.chunking_resolver = ChunkingStrategyResolver(
                 default_chunk_size=chunk_size,
                 default_chunk_overlap=chunk_overlap,
+                chunking_overrides=chunking_overrides,
             )
 
             logger.info(
@@ -179,6 +182,32 @@ class IndexingOrchestrator:
         """Close resources and release locks."""
         if hasattr(self, "vector_store") and self.vector_store:
             self.vector_store.close()
+
+    @staticmethod
+    def _build_chunking_overrides(plugin_config: Any) -> dict[str, str]:
+        """Build per-plugin chunking strategy overrides from configuration.
+
+        Reads ``chunking_strategy`` from each plugin's settings in the config
+        to allow users to override the chunking approach per plugin.
+
+        Args:
+            plugin_config: PluginConfiguration with plugin_settings
+
+        Returns:
+            dict mapping plugin name to strategy name string
+        """
+        overrides: dict[str, str] = {}
+        if not hasattr(plugin_config, "plugin_settings"):
+            return overrides
+
+        for plugin_name, settings in plugin_config.plugin_settings.items():
+            if isinstance(settings, dict) and "chunking_strategy" in settings:
+                overrides[plugin_name] = str(settings["chunking_strategy"])
+                logger.debug(
+                    f"Chunking override for '{plugin_name}': {settings['chunking_strategy']}"
+                )
+
+        return overrides
 
     def __enter__(self) -> "IndexingOrchestrator":
         """Context manager entry."""
@@ -448,10 +477,15 @@ class IndexingOrchestrator:
                         # Get chunking strategy from plugin
                         chunking_strategy = plugin_handler.get_chunking_strategy()
 
+                        # Use handler.name for config override lookup
+                        handler_name = getattr(
+                            plugin_handler, "name", plugin_handler.__class__.__name__
+                        )
+
                         # Resolve to actual chunker
                         chunker = self.chunking_resolver.resolve(
                             chunking_strategy,
-                            plugin_name=plugin_handler.__class__.__name__,
+                            plugin_name=handler_name,
                         )
 
                         # Use resolved chunker

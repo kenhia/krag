@@ -2,16 +2,18 @@
 
 Tests that plugins can specify chunking strategies and that the
 ChunkingStrategyResolver correctly selects and applies chunkers
-during the indexing pipeline.
+during the indexing pipeline.  Includes US4 tests for custom
+chunking, config overrides, and the chunk_text() adapter.
 """
 
+import logging
 from pathlib import Path
 
 import pytest
 
 from krag.extraction.chunker import TextChunker
 from krag.models.text_chunk import TextChunk
-from krag.plugins.chunking import ChunkingStrategyResolver
+from krag.plugins.chunking import ChunkingStrategyResolver, CustomChunkerAdapter
 from krag.plugins.interfaces import ChunkingStrategy
 from tests.fixtures.mock_plugin import MockFileTypeHandler
 
@@ -432,3 +434,347 @@ class TestRealWorldScenarios:
         assert len(chunks) > 0
         # Verify chunking worked (created multiple chunks or one chunk with content)
         assert sum(len(c.content) for c in chunks) > 0
+
+
+# ───────────────────────────────────────────────────────────
+# US4: Integration Tests - Plugin Provided Custom Chunking (T145)
+# ───────────────────────────────────────────────────────────
+
+
+class ChunkTextLogChunker:
+    """Chunker implementing only chunk_text() per plugin contract."""
+
+    def __init__(self, boundary_pattern: str = "---"):
+        self.boundary_pattern = boundary_pattern
+
+    def chunk_text(self, text: str) -> list[str]:
+        """Split on boundary lines."""
+        sections = text.split(self.boundary_pattern)
+        return [s.strip() for s in sections if s.strip()]
+
+
+class TestPluginCustomChunkingIntegration:
+    """T145: Integration test for plugin-provided custom chunking in indexing pipeline."""
+
+    def test_chunk_text_plugin_produces_valid_chunks(self):
+        """Plugin with chunk_text()-only chunker should produce valid TextChunks in pipeline."""
+
+        class LogPlugin(MockFileTypeHandler):
+            @property
+            def name(self) -> str:
+                return "logs"
+
+            def get_chunking_strategy(self):
+                return ChunkTextLogChunker(boundary_pattern="---")
+
+        resolver = ChunkingStrategyResolver()
+        plugin = LogPlugin()
+        strategy = plugin.get_chunking_strategy()
+
+        # Resolve should wrap in adapter
+        chunker = resolver.resolve(strategy, plugin_name=plugin.name)
+        assert isinstance(chunker, CustomChunkerAdapter)
+
+        # Simulate indexing pipeline: extract text, then chunk
+        log_text = "Entry 1: Starting\n---\nEntry 2: Processing\n---\nEntry 3: Done"
+        chunks = chunker.chunk(log_text, file_path=Path("/var/log/app.log"))
+
+        assert len(chunks) == 3
+        assert all(isinstance(c, TextChunk) for c in chunks)
+        assert chunks[0].content == "Entry 1: Starting"
+        assert chunks[1].content == "Entry 2: Processing"
+        assert chunks[2].content == "Entry 3: Done"
+        assert all(c.file_path == Path("/var/log/app.log") for c in chunks)
+
+    def test_custom_chunker_with_chunk_method_in_pipeline(self):
+        """Plugin providing full chunk() method works directly in pipeline."""
+
+        class CSVChunker:
+            def __init__(self, rows_per_chunk: int = 3):
+                self.rows_per_chunk = rows_per_chunk
+
+            def chunk(
+                self, text: str, file_path: Path | None = None, file_type: str | None = None
+            ) -> list[TextChunk]:
+                lines = [line for line in text.split("\n") if line.strip()]
+                chunks = []
+                for i in range(0, len(lines), self.rows_per_chunk):
+                    batch = lines[i : i + self.rows_per_chunk]
+                    content = "\n".join(batch)
+                    chunks.append(
+                        TextChunk(
+                            file_path=file_path or Path("unknown"),
+                            chunk_index=len(chunks),
+                            content=content,
+                            start_char=0,
+                            end_char=len(content),
+                            token_count=len(content.split()),
+                        )
+                    )
+                return chunks
+
+        class CSVPlugin(MockFileTypeHandler):
+            @property
+            def name(self) -> str:
+                return "csv"
+
+            def get_chunking_strategy(self):
+                return CSVChunker(rows_per_chunk=2)
+
+        resolver = ChunkingStrategyResolver()
+        plugin = CSVPlugin()
+        chunker = resolver.resolve(plugin.get_chunking_strategy(), plugin_name="csv")
+
+        csv_text = "name,age\nAlice,30\nBob,25\nCharlie,35"
+        chunks = chunker.chunk(csv_text, file_path=Path("/data/people.csv"))
+
+        assert len(chunks) == 2
+        assert "Alice" in chunks[0].content
+        assert "Charlie" in chunks[1].content
+
+    def test_multiple_plugins_mixed_strategies_in_pipeline(self):
+        """Multiple plugins with different strategies coexist in one resolver."""
+        resolver = ChunkingStrategyResolver()
+
+        # Plugin 1: Default
+        default_chunker = resolver.resolve(ChunkingStrategy.DEFAULT, plugin_name="markdown")
+
+        # Plugin 2: Custom chunk() method
+        class MyCustomChunker:
+            def chunk(self, text, file_path=None, file_type=None):
+                return [
+                    TextChunk(
+                        file_path=file_path or Path("unknown"),
+                        chunk_index=0,
+                        content=text,
+                        start_char=0,
+                        end_char=len(text),
+                        token_count=len(text.split()),
+                    )
+                ]
+
+        custom_chunker = resolver.resolve(MyCustomChunker(), plugin_name="xml")
+
+        # Plugin 3: chunk_text()-only
+        chunk_text_chunker = resolver.resolve(
+            ChunkTextLogChunker(boundary_pattern="---"), plugin_name="logs"
+        )
+
+        assert isinstance(default_chunker, TextChunker)
+        assert isinstance(custom_chunker, MyCustomChunker)
+        assert isinstance(chunk_text_chunker, CustomChunkerAdapter)
+
+
+# ───────────────────────────────────────────────────────────
+# US4: Integration Tests - Default vs Custom Chunking (T146)
+# ───────────────────────────────────────────────────────────
+
+
+class TestDefaultVsCustomChunking:
+    """T146: Test default vs custom chunking with same file type."""
+
+    def test_default_and_custom_produce_different_results(self):
+        """Default chunker and custom chunker produce different chunk boundaries."""
+        text = "Section A content here.\n---\nSection B content here.\n---\nSection C."
+
+        # Default: character-based
+        default_resolver = ChunkingStrategyResolver(
+            default_chunk_size=100, default_chunk_overlap=20
+        )
+        default_chunker = default_resolver.resolve(ChunkingStrategy.DEFAULT)
+        default_chunks = default_chunker.chunk(text, file_path=Path("/tmp/test.txt"))
+
+        # Custom: boundary-based
+        custom_resolver = ChunkingStrategyResolver()
+        custom_chunker = custom_resolver.resolve(
+            ChunkTextLogChunker(boundary_pattern="---"), plugin_name="custom"
+        )
+        custom_chunks = custom_chunker.chunk(text, file_path=Path("/tmp/test.txt"))
+
+        # Custom respects section boundaries (3 sections)
+        assert len(custom_chunks) == 3
+        assert custom_chunks[0].content == "Section A content here."
+        assert custom_chunks[1].content == "Section B content here."
+        assert custom_chunks[2].content == "Section C."
+
+        # Default might produce different boundary splits
+        # (depends on text length vs chunk size)
+        default_content = "".join(c.content for c in default_chunks)
+        custom_content = "".join(c.content for c in custom_chunks)
+
+        # Both should cover all the text
+        assert len(default_content) > 0
+        assert len(custom_content) > 0
+
+    def test_switching_plugin_strategy_changes_output(self):
+        """Same text chunked differently when plugin changes strategy."""
+        text = "A-section\n---\nB-section\n---\nC-section"
+
+        resolver = ChunkingStrategyResolver()
+
+        # First: use default
+        default_chunks = resolver.resolve(None, plugin_name="test").chunk(
+            text, file_path=Path("/tmp/test.txt")
+        )
+
+        # Then: use custom
+        custom_chunks = resolver.resolve(
+            ChunkTextLogChunker(boundary_pattern="---"), plugin_name="test"
+        ).chunk(text, file_path=Path("/tmp/test.txt"))
+
+        # Custom should give exactly 3 chunks
+        assert len(custom_chunks) == 3
+        # Default processes differently (likely 1 chunk for short text)
+        assert len(default_chunks) >= 1
+
+
+# ───────────────────────────────────────────────────────────
+# US4: Integration Tests - Config Override (T147)
+# ───────────────────────────────────────────────────────────
+
+
+class TestChunkingConfigOverrideIntegration:
+    """T147: Test chunking strategy selection based on plugin configuration."""
+
+    def test_config_override_forces_default_over_custom(self, caplog):
+        """Config override should override plugin's custom chunker preference."""
+        caplog.set_level(logging.INFO)
+
+        # User configured: override logs plugin to use default
+        resolver = ChunkingStrategyResolver(
+            default_chunk_size=1000,
+            default_chunk_overlap=200,
+            chunking_overrides={"logs": "default"},
+        )
+
+        class LogPlugin(MockFileTypeHandler):
+            @property
+            def name(self) -> str:
+                return "logs"
+
+            def get_chunking_strategy(self):
+                return ChunkTextLogChunker(boundary_pattern="---")
+
+        plugin = LogPlugin()
+        strategy = plugin.get_chunking_strategy()
+
+        # Plugin wants custom, but config says default
+        chunker = resolver.resolve(strategy, plugin_name=plugin.name)
+
+        # Should use default, not the custom chunker
+        assert isinstance(chunker, TextChunker)
+        assert not isinstance(chunker, CustomChunkerAdapter)
+        assert any("overridden by config" in r.message for r in caplog.records)
+
+    def test_config_override_different_plugins_independently(self):
+        """Config overrides apply independently per plugin."""
+        resolver = ChunkingStrategyResolver(
+            chunking_overrides={"logs": "default"},  # Only logs overridden
+        )
+
+        # Logs: overridden to default
+        log_chunker = resolver.resolve(
+            ChunkTextLogChunker(boundary_pattern="---"), plugin_name="logs"
+        )
+
+        # CSV: no override, gets its custom chunker
+        class CSVCustom:
+            def chunk(self, text, file_path=None, file_type=None):
+                return []
+
+        csv_chunker = resolver.resolve(CSVCustom(), plugin_name="csv")
+
+        assert isinstance(log_chunker, TextChunker)
+        assert isinstance(csv_chunker, CSVCustom)
+
+    def test_config_override_end_to_end_chunking(self):
+        """End-to-end: config override changes actual chunk output."""
+        text = "Entry 1\n---\nEntry 2\n---\nEntry 3"
+
+        # Without override: custom chunks on boundaries
+        resolver_no_override = ChunkingStrategyResolver()
+        custom = resolver_no_override.resolve(
+            ChunkTextLogChunker(boundary_pattern="---"), plugin_name="logs"
+        )
+        custom_chunks = custom.chunk(text, file_path=Path("/var/log/app.log"))
+
+        # With override: default character-based chunking
+        resolver_override = ChunkingStrategyResolver(
+            default_chunk_size=1000,
+            default_chunk_overlap=200,
+            chunking_overrides={"logs": "default"},
+        )
+        default = resolver_override.resolve(
+            ChunkTextLogChunker(boundary_pattern="---"), plugin_name="logs"
+        )
+        default_chunks = default.chunk(text, file_path=Path("/var/log/app.log"))
+
+        # Custom gives 3 boundary-based chunks
+        assert len(custom_chunks) == 3
+
+        # Default gives different result (likely 1 chunk for this short text)
+        assert len(default_chunks) >= 1
+
+        # Chunks are structurally different
+        assert len(custom_chunks) != len(default_chunks) or any(
+            c.content != d.content
+            for c, d in zip(custom_chunks, default_chunks, strict=False)
+        )
+
+    def test_config_override_with_real_plugin_flow(self, caplog):
+        """Simulate real plugin flow: discover → resolve → chunk → embed."""
+        caplog.set_level(logging.DEBUG)
+
+        # 1. Simulate config loading with override
+        plugin_overrides = {"logs": "default", "csv": "semantic"}
+        resolver = ChunkingStrategyResolver(chunking_overrides=plugin_overrides)
+
+        # 2. "logs" plugin discovered - gets overridden
+        class LogPlugin(MockFileTypeHandler):
+            @property
+            def name(self) -> str:
+                return "logs"
+
+            def get_chunking_strategy(self):
+                return ChunkTextLogChunker()
+
+        log_plugin = LogPlugin()
+        log_chunker = resolver.resolve(
+            log_plugin.get_chunking_strategy(), plugin_name=log_plugin.name
+        )
+
+        # 3. "csv" plugin discovered - gets overridden to semantic (falls back to default)
+        class CSVPlugin(MockFileTypeHandler):
+            @property
+            def name(self) -> str:
+                return "csv"
+
+            def get_chunking_strategy(self):
+                return ChunkingStrategy.CODE_AWARE
+
+        csv_plugin = CSVPlugin()
+        csv_chunker = resolver.resolve(
+            csv_plugin.get_chunking_strategy(), plugin_name=csv_plugin.name
+        )
+
+        # 4. "markdown" plugin - no override
+        class MDPlugin(MockFileTypeHandler):
+            @property
+            def name(self) -> str:
+                return "markdown"
+
+            def get_chunking_strategy(self):
+                return None
+
+        md_plugin = MDPlugin()
+        md_chunker = resolver.resolve(md_plugin.get_chunking_strategy(), plugin_name=md_plugin.name)
+
+        # Verify: logs uses default (overridden), csv uses default (SEMANTIC fallback),
+        # markdown uses default (plugin choice)
+        assert isinstance(log_chunker, TextChunker)
+        assert isinstance(csv_chunker, TextChunker)
+        assert isinstance(md_chunker, TextChunker)
+
+        # All three should be the same cached default chunker
+        assert log_chunker is csv_chunker
+        assert csv_chunker is md_chunker

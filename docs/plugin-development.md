@@ -660,8 +660,8 @@ class LogFileHandler(FileTypeHandler):
 ```
 
 **Custom chunker requirements**:
-- Implement `chunk(text, file_path, file_type)` method
-- Return `list[TextChunk]`
+- Implement `chunk(text, file_path, file_type)` method returning `list[TextChunk]`, OR
+- Implement `chunk_text(text)` method returning `list[str]` (will be wrapped automatically)
 - Each chunk must have valid `file_path`, `chunk_index`, `content`, `start_char`, `end_char`, `token_count`
 
 **When to use**:
@@ -669,6 +669,67 @@ class LogFileHandler(FileTypeHandler):
 - Need semantic chunking based on content
 - Want chunks to respect format boundaries
 - Base chunkers don't meet requirements
+
+### Option 3b: Lightweight Custom Chunking (chunk_text only)
+
+If your custom chunker only needs to split text into strings, you can implement `chunk_text()` instead of the full `chunk()` interface. krag will automatically wrap it:
+
+```python
+class SimpleLogChunker:
+    """Lightweight chunker that only splits text."""
+    
+    def chunk_text(self, text: str) -> list[str]:
+        """Split log file on separator lines."""
+        return [s.strip() for s in text.split("---") if s.strip()]
+
+
+class LogFileHandler(FileTypeHandler):
+    def get_chunking_strategy(self) -> SimpleLogChunker:
+        return SimpleLogChunker()
+```
+
+krag wraps `chunk_text()`-only chunkers in a `CustomChunkerAdapter` that converts the raw string output to `TextChunk` objects with proper metadata. The adapter also supports `chunk_text()` returning `list[dict]` where each dict has a `"content"` key.
+
+### Chunking Configuration Override
+
+Users can override plugin chunking strategies via krag configuration. This is useful when a plugin's default chunking doesn't suit a particular use case.
+
+**Configuration format** (in `~/.config/krag/config.toml`):
+
+```toml
+[plugins.logs]
+chunking_strategy = "default"    # Override logs plugin to use default chunker
+
+[plugins.csv]
+chunking_strategy = "semantic"   # Override csv plugin (falls back to default until implemented)
+```
+
+**Valid override values**:
+
+| Value | Effect |
+|-------|--------|
+| `"default"` | Use krag's standard TextChunker |
+| `"semantic"` | Use semantic chunker (falls back to default) |
+| `"code_aware"` | Use code-aware chunker (falls back to default) |
+
+**Override precedence**:
+1. Configuration override (highest priority)
+2. Plugin's `get_chunking_strategy()` return value
+3. Default TextChunker (lowest priority)
+
+If an invalid override value is configured, krag logs a warning and falls back to the plugin's preferred strategy.
+
+### Validating Custom Chunkers
+
+Use `ChunkingStrategyResolver.validate_chunker_interface()` to check whether your chunker meets the requirements:
+
+```python
+from krag.plugins.chunking import ChunkingStrategyResolver
+
+errors = ChunkingStrategyResolver.validate_chunker_interface(my_chunker)
+if errors:
+    print(f"Invalid chunker: {errors}")
+```
 
 ### Chunking API Summary
 
@@ -678,7 +739,8 @@ class LogFileHandler(FileTypeHandler):
 | `ChunkingStrategy.DEFAULT` | Default TextChunker | Explicit default |
 | `ChunkingStrategy.CODE_AWARE` | Code-aware chunker (future) | Source code files |
 | `ChunkingStrategy.SEMANTIC` | Semantic chunker (future) | Advanced text |
-| Custom chunker instance | Plugin's chunker | Special formats |
+| Custom chunker with `chunk()` | Plugin's chunker directly | Full control |
+| Custom chunker with `chunk_text()` | Wrapped in adapter | Simple splitting |
 
 ---
 
@@ -687,6 +749,7 @@ class LogFileHandler(FileTypeHandler):
 ### PluginContext Overview
 
 The `PluginContext` provides plugins with access to krag services and the failure reporting API. Context is passed to `initialize()` and should be stored for later use.
+
 
 **Available Services**:
 
