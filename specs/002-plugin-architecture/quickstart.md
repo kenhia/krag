@@ -37,6 +37,18 @@ krag plugin list
 # markdown  1.0.0    enabled  .md, .markdown
 ```
 
+### Installing from Local Source
+
+For development or testing plugins locally:
+
+```bash
+# Install a plugin in editable mode via krag CLI
+krag plugin install -e ./my-plugin
+
+# Or directly with uv pip
+uv pip install -e ./my-plugin
+```
+
 ### Using Plugins
 
 Plugins work automatically once installed:

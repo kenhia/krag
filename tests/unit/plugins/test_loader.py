@@ -238,7 +238,7 @@ class TestPluginClassLoading:
         with pytest.raises(PluginDependencyError) as exc_info:
             loader.load_plugin_class("missing_deps")
 
-        assert "missing dependencies" in str(exc_info.value).lower()
+        assert "not installed" in str(exc_info.value).lower()
         assert "missing_deps" in str(exc_info.value)
 
     @patch("krag.plugins.loader.entry_points")

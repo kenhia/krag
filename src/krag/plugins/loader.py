@@ -158,21 +158,28 @@ class PluginLoader:
 
         except ImportError as e:
             # Check if it's a missing dependency
-            if "No module named" in str(e):
+            missing_module = str(e)
+            if "No module named" in missing_module:
+                # Extract module name for helpful install suggestion
+                module_name = missing_module.split("No module named ")[-1].strip("'\"")
                 raise PluginDependencyError(
-                    f"Plugin '{plugin_name}' has missing dependencies: {e}",
+                    f"Plugin '{plugin_name}' requires package '{module_name}' which is not installed.\n"
+                    f"  Install it with: uv pip install {module_name}\n"
+                    f"  Or: pip install {module_name}",
                     plugin_name=plugin_name,
                     original_exception=e,
                 ) from e
             raise PluginLoadError(
-                f"Failed to import plugin '{plugin_name}': {e}",
+                f"Failed to import plugin '{plugin_name}': {e}\n"
+                f"  Try reinstalling: uv pip install --force-reinstall <plugin-package>",
                 plugin_name=plugin_name,
                 original_exception=e,
             ) from e
 
         except Exception as e:
             raise PluginLoadError(
-                f"Unexpected error loading plugin '{plugin_name}': {e}",
+                f"Unexpected error loading plugin '{plugin_name}': {e}\n"
+                f"  Run 'krag plugin validate' to diagnose issues.",
                 plugin_name=plugin_name,
                 original_exception=e,
             ) from e

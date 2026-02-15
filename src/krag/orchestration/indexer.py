@@ -439,11 +439,15 @@ class IndexingOrchestrator:
                                 exception_type="extraction",
                             )
 
-                        # Disable plugin on error
-                        plugin_name = plugin_handler.__class__.__name__.lower()
+                        # Disable plugin on error - use handler.name for registry key
+                        handler_plugin_name = getattr(
+                            plugin_handler, "name", plugin_handler.__class__.__name__.lower()
+                        )
                         if self.plugin_registry is not None:
-                            self.plugin_registry.unload_plugin(plugin_name)
-                            logger.warning(f"Disabled plugin {plugin_name} due to extraction error")
+                            self.plugin_registry.unload_plugin(handler_plugin_name)
+                            logger.warning(
+                                f"Disabled plugin '{handler_plugin_name}' due to extraction error"
+                            )
 
                         # Fall back to default extraction
                         plugin_handler = None
@@ -730,9 +734,11 @@ class IndexingOrchestrator:
                                 exception_type="extraction",
                             )
 
-                        plugin_name = plugin_handler.__class__.__name__.lower()
+                        handler_plugin_name = getattr(
+                            plugin_handler, "name", plugin_handler.__class__.__name__.lower()
+                        )
                         if self.plugin_registry is not None:
-                            self.plugin_registry.unload_plugin(plugin_name)
+                            self.plugin_registry.unload_plugin(handler_plugin_name)
 
                         plugin_handler = None
                         text = None

@@ -15,6 +15,7 @@ A local-first system for indexing personal files (PC and NAS storage) and queryi
 - 🤖 **LLM Synthesis**: Local LLM generates coherent answers from retrieved content
 - ⚡ **Incremental Updates**: Re-index only new or modified files
 - ⚙️ **Flexible Configuration**: Customize directories, file types, chunking, models
+- 🔌 **Plugin System**: Extend with custom file type handlers for PDF, DOCX, logs, and more
 
 ## Prerequisites
 
@@ -139,6 +140,79 @@ Key settings:
 - `path_aliases`: Display path reductions (e.g., `/home/ken:~`)
 
 See [docs/configuration.md](docs/configuration.md) for full details.
+
+## Plugin System
+
+krag supports file type plugins for indexing specialized formats (PDF, DOCX, log files, etc.) that go beyond built-in text extraction.
+
+### Installing Plugins
+
+```bash
+# Install a plugin package
+uv pip install krag-plugin-markdown
+
+# Install from local path (for development)
+krag plugin install -e ./my-plugin
+```
+
+### Managing Plugins
+
+```bash
+# List installed plugins
+krag plugin list
+
+# Show plugin details
+krag plugin info markdown
+
+# Enable/disable plugins
+krag plugin enable markdown
+krag plugin disable markdown
+
+# Validate all plugins
+krag plugin validate
+```
+
+### Plugin Configuration
+
+Plugins are configured in `config.toml`:
+
+```toml
+[plugins]
+enabled = []   # Empty = all discovered plugins enabled
+disabled = []  # Explicitly disabled plugins
+
+# Per-plugin settings
+[plugins.markdown]
+strip_html = true
+
+[plugins.logs]
+chunking_strategy = "custom"
+window_minutes = 5
+```
+
+### Developing Plugins
+
+Create custom plugins to support new file formats. See [docs/plugin-development.md](docs/plugin-development.md) for the complete API reference and examples.
+
+```python
+from krag.plugins import FileTypeHandler
+
+class MyHandler(FileTypeHandler):
+    @property
+    def name(self) -> str:
+        return "my_format"
+
+    def supported_extensions(self) -> list[str]:
+        return [".myext"]
+
+    def extract_text(self, file_path: Path) -> str:
+        return file_path.read_text()
+
+    def extract_metadata(self, file_path: Path) -> dict:
+        return {"format": "my_format"}
+```
+
+See also: [docs/plugin-user-guide.md](docs/plugin-user-guide.md) for the user guide.
 
 ## Architecture
 

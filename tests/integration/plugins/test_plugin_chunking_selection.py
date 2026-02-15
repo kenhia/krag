@@ -717,8 +717,7 @@ class TestChunkingConfigOverrideIntegration:
 
         # Chunks are structurally different
         assert len(custom_chunks) != len(default_chunks) or any(
-            c.content != d.content
-            for c, d in zip(custom_chunks, default_chunks, strict=False)
+            c.content != d.content for c, d in zip(custom_chunks, default_chunks, strict=False)
         )
 
     def test_config_override_with_real_plugin_flow(self, caplog):

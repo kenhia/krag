@@ -325,37 +325,37 @@ Tasks follow strict checklist format:
 
 ### Error Handling & Resilience
 
-- [ ] T149 Comprehensive error handling review across all plugin system modules
-- [ ] T150 Add user-friendly error messages for common plugin failures
-- [ ] T151 Implement plugin dependency validation with helpful install instructions (document both `uv pip install` and `pip install`)
+- [X] T149 Comprehensive error handling review across all plugin system modules
+- [X] T150 Add user-friendly error messages for common plugin failures
+- [X] T151 Implement plugin dependency validation with helpful install instructions (document both `uv pip install` and `pip install`)
 
 ### Logging & Observability
 
-- [ ] T152 Add structured logging for plugin lifecycle events
-- [ ] T153 [P] Add plugin error aggregation and reporting (ties into failure-to-index report)
-- [ ] T154 Implement debug-level logging for plugin discovery and loading
+- [X] T152 Add structured logging for plugin lifecycle events
+- [X] T153 [P] Add plugin error aggregation and reporting (ties into failure-to-index report)
+- [X] T154 Implement debug-level logging for plugin discovery and loading
 
 ### Configuration & Defaults
 
-- [ ] T155 Add sensible defaults for plugin configuration options
-- [ ] T156 Implement plugin configuration migration for config schema changes
-- [ ] T157 Add configuration validation error messages with examples
+- [X] T155 Add sensible defaults for plugin configuration options
+- [X] T156 Implement plugin configuration migration for config schema changes
+- [X] T157 Add configuration validation error messages with examples
 
 ### Documentation
 
-- [ ] T158 Create comprehensive README section for plugin system in main `README.md`
-- [ ] T159 [P] Update `docs/architecture.md` with plugin system architecture diagrams
-- [ ] T160 [P] Create `docs/plugin-user-guide.md` for plugin users (how to install packages via `uv pip install`/`pip install`, register with `krag plugin add`, configure)
-- [ ] T161 [P] Create `docs/troubleshooting.md` section for plugin-related issues
-- [ ] T162 Update `quickstart.md` with plugin installation and registration examples
+- [X] T158 Create comprehensive README section for plugin system in main `README.md`
+- [X] T159 [P] Update `docs/architecture.md` with plugin system architecture diagrams
+- [X] T160 [P] Create `docs/plugin-user-guide.md` for plugin users (how to install packages via `uv pip install`/`pip install`, register with `krag plugin add`, configure)
+- [X] T161 [P] Create `docs/troubleshooting.md` section for plugin-related issues
+- [X] T162 Update `quickstart.md` with plugin installation and registration examples
 
 ### Testing & Quality
 
-- [ ] T163 [P] Add edge case tests for all 6 edge cases from spec.md (EC-001 through EC-006)
-- [ ] T164 [P] Achieve minimum 80% test coverage for plugin system modules
-- [ ] T165 [P] Manual performance testing: verify plugin operations feel responsive (no formal benchmarks)
+- [X] T163 [P] Add edge case tests for all 6 edge cases from spec.md (EC-001 through EC-006)
+- [X] T164 [P] Achieve minimum 80% test coverage for plugin system modules
+- [X] T165 [P] Manual performance testing: verify plugin operations feel responsive (no formal benchmarks)
 
-- [ ] T166 Perform pre-commit checks using "python-precommit" skill; commit changes
+- [X] T166 Perform pre-commit checks using "python-precommit" skill; commit changes
 
 ---
 

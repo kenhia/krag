@@ -52,6 +52,12 @@ class PluginRegistry:
         self._loader = PluginLoader(api_version=self._api_version)
 
         logger.info("Plugin registry initialized with API version %s", self._api_version)
+        logger.debug(
+            "Registry config: enabled=%s, disabled=%s, settings_for=%s",
+            self._config.enabled_plugins or "(all)",
+            self._config.disabled_plugins or "(none)",
+            list(self._config.plugin_settings.keys()) or "(none)",
+        )
 
     def discover_plugins(self) -> list[PluginMetadata]:
         """Discover installed plugins via entry points.
@@ -342,9 +348,32 @@ class PluginRegistry:
             return handler
 
         except Exception as e:
-            # Disable plugin on load failure
-            error_msg = str(e)
-            logger.error(f"Failed to load plugin '{name}': {error_msg}")
+            # Disable plugin on load failure with structured error context
+            from krag.plugins.exceptions import (
+                PluginAPIVersionError,
+                PluginConfigurationError,
+                PluginDependencyError,
+            )
+
+            if isinstance(e, PluginDependencyError):
+                error_msg = (
+                    f"Plugin '{name}' has missing dependencies: {e}. "
+                    f"Install with: uv pip install <package> or pip install <package>"
+                )
+            elif isinstance(e, PluginAPIVersionError):
+                error_msg = (
+                    f"Plugin '{name}' is incompatible with this version of krag: {e}. "
+                    f"Check for a plugin update or downgrade krag."
+                )
+            elif isinstance(e, PluginConfigurationError):
+                error_msg = (
+                    f"Plugin '{name}' has invalid configuration: {e}. "
+                    f"Check [plugins.{name}] section in config.toml."
+                )
+            else:
+                error_msg = f"Plugin '{name}' failed to load: {e}"
+
+            logger.error(error_msg)
             metadata.is_enabled = False
             metadata.load_error = error_msg
             return None
@@ -586,3 +615,44 @@ class PluginRegistry:
 
         self._loaded.clear()
         logger.info("All plugins shutdown successfully")
+
+    def validate_dependencies(self) -> dict[str, str]:
+        """Check that all discovered plugins have their dependencies installed.
+
+        Attempts to import each enabled plugin and reports any missing
+        dependencies with installation instructions.
+
+        Returns:
+            dict[str, str]: Map of plugin name to dependency error message.
+                            Empty dict if all dependencies are satisfied.
+
+        Example:
+            >>> issues = registry.validate_dependencies()
+            >>> for plugin, msg in issues.items():
+            ...     print(f"{plugin}: {msg}")
+        """
+        issues: dict[str, str] = {}
+
+        for plugin_name, metadata in self._discovered.items():
+            if not metadata.is_enabled:
+                continue
+
+            try:
+                self._loader.load_plugin_class(plugin_name)
+            except Exception as e:
+                from krag.plugins.exceptions import PluginDependencyError
+
+                if isinstance(e, PluginDependencyError):
+                    issues[plugin_name] = str(e)
+                else:
+                    issues[plugin_name] = (
+                        f"Failed to import: {e}\n"
+                        f"  Try: uv pip install --force-reinstall <plugin-package>\n"
+                        f"  Or:  pip install --force-reinstall <plugin-package>"
+                    )
+
+                metadata.is_enabled = False
+                metadata.load_error = str(e)
+                logger.warning(f"Plugin '{plugin_name}' dependency check failed: {e}")
+
+        return issues

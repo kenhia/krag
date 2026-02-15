@@ -606,3 +606,361 @@ class TestPluginCleanup:
         registry_empty.shutdown_all_plugins()
 
         assert len(registry_empty._loaded) == 0
+
+
+class TestUnloadPlugin:
+    """Test plugin unloading."""
+
+    def test_unload_plugin_removes_from_loaded(self, registry_empty):
+        """unload_plugin should remove handler from loaded dict."""
+        handler = MagicMock(spec=MockFileTypeHandler)
+        registry_empty._loaded["plugin"] = handler
+        registry_empty._discovered["plugin"] = PluginMetadata(
+            name="plugin",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".p"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+            is_loaded=True,
+        )
+
+        registry_empty.unload_plugin("plugin")
+
+        assert "plugin" not in registry_empty._loaded
+        assert registry_empty._discovered["plugin"].is_loaded is False
+
+    def test_unload_plugin_calls_cleanup(self, registry_empty):
+        """unload_plugin should call cleanup on handler via loader."""
+        handler = MagicMock(spec=MockFileTypeHandler)
+        registry_empty._loaded["plugin"] = handler
+
+        with patch.object(registry_empty._loader, "cleanup_plugin") as mock_cleanup:
+            registry_empty.unload_plugin("plugin")
+            mock_cleanup.assert_called_once_with(handler)
+
+    def test_unload_plugin_noop_for_not_loaded(self, registry_empty):
+        """unload_plugin should be a no-op for unloaded plugins."""
+        # Should not raise
+        registry_empty.unload_plugin("nonexistent")
+
+    def test_unload_plugin_handles_cleanup_errors(self, registry_empty):
+        """unload_plugin should handle cleanup errors gracefully."""
+        handler = MagicMock(spec=MockFileTypeHandler)
+        registry_empty._loaded["plugin"] = handler
+
+        with patch.object(
+            registry_empty._loader, "cleanup_plugin", side_effect=Exception("Cleanup boom")
+        ):
+            # Should not raise
+            registry_empty.unload_plugin("plugin")
+
+
+class TestGetPluginsByExtension:
+    """Test querying plugins by extension."""
+
+    def test_get_plugins_by_extension_returns_matching(self, registry_empty):
+        """get_plugins_by_extension should return plugins that support an extension."""
+        registry_empty._discovered["pdf"] = PluginMetadata(
+            name="pdf",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".pdf", ".PDF"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+        registry_empty._discovered["txt"] = PluginMetadata(
+            name="txt",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".txt"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+
+        results = registry_empty.get_plugins_by_extension(".pdf")
+
+        assert len(results) == 1
+        assert results[0].name == "pdf"
+
+    def test_get_plugins_by_extension_case_insensitive(self, registry_empty):
+        """get_plugins_by_extension should be case-insensitive."""
+        registry_empty._discovered["pdf"] = PluginMetadata(
+            name="pdf",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".PDF"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+
+        results = registry_empty.get_plugins_by_extension(".pdf")
+
+        assert len(results) == 1
+
+    def test_get_plugins_by_extension_skips_disabled(self, registry_empty):
+        """get_plugins_by_extension should skip disabled plugins."""
+        registry_empty._discovered["pdf"] = PluginMetadata(
+            name="pdf",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".pdf"],
+            required_api_version="1.0.0",
+            is_enabled=False,
+        )
+
+        results = registry_empty.get_plugins_by_extension(".pdf")
+
+        assert len(results) == 0
+
+
+class TestGetHandlerForFile:
+    """Test file-based handler resolution with can_handle_file validation."""
+
+    def test_get_handler_for_file_no_extension(self, registry_empty, plugin_context, tmp_path):
+        """get_handler_for_file should return None for files with no extension."""
+        test_file = tmp_path / "Makefile"
+        result = registry_empty.get_handler_for_file(test_file, plugin_context)
+        assert result is None
+
+    def test_get_handler_for_file_can_handle_false(self, registry_empty, plugin_context, tmp_path):
+        """get_handler_for_file should return None when plugin's can_handle_file is False."""
+        handler = MagicMock(spec=MockFileTypeHandler)
+        handler.can_handle_file.return_value = False
+        handler.name = "mock_plugin"
+
+        registry_empty._discovered["mock_plugin"] = PluginMetadata(
+            name="mock_plugin",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".mock"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+        registry_empty._extension_map = {".mock": "mock_plugin"}
+        registry_empty._loaded["mock_plugin"] = handler
+
+        test_file = tmp_path / "test.mock"
+        result = registry_empty.get_handler_for_file(test_file, plugin_context)
+        assert result is None
+
+    def test_get_handler_for_file_can_handle_exception(
+        self, registry_empty, plugin_context, tmp_path
+    ):
+        """get_handler_for_file should return None if can_handle_file raises."""
+        handler = MagicMock(spec=MockFileTypeHandler)
+        handler.can_handle_file.side_effect = Exception("Read error")
+        handler.name = "mock_plugin"
+
+        registry_empty._discovered["mock_plugin"] = PluginMetadata(
+            name="mock_plugin",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".mock"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+        registry_empty._extension_map = {".mock": "mock_plugin"}
+        registry_empty._loaded["mock_plugin"] = handler
+
+        test_file = tmp_path / "test.mock"
+        result = registry_empty.get_handler_for_file(test_file, plugin_context)
+        assert result is None
+
+
+class TestSuccessfulPluginLoad:
+    """Test the full successful plugin load path."""
+
+    def test_load_plugin_full_path(self, registry_empty, plugin_context):
+        """load_plugin should complete full load cycle successfully."""
+        registry_empty._discovered["mock_plugin"] = PluginMetadata(
+            name="mock_plugin",
+            version="1.0.0",
+            entry_point="tests.fixtures.mock_plugin:MockFileTypeHandler",
+            supported_extensions=[".mock"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+
+        mock_handler = MagicMock(spec=MockFileTypeHandler)
+        mock_handler.version = "1.0.0"
+        mock_handler.required_api_version = "1.0.0"
+        mock_handler.supported_extensions.return_value = [".mock"]
+
+        with patch.object(registry_empty._loader, "load_plugin_class"):
+            with patch.object(
+                registry_empty._loader, "instantiate_plugin", return_value=mock_handler
+            ):
+                with patch.object(registry_empty._loader, "check_api_compatibility"):
+                    with patch.object(registry_empty._loader, "initialize_plugin"):
+                        handler = registry_empty.load_plugin("mock_plugin", plugin_context)
+
+        assert handler is mock_handler
+        assert "mock_plugin" in registry_empty._loaded
+        assert registry_empty._discovered["mock_plugin"].is_loaded is True
+
+    def test_load_plugin_returns_none_for_previous_load_error(self, registry_empty, plugin_context):
+        """load_plugin should return None immediately if plugin has a previous load error."""
+        registry_empty._discovered["broken"] = PluginMetadata(
+            name="broken",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".brk"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+            load_error="Previously failed to load",
+        )
+
+        handler = registry_empty.load_plugin("broken", plugin_context)
+        assert handler is None
+
+
+class TestValidatePlugins:
+    """Test plugin validation."""
+
+    def test_validate_plugins_success(self, registry_empty):
+        """validate_plugins should return empty list when all pass."""
+        registry_empty._discovered["good"] = PluginMetadata(
+            name="good",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".g"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+
+        mock_handler = MagicMock(spec=MockFileTypeHandler)
+        mock_handler.version = "1.0.0"
+        mock_handler.required_api_version = "1.0.0"
+        mock_handler.supported_extensions.return_value = [".g"]
+        mock_handler.config_schema.return_value = None
+
+        with patch.object(registry_empty._loader, "load_plugin_class", return_value=MagicMock):
+            with patch.object(
+                registry_empty._loader, "instantiate_plugin", return_value=mock_handler
+            ):
+                with patch.object(registry_empty._loader, "check_api_compatibility"):
+                    failed = registry_empty.validate_plugins()
+
+        assert failed == []
+
+    def test_validate_plugins_skips_disabled(self, registry_empty):
+        """validate_plugins should skip disabled plugins."""
+        registry_empty._discovered["disabled"] = PluginMetadata(
+            name="disabled",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".dis"],
+            required_api_version="1.0.0",
+            is_enabled=False,
+        )
+
+        failed = registry_empty.validate_plugins()
+        assert failed == []
+
+    def test_validate_plugins_catches_load_error(self, registry_empty):
+        """validate_plugins should catch and report load errors."""
+        registry_empty._discovered["bad"] = PluginMetadata(
+            name="bad",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".bad"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+
+        with patch.object(
+            registry_empty._loader,
+            "load_plugin_class",
+            side_effect=ImportError("No module named 'badlib'"),
+        ):
+            failed = registry_empty.validate_plugins()
+
+        assert "bad" in failed
+        assert registry_empty._discovered["bad"].is_enabled is False
+
+    def test_validate_plugins_validates_config_schema(self, registry_empty):
+        """validate_plugins should validate plugin config against its schema."""
+        registry_empty._config = PluginConfiguration(
+            enabled_plugins=[],
+            disabled_plugins=[],
+            plugin_settings={"schema_plugin": {"key": "value"}},
+        )
+        registry_empty._discovered["schema_plugin"] = PluginMetadata(
+            name="schema_plugin",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".s"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+
+        mock_handler = MagicMock(spec=MockFileTypeHandler)
+        mock_handler.version = "1.0.0"
+        mock_handler.required_api_version = "1.0.0"
+        mock_handler.supported_extensions.return_value = [".s"]
+
+        # Config schema validates successfully
+        mock_schema = MagicMock()
+        mock_handler.config_schema.return_value = mock_schema
+
+        with patch.object(registry_empty._loader, "load_plugin_class", return_value=MagicMock):
+            with patch.object(
+                registry_empty._loader, "instantiate_plugin", return_value=mock_handler
+            ):
+                with patch.object(registry_empty._loader, "check_api_compatibility"):
+                    failed = registry_empty.validate_plugins()
+
+        assert failed == []
+        mock_schema.assert_called_once_with(key="value")
+
+
+class TestValidateDependencies:
+    """Test dependency validation."""
+
+    def test_validate_dependencies_all_good(self, registry_empty):
+        """validate_dependencies should return empty dict when all pass."""
+        registry_empty._discovered["good"] = PluginMetadata(
+            name="good",
+            version="1.0.0",
+            entry_point="dummy:H",
+            supported_extensions=[".g"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+        )
+
+        with patch.object(registry_empty._loader, "load_plugin_class"):
+            issues = registry_empty.validate_dependencies()
+
+        assert issues == {}
+
+
+class TestDiscoveryFullPath:
+    """Test successful plugin discovery path."""
+
+    @patch("krag.plugins.registry.entry_points")
+    def test_discover_plugins_loads_metadata_from_handler(self, mock_entry_points, registry_empty):
+        """discover_plugins should load metadata from handler on successful instantiation."""
+        ep = MagicMock(spec=EntryPoint)
+        ep.name = "mock_plugin"
+        ep.value = "tests.fixtures.mock_plugin:MockFileTypeHandler"
+
+        mock_eps = MagicMock()
+        mock_eps.select.return_value = [ep]
+        mock_entry_points.return_value = mock_eps
+
+        # Mock loader to return a handler with metadata
+        mock_handler = MagicMock(spec=MockFileTypeHandler)
+        mock_handler.version = "2.0.0"
+        mock_handler.required_api_version = "1.0.0"
+        mock_handler.supported_extensions.return_value = [".mock"]
+
+        with patch.object(registry_empty._loader, "load_plugin_class", return_value=MagicMock):
+            with patch.object(
+                registry_empty._loader, "instantiate_plugin", return_value=mock_handler
+            ):
+                plugins = registry_empty.discover_plugins()
+
+        assert len(plugins) == 1
+        assert plugins[0].version == "2.0.0"
+        assert plugins[0].supported_extensions == [".mock"]

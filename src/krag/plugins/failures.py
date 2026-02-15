@@ -7,6 +7,7 @@ It also provides a public report_indexing_failure() API for use by plugins.
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from krag.models.indexing_job import IndexingFailureRecord
 
@@ -135,6 +136,46 @@ class IndexingFailureCollector:
                 lines.append("")
 
         return "\n".join(lines)
+
+    def failures_by_exception_type(self) -> dict[str | None, int]:
+        """Get failure counts grouped by exception type.
+
+        Useful for identifying systemic issues (e.g., many 'extraction' errors
+        may indicate a plugin bug, while 'dependency' errors indicate missing packages).
+
+        Returns:
+            dict[str | None, int]: Mapping of exception type to failure count
+        """
+        counts: dict[str | None, int] = {}
+        for failure in self._failures:
+            counts[failure.exception_type] = counts.get(failure.exception_type, 0) + 1
+        return counts
+
+    def get_error_report(self) -> dict[str, Any]:
+        """Generate structured error aggregation report.
+
+        Returns a dictionary suitable for structured logging or JSON output,
+        including failure counts by plugin, by exception type, and details.
+
+        Returns:
+            dict: Structured error report with aggregated statistics
+        """
+        return {
+            "total_failures": self.total_failures(),
+            "by_plugin": {(k or "core"): v for k, v in self.failures_by_plugin().items()},
+            "by_exception_type": {
+                (k or "unknown"): v for k, v in self.failures_by_exception_type().items()
+            },
+            "failures": [
+                {
+                    "file_path": str(f.file_path),
+                    "plugin_name": f.plugin_name or "core",
+                    "reason": f.reason,
+                    "exception_type": f.exception_type,
+                }
+                for f in self._failures
+            ],
+        }
 
 
 def report_indexing_failure(
