@@ -4,8 +4,12 @@ import hashlib
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from krag.models.file_metadata import FileMetadata, IndexingStatus
+
+if TYPE_CHECKING:
+    from krag.plugins.registry import PluginRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,7 @@ class FileScanner:
         supported_file_types: list[str] | None = None,
         exclusion_patterns: list[str] | None = None,
         follow_symlinks: bool = False,
+        plugin_registry: "PluginRegistry | None" = None,
     ):
         """Initialize file scanner.
 
@@ -30,6 +35,7 @@ class FileScanner:
             supported_file_types: File extensions to include (e.g. ['.txt', '.md'])
             exclusion_patterns: Glob patterns to exclude (e.g. ['*.pyc', '__pycache__'])
             follow_symlinks: Whether to follow symbolic links
+            plugin_registry: Optional plugin registry to get additional extensions from
         """
         self.directory_paths = [Path(p) for p in directory_paths]
         self.supported_file_types = supported_file_types or [
@@ -43,6 +49,20 @@ class FileScanner:
             ".rs",
             ".go",
         ]
+
+        # Merge plugin extensions if registry provided
+        if plugin_registry is not None:
+            plugin_extensions = plugin_registry.get_supported_extensions()
+            # Add plugin extensions that aren't already in the list
+            for ext in plugin_extensions:
+                ext_lower = ext.lower()
+                if ext_lower not in [e.lower() for e in self.supported_file_types]:
+                    self.supported_file_types.append(ext_lower)
+            if plugin_extensions:
+                logger.debug(
+                    f"Added {len(plugin_extensions)} extensions from plugins: {plugin_extensions}"
+                )
+
         self.exclusion_patterns = exclusion_patterns or [
             ".*",  # Hidden files (starting with .)
             "__pycache__",

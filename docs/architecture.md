@@ -90,6 +90,7 @@ src/krag/
 │   ├── index.py             # `krag index` command
 │   ├── query.py             # `krag query` command
 │   ├── config.py            # `krag config` sub-commands
+│   ├── plugin.py            # `krag plugin` sub-commands
 │   └── utils.py             # CLI utilities
 ├── config/                  # Configuration management
 │   ├── __init__.py
@@ -129,6 +130,15 @@ src/krag/
 │   ├── __init__.py
 │   ├── vector_store.py      # VectorStore ABC
 │   └── qdrant_impl.py       # QdrantVectorStore implementation
+├── plugins/                 # Plugin system for file type extensions
+│   ├── __init__.py
+│   ├── registry.py          # PluginRegistry: discovery, lifecycle
+│   ├── interfaces.py        # FileTypeHandler ABC, ChunkingStrategy
+│   ├── loader.py            # Plugin import and version checking
+│   ├── chunking.py          # ChunkingStrategyResolver, CustomChunkerAdapter
+│   ├── context.py           # PluginContext: service access for plugins
+│   ├── failures.py          # IndexingFailureCollector
+│   └── exceptions.py        # Plugin exception hierarchy
 └── synthesis/               # LLM answer generation
     ├── __init__.py
     ├── llm_client.py         # LLMClient: local LLM inference
@@ -271,6 +281,12 @@ The CLI is implemented with Typer and Rich. It is a thin presentation layer: it 
 | `krag config edit` | Open configuration in system editor |
 | `krag migrate` | Convert YAML config to TOML format |
 | `krag reset` | Remove configuration, data, and/or logs |
+| `krag plugin list` | List installed plugins with status |
+| `krag plugin info <name>` | Show detailed plugin information |
+| `krag plugin enable <name>` | Enable a disabled plugin |
+| `krag plugin disable <name>` | Disable an enabled plugin |
+| `krag plugin validate` | Check plugin compatibility |
+| `krag plugin install` | Install a plugin package |
 
 Global options (`--verbose`, `--show-logs`, `--legacy-paths`, `--version`) are handled by a Typer callback on the main app. Automatic migration from legacy `~/.krag` paths to XDG locations runs on first invocation when legacy data is detected.
 
@@ -376,6 +392,73 @@ This layer wires together the core processing modules into complete workflows.
 **`QueryEngine`** coordinates the query pipeline. It owns a `Retriever`, `PromptBuilder`, and reference to an `LLMClient`. It validates input, retrieves results, builds prompts, generates answers, and returns a `QueryResponse` dataclass containing the answer text, source list, and original query.
 
 **`ChangeDetector`** implements incremental indexing logic. It categorizes files into four groups (new, modified, deleted, unchanged) by comparing filesystem state against persisted metadata. Change detection uses a two-tier strategy: modification time comparison first (fast), then content hash comparison (accurate) when mtimes differ.
+
+### `krag.plugins` — Plugin System
+
+The plugin system enables file type handler extensions without modifying core code. Plugins are separate Python packages discovered via entry points and loaded lazily.
+
+**Architecture Overview:**
+
+```mermaid
+graph TB
+    subgraph Plugin["Plugin System (krag.plugins)"]
+        REG[PluginRegistry<br/>registry.py]
+        LOADER[PluginLoader<br/>loader.py]
+        IFACE[FileTypeHandler ABC<br/>interfaces.py]
+        CTX[PluginContext<br/>context.py]
+        CHUNK_R[ChunkingStrategyResolver<br/>chunking.py]
+        FAIL[IndexingFailureCollector<br/>failures.py]
+        EXC[Plugin Exceptions<br/>exceptions.py]
+    end
+
+    subgraph External["External Plugins"]
+        P1[krag-plugin-markdown]
+        P2[krag-plugin-logs]
+        P3[Third-party plugins]
+    end
+
+    REG --> LOADER
+    REG --> IFACE
+    LOADER --> IFACE
+    LOADER --> EXC
+    CTX --> FAIL
+    CHUNK_R --> IFACE
+
+    P1 -.->|entry point| REG
+    P2 -.->|entry point| REG
+    P3 -.->|entry point| REG
+
+    INDEXER_EXT[IndexingOrchestrator] --> REG
+    INDEXER_EXT --> CTX
+    INDEXER_EXT --> CHUNK_R
+    INDEXER_EXT --> FAIL
+```
+
+**Key Components:**
+
+| Component | File | Role |
+|-----------|------|------|
+| `PluginRegistry` | `registry.py` | Central registry: discovery, loading, lifecycle, extension mapping |
+| `PluginLoader` | `loader.py` | Plugin import, instantiation, API version checking |
+| `FileTypeHandler` | `interfaces.py` | ABC all plugins must implement |
+| `ChunkingStrategy` | `interfaces.py` | Enum for built-in chunking approaches |
+| `PluginContext` | `context.py` | Service access object passed to plugins during initialization |
+| `ChunkingStrategyResolver` | `chunking.py` | Maps plugin chunking preferences to TextChunker instances |
+| `IndexingFailureCollector` | `failures.py` | Aggregates indexing failure records from plugins and core |
+| `CustomChunkerAdapter` | `chunking.py` | Wraps `chunk_text()` chunkers to full `TextChunker` interface |
+
+**Plugin Lifecycle:**
+
+1. **Discovery** — `PluginRegistry.discover_plugins()` scans `krag.plugins` entry point group
+2. **Extension Mapping** — `_build_extension_map()` creates config-driven extension-to-plugin map
+3. **Lazy Loading** — `get_handler_for_extension()` loads plugins on first file access
+4. **Initialization** — `PluginLoader.initialize_plugin()` calls `handler.initialize(config, context)`
+5. **Processing** — `extract_text()`, `extract_metadata()`, `get_chunking_strategy()` per file
+6. **Cleanup** — `PluginLoader.cleanup_plugin()` calls `handler.cleanup()` at shutdown
+
+**Error Handling:** All plugin calls are wrapped in try-catch. On unhandled exception, the plugin is automatically disabled for the remainder of the run. Failures are recorded via `IndexingFailureCollector` and reported in a post-indexing summary.
+
+**API Version:** Plugin API uses semver with major-version compatibility (`PLUGIN_API_VERSION = "1.0.0"`).
 
 ---
 

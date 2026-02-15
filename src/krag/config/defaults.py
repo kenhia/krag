@@ -73,3 +73,8 @@ DEFAULT_STATE_DIR = get_krag_state_dir()
 DEFAULT_VECTOR_STORE_PATH = DEFAULT_CACHE_DIR / "storage"
 DEFAULT_LLM_MODEL_PATH = DEFAULT_CACHE_DIR / "models" / "model.gguf"
 DEFAULT_LOG_DIR = DEFAULT_STATE_DIR / "logs"
+
+# Plugin system defaults
+DEFAULT_ENABLED_PLUGINS: list[str] = []  # Empty = all discovered plugins enabled
+DEFAULT_DISABLED_PLUGINS: list[str] = []  # Explicitly disabled plugins
+DEFAULT_PLUGIN_SETTINGS: dict[str, dict] = {}  # Per-plugin settings

@@ -32,6 +32,42 @@ class FileError(BaseModel):
     error_message: str
 
 
+class IndexingFailureRecord(BaseModel):
+    """Records files that could not be indexed for user reporting.
+
+    Tracks individual file failures during indexing, whether from core system
+    or plugins, to provide comprehensive failure summaries.
+
+    Attributes:
+        file_path: Path of the file that failed to index
+        plugin_name: Plugin that reported the failure (None for core system)
+        reason: Human-readable description of why indexing failed
+        timestamp: When the failure occurred
+        exception_type: Exception class name if caused by exception (optional)
+
+    Example:
+        >>> failure = IndexingFailureRecord(
+        ...     file_path=Path("/docs/corrupted.pdf"),
+        ...     plugin_name="pdf",
+        ...     reason="File appears to be corrupted",
+        ...     timestamp=datetime.now(),
+        ...     exception_type="PDFReadError"
+        ... )
+    """
+
+    file_path: Path = Field(..., description="Path of the file that failed")
+    plugin_name: str | None = Field(
+        None, description="Plugin that reported the failure (None for core system)"
+    )
+    reason: str = Field(..., description="Human-readable failure description")
+    timestamp: datetime = Field(
+        default_factory=datetime.now, description="When the failure occurred"
+    )
+    exception_type: str | None = Field(
+        None, description="Exception class name if caused by exception"
+    )
+
+
 class IndexingJob(BaseModel):
     """Single indexing operation (full or incremental).
 

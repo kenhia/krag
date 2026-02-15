@@ -3,11 +3,12 @@
 # Use built-in tomllib for Python 3.11+, fallback to tomli for older versions
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import tomli_w  # For writing TOML
 import yaml
 
-from krag.models.configuration import Configuration
+from krag.models.configuration import Configuration, PluginConfiguration
 
 
 class ConfigManager:
@@ -133,6 +134,29 @@ class ConfigManager:
             if "aliases" in pr_section:
                 config_dict["path_aliases"] = pr_section["aliases"]
 
+        # [plugins] section (T028: plugin configuration parsing)
+        if "plugins" in toml_data:
+            plugin_section = toml_data["plugins"]
+            plugin_config_dict: dict[str, Any] = {}
+
+            if "enabled" in plugin_section:
+                plugin_config_dict["enabled_plugins"] = plugin_section["enabled"]
+            if "disabled" in plugin_section:
+                plugin_config_dict["disabled_plugins"] = plugin_section["disabled"]
+
+            # Collect per-plugin settings from [plugins.<plugin_name>] sections
+            plugin_settings: dict[str, dict[str, Any]] = {}
+            for key, value in toml_data.items():
+                if key.startswith("plugins.") and isinstance(value, dict):
+                    plugin_name = key.split(".", 1)[1]
+                    plugin_settings[plugin_name] = value
+
+            if plugin_settings:
+                plugin_config_dict["plugin_settings"] = plugin_settings
+
+            # Create PluginConfiguration and validate (T029: validation happens here)
+            config_dict["plugins"] = PluginConfiguration(**plugin_config_dict)
+
         return Configuration(**config_dict)
 
     @staticmethod
@@ -221,6 +245,10 @@ class ConfigManager:
                 "path_reductions": {
                     "aliases": default_config.path_aliases,
                 },
+                "plugins": {
+                    "enabled": default_config.plugins.enabled_plugins,
+                    "disabled": default_config.plugins.disabled_plugins,
+                },
             }
             with open(config_path, "wb") as f:
                 tomli_w.dump(toml_dict, f)
@@ -295,7 +323,16 @@ class ConfigManager:
             "path_reductions": {
                 "aliases": config.path_aliases,
             },
+            "plugins": {
+                "enabled": config.plugins.enabled_plugins,
+                "disabled": config.plugins.disabled_plugins,
+            },
         }
+
+        # Add per-plugin settings sections from migration
+        for plugin_name, settings in config.plugins.plugin_settings.items():
+            toml_dict[f"plugins.{plugin_name}"] = settings
+
         with open(toml_path, "wb") as f:
             tomli_w.dump(toml_dict, f)
 
@@ -354,6 +391,21 @@ class ConfigManager:
                     False,
                     f"Invalid embedding device: {config.embedding_device}. Must be one of {valid_devices}",
                 )
+
+            # Validate plugin configuration
+            if config.plugins:
+                # Check for overlapping enabled/disabled lists
+                overlap = set(config.plugins.enabled_plugins) & set(config.plugins.disabled_plugins)
+                if overlap:
+                    return (
+                        False,
+                        f"Plugin(s) listed in both enabled and disabled: {', '.join(overlap)}.\n"
+                        f"  Fix: Remove from one list in [plugins] section of config.toml.\n"
+                        f"  Example:\n"
+                        f"    [plugins]\n"
+                        f'    enabled = ["markdown", "logs"]\n'
+                        f"    disabled = []",
+                    )
 
             return True, None
 

@@ -41,6 +41,15 @@ class FileMetadata(BaseModel):
     error_message: str | None = Field(default=None, description="Error details if failed")
     chunk_count: int = Field(default=0, ge=0, description="Number of chunks generated")
 
+    # Plugin system fields (T030, T031)
+    handler_plugin: str | None = Field(
+        default=None,
+        description="Name of plugin that processed this file (None for built-in text extractor)",
+    )
+    plugin_metadata: dict[str, Any] | None = Field(
+        default=None, description="Plugin-specific metadata extracted from file"
+    )
+
     @field_validator("file_path")
     @classmethod
     def file_path_must_be_absolute(cls, v: Path) -> Path:
@@ -85,6 +94,8 @@ class FileMetadata(BaseModel):
             "last_indexed_at": self.last_indexed_at.isoformat() if self.last_indexed_at else None,
             "error_message": self.error_message,
             "chunk_count": self.chunk_count,
+            "handler_plugin": self.handler_plugin,
+            "plugin_metadata": self.plugin_metadata,
         }
 
     model_config = ConfigDict()
