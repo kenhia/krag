@@ -91,8 +91,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T015 [US3] Add --preset CLI option (typer.Option with choices from PromptBuilder.available_presets()) to query command in src/krag/cli/query.py
-- [ ] T016 [US3] Wire all new config fields (similarity_threshold, prompt_preset, prompt_system_override, llm_top_p, llm_repeat_penalty, llm_min_p) through QueryEngine construction in src/krag/cli/query.py
+- [x] T015 [US3] Add --preset CLI option (typer.Option with choices from PromptBuilder.available_presets()) to query command in src/krag/cli/query.py
+- [x] T016 [US3] Wire all new config fields (similarity_threshold, prompt_preset, prompt_system_override, llm_top_p, llm_repeat_penalty, llm_min_p) through QueryEngine construction in src/krag/cli/query.py
 
 **Checkpoint**: Config file and CLI flags control prompt preset, similarity threshold, and LLM parameters
 
