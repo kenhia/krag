@@ -94,7 +94,7 @@ class TestPromptBuilder:
         assert messages[0]["role"] == "system"
         assert messages[1]["role"] == "user"
         assert query in messages[1]["content"]
-        assert "RAG combines" in messages[0]["content"]
+        assert "RAG combines" in messages[1]["content"]
 
     def test_build_includes_numbered_sources(self) -> None:
         """Test that context chunks are numbered [1], [2] etc."""
@@ -124,12 +124,12 @@ class TestPromptBuilder:
         ]
 
         messages = builder.build(query="test", results=results)
-        system_content = messages[0]["content"]
+        user_content = messages[1]["content"]
 
-        assert "[1]" in system_content, "Should have numbered source [1]"
-        assert "[2]" in system_content, "Should have numbered source [2]"
-        assert "First chunk" in system_content
-        assert "Second chunk" in system_content
+        assert "[1]" in user_content, "Should have numbered source [1]"
+        assert "[2]" in user_content, "Should have numbered source [2]"
+        assert "First chunk" in user_content
+        assert "Second chunk" in user_content
 
     def test_build_empty_results_returns_insufficient_context_message(self) -> None:
         """Test that empty results produce an 'insufficient context' message."""
@@ -162,9 +162,9 @@ class TestPromptBuilder:
         ]
 
         messages = builder.build(query="test", results=results)
-        system_content = messages[0]["content"]
+        user_content = messages[1]["content"]
 
-        assert "important.md" in system_content, "Should include source file path"
+        assert "important.md" in user_content, "Should include source file path"
 
     def test_build_limits_total_context_length(self) -> None:
         """Test that prompt builder limits total context length."""
@@ -187,8 +187,8 @@ class TestPromptBuilder:
 
         messages = builder.build(query="test", results=results)
         # Context should be truncated
-        system_content = messages[0]["content"]
-        assert len(system_content) < 10000, "Should limit total prompt length"
+        user_content = messages[1]["content"]
+        assert len(user_content) < 10000, "Should limit total prompt length"
 
     def test_get_system_prompt_returns_preset_prompt(self) -> None:
         """Test get_system_prompt returns the active preset's system prompt."""

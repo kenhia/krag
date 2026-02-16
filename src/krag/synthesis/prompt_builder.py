@@ -136,16 +136,21 @@ class PromptBuilder:
         system_prompt = self.get_system_prompt()
         context = self._format_context(results)
 
-        system_content = f"{system_prompt}\n\nContext from relevant documents:\n{context}"
-
-        # Repeat grounding constraint after context (research.md: primacy + recency)
-        system_content += (
-            "\n\nRemember: Answer ONLY using the context above. Cite sources by number."
+        # Place context in the user message alongside the query.
+        # Many models ground better when context is in the user turn rather
+        # than buried in the system message.
+        user_content = (
+            f"Context from relevant documents:\n{context}\n\n"
+            "---\n"
+            "Using ONLY the context above, answer the following question. "
+            "Cite sources by number, e.g. (1). "
+            f'If the context does not contain the answer, respond exactly: "{INSUFFICIENT_CONTEXT_PHRASE}"\n\n'
+            f"Question: {query}"
         )
 
         return [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": query},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
         ]
 
     def get_system_prompt(self) -> str:

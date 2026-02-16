@@ -122,8 +122,9 @@ class TestQueryPipeline:
         assert source.file_path == Path("/test/file.txt"), "Should have correct file path"
 
     def test_query_pipeline_respects_top_k(self) -> None:
-        """Test that pipeline respects top_k parameter."""
+        """Test that pipeline over-fetches for dedup based on top_k."""
         from krag.orchestration.query_engine import QueryEngine
+        from krag.retrieval.retriever import Retriever
         from tests.fixtures.mock_embeddings import MockEmbeddingGenerator
         from tests.fixtures.mock_llm import MockLLMClient
 
@@ -144,7 +145,12 @@ class TestQueryPipeline:
         )
 
         engine.query("test")
-        assert mock_store.last_limit == 10, "Should use configured top_k"
+        # Retriever over-fetches by _OVERFETCH_FACTOR for dedup headroom
+        expected = 10 * Retriever._OVERFETCH_FACTOR
+        assert mock_store.last_limit == expected, (
+            f"Should over-fetch {Retriever._OVERFETCH_FACTOR}x top_k "
+            f"(expected {expected}, got {mock_store.last_limit})"
+        )
 
 
 class TestQueryPipelineDiagnosticLogging:

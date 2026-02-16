@@ -62,7 +62,12 @@ class MockLLMClient:
         if "fibonacci" in prompt.lower():
             return "The Fibonacci function calculates the nth Fibonacci number using recursion."
 
-        if "RAG" in ctx or "Retrieval-Augmented Generation" in ctx:
+        if (
+            "RAG" in ctx
+            or "RAG" in prompt
+            or "Retrieval-Augmented Generation" in ctx
+            or "Retrieval-Augmented Generation" in prompt
+        ):
             return "RAG (Retrieval-Augmented Generation) combines information retrieval with LLM generation to produce accurate, grounded responses."
 
         if "vector store" in prompt.lower() or "vector store" in ctx.lower():

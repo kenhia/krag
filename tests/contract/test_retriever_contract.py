@@ -73,7 +73,7 @@ class TestRetrieverContract:
         assert isinstance(results[0], QueryResult), "Results must be QueryResult objects"
 
     def test_retrieve_respects_top_k_parameter(self) -> None:
-        """Test that retrieve respects the top_k parameter."""
+        """Test that retrieve over-fetches for dedup then trims to top_k."""
         from krag.retrieval.retriever import Retriever
 
         class MockVectorStore:
@@ -95,7 +95,12 @@ class TestRetrieverContract:
         )
 
         retriever.retrieve("test", top_k=10)
-        assert mock_store.last_limit == 10, "Should pass top_k to vector store"
+        # The retriever over-fetches by _OVERFETCH_FACTOR to allow dedup
+        expected = 10 * Retriever._OVERFETCH_FACTOR
+        assert mock_store.last_limit == expected, (
+            f"Should over-fetch {Retriever._OVERFETCH_FACTOR}x top_k "
+            f"(expected {expected}, got {mock_store.last_limit})"
+        )
 
     def test_retrieve_handles_empty_results(self) -> None:
         """Test that retrieve handles empty results gracefully."""
