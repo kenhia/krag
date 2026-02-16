@@ -19,8 +19,8 @@
 
 **Purpose**: Create new module skeleton and test fixtures
 
-- [ ] T001 [P] Create evaluation module skeleton in src/krag/evaluation/__init__.py
-- [ ] T002 [P] Create sample evaluation TOML fixture in tests/fixtures/eval_queries.toml
+- [x] T001 [P] Create evaluation module skeleton in src/krag/evaluation/__init__.py
+- [x] T002 [P] Create sample evaluation TOML fixture in tests/fixtures/eval_queries.toml
 
 ---
 
@@ -30,9 +30,9 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 [P] Add new default constants (DEFAULT_SIMILARITY_THRESHOLD=0.3, DEFAULT_LLM_TOP_P=0.9, DEFAULT_LLM_REPEAT_PENALTY=1.1, DEFAULT_LLM_MIN_P=0.05, DEFAULT_PROMPT_PRESET="balanced") and update DEFAULT_LLM_TEMPERATURE from 0.7 to 0.2 in src/krag/config/defaults.py
-- [ ] T004 [P] Add new config fields (similarity_threshold, llm_top_p, llm_repeat_penalty, llm_min_p, prompt_preset, prompt_system_override) with validators per data-model.md to src/krag/models/configuration.py
-- [ ] T005 Update settings parser to handle new [prompt] section and expanded [retrieval]/[llm] fields in src/krag/config/settings.py
+- [x] T003 [P] Add new default constants (DEFAULT_SIMILARITY_THRESHOLD=0.3, DEFAULT_LLM_TOP_P=0.9, DEFAULT_LLM_REPEAT_PENALTY=1.1, DEFAULT_LLM_MIN_P=0.05, DEFAULT_PROMPT_PRESET="balanced") and update DEFAULT_LLM_TEMPERATURE from 0.7 to 0.2 in src/krag/config/defaults.py
+- [x] T004 [P] Add new config fields (similarity_threshold, llm_top_p, llm_repeat_penalty, llm_min_p, prompt_preset, prompt_system_override) with validators per data-model.md to src/krag/models/configuration.py
+- [x] T005 Update settings parser to handle new [prompt] section and expanded [retrieval]/[llm] fields in src/krag/config/settings.py
 
 **Checkpoint**: Configuration infrastructure ready — user story implementation can begin
 

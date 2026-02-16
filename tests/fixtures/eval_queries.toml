@@ -1,0 +1,28 @@
+# Sample evaluation queries for testing the evaluation harness.
+#
+# Each [[queries]] entry defines a test case with a query string
+# and one or more behavior checks.
+
+[[queries]]
+query = "What is the default chunk size in krag?"
+
+[[queries.checks]]
+type = "substring"
+value = "512"
+
+[[queries.checks]]
+type = "source_cited"
+value = "defaults.py"
+
+[[queries]]
+query = "What embedding model does krag use by default?"
+
+[[queries.checks]]
+type = "substring"
+value = "all-MiniLM-L6-v2"
+
+[[queries]]
+query = "What is quantum computing and how does it relate to krag?"
+
+[[queries.checks]]
+type = "no_hallucination"

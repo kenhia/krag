@@ -113,6 +113,8 @@ class ConfigManager:
             retr_section = toml_data["retrieval"]
             if "top_k" in retr_section:
                 config_dict["top_k"] = retr_section["top_k"]
+            if "similarity_threshold" in retr_section:
+                config_dict["similarity_threshold"] = retr_section["similarity_threshold"]
 
         # [llm] section
         if "llm" in toml_data:
@@ -128,6 +130,12 @@ class ConfigManager:
                 config_dict["llm_num_threads"] = llm_section["num_threads"]
             if "temperature" in llm_section:
                 config_dict["llm_temperature"] = llm_section["temperature"]
+            if "top_p" in llm_section:
+                config_dict["llm_top_p"] = llm_section["top_p"]
+            if "repeat_penalty" in llm_section:
+                config_dict["llm_repeat_penalty"] = llm_section["repeat_penalty"]
+            if "min_p" in llm_section:
+                config_dict["llm_min_p"] = llm_section["min_p"]
             if "n_gpu_layers" in llm_section:
                 config_dict["llm_n_gpu_layers"] = llm_section["n_gpu_layers"]
 
@@ -148,6 +156,16 @@ class ConfigManager:
             pr_section = toml_data["path_reductions"]
             if "aliases" in pr_section:
                 config_dict["path_aliases"] = pr_section["aliases"]
+
+        # [prompt] section
+        if "prompt" in toml_data:
+            prompt_section = toml_data["prompt"]
+            if "preset" in prompt_section:
+                config_dict["prompt_preset"] = prompt_section["preset"]
+            if "system_override" in prompt_section:
+                override = prompt_section["system_override"]
+                # Treat empty string as None (no override)
+                config_dict["prompt_system_override"] = override if override else None
 
         # [plugins] section (T028: plugin configuration parsing)
         if "plugins" in toml_data:
@@ -255,16 +273,23 @@ class ConfigManager:
                 },
                 "retrieval": {
                     "top_k": default_config.top_k,
+                    "similarity_threshold": default_config.similarity_threshold,
                 },
                 "llm": {
                     "model": default_config.llm_model,
                     "context_size": default_config.llm_context_size,
                     "num_threads": default_config.llm_num_threads,
                     "temperature": default_config.llm_temperature,
+                    "top_p": default_config.llm_top_p,
+                    "repeat_penalty": default_config.llm_repeat_penalty,
+                    "min_p": default_config.llm_min_p,
                     "n_gpu_layers": default_config.llm_n_gpu_layers,
                 },
                 "path_reductions": {
                     "aliases": default_config.path_aliases,
+                },
+                "prompt": {
+                    "preset": default_config.prompt_preset,
                 },
                 "plugins": {
                     "enabled": default_config.plugins.enabled_plugins,
@@ -339,16 +364,23 @@ class ConfigManager:
             },
             "retrieval": {
                 "top_k": config.top_k,
+                "similarity_threshold": config.similarity_threshold,
             },
             "llm": {
                 "model": config.llm_model,
                 "context_size": config.llm_context_size,
                 "num_threads": config.llm_num_threads,
                 "temperature": config.llm_temperature,
+                "top_p": config.llm_top_p,
+                "repeat_penalty": config.llm_repeat_penalty,
+                "min_p": config.llm_min_p,
                 "n_gpu_layers": config.llm_n_gpu_layers,
             },
             "path_reductions": {
                 "aliases": config.path_aliases,
+            },
+            "prompt": {
+                "preset": config.prompt_preset,
             },
             "plugins": {
                 "enabled": config.plugins.enabled_plugins,
