@@ -108,19 +108,19 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T017 [P] [US4] Write unit tests for load_eval_file() — valid TOML parsing, missing fields error, all check types in tests/unit/test_eval_loader.py
-- [ ] T018 [P] [US4] Write unit tests for evaluate_check() — substring match, source_cited match, no_hallucination logic (with/without sources) in tests/unit/test_eval_checks.py
-- [ ] T019 [P] [US4] Write unit tests for EvalRunner.run() — sequential execution, per-query check aggregation, passed flag in tests/unit/test_eval_runner.py
-- [ ] T020 [P] [US4] Write unit tests for generate_report(), format_json(), format_summary() in tests/unit/test_eval_report.py
+- [x] T017 [P] [US4] Write unit tests for load_eval_file() — valid TOML parsing, missing fields error, all check types in tests/unit/test_eval_loader.py
+- [x] T018 [P] [US4] Write unit tests for evaluate_check() — substring match, source_cited match, no_hallucination logic (with/without sources) in tests/unit/test_eval_checks.py
+- [x] T019 [P] [US4] Write unit tests for EvalRunner.run() — sequential execution, per-query check aggregation, passed flag in tests/unit/test_eval_runner.py
+- [x] T020 [P] [US4] Write unit tests for generate_report(), format_json(), format_summary() in tests/unit/test_eval_report.py
 
 ### Implementation for User Story 4
 
-- [ ] T021 [US4] Implement EvalQuery/EvalCheck dataclasses and load_eval_file() TOML loader with validation in src/krag/evaluation/loader.py
-- [ ] T022 [P] [US4] Implement CheckResult dataclass and evaluate_check() for substring, source_cited, no_hallucination check types in src/krag/evaluation/checks.py
-- [ ] T023 [US4] Implement EvalRunner class wrapping QueryEngine — sequential query execution, check evaluation, result aggregation in src/krag/evaluation/runner.py
-- [ ] T024 [P] [US4] Implement EvalReport dataclass, generate_report(), format_json() for stdout, format_summary() for stderr in src/krag/evaluation/reporter.py
-- [ ] T025 [US4] Implement eval CLI command (typer) with JSON stdout, summary stderr, exit code 0/1 in src/krag/cli/eval.py
-- [ ] T026 [US4] Register eval command in CLI app entry point in src/krag/cli/main.py
+- [x] T021 [US4] Implement EvalQuery/EvalCheck dataclasses and load_eval_file() TOML loader with validation in src/krag/evaluation/loader.py
+- [x] T022 [P] [US4] Implement CheckResult dataclass and evaluate_check() for substring, source_cited, no_hallucination check types in src/krag/evaluation/checks.py
+- [x] T023 [US4] Implement EvalRunner class wrapping QueryEngine — sequential query execution, check evaluation, result aggregation in src/krag/evaluation/runner.py
+- [x] T024 [P] [US4] Implement EvalReport dataclass, generate_report(), format_json() for stdout, format_summary() for stderr in src/krag/evaluation/reporter.py
+- [x] T025 [US4] Implement eval CLI command (typer) with JSON stdout, summary stderr, exit code 0/1 in src/krag/cli/eval.py
+- [x] T026 [US4] Register eval command in CLI app entry point in src/krag/cli/main.py
 
 **Checkpoint**: `krag eval eval-tests.toml` produces JSON report on stdout, human summary on stderr, correct exit code
 
