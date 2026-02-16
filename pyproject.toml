@@ -3,23 +3,23 @@ name = "krag"
 version = "0.1.0"
 description = "Personal Multimodal RAG System - Phase 1: Text indexing and retrieval"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
 authors = [
     { name = "Ken", email = "ken@example.com" }
 ]
 dependencies = [
     "typer>=0.9.0",
-    "sentence-transformers>=2.2.0",
-    "qdrant-client>=1.7.0",
-    "llama-cpp-python>=0.2.0",
+    "sentence-transformers>=2.3.0",
+    "qdrant-client>=1.8.0",
+    "llama-cpp-python>=0.2.90",
     "llama-index>=0.9.0",
-    "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
     "rich>=13.0.0",
     "tomli>=2.0.0 ; python_version < '3.11'",
     "tomli-w>=1.0.0",
-    "pyyaml>=6.0.0",
+    "pyyaml>=6.0.1",
 ]
 
 [dependency-groups]
@@ -47,7 +47,7 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py311"  # Can use py313 features when ready
 
 [tool.ruff.lint]
 select = [

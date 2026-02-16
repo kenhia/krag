@@ -181,7 +181,9 @@ class IndexingOrchestrator:
     def close(self) -> None:
         """Close resources and release locks."""
         if hasattr(self, "vector_store") and self.vector_store:
+            logger.info("Closing vector store...")
             self.vector_store.close()
+            logger.debug("Vector store closed")
 
     @staticmethod
     def _build_chunking_overrides(plugin_config: Any) -> dict[str, str]:
@@ -472,7 +474,8 @@ class IndexingOrchestrator:
                         continue
 
                 if not text or not text.strip():
-                    logger.debug(f"Skipping empty file: {file_metadata.file_path}")
+                    logger.info(f"Skipping empty file: {file_metadata.file_path}")
+                    job.files_skipped += 1
                     continue
 
                 # T050: Integrate plugin chunking strategy selection
@@ -517,7 +520,8 @@ class IndexingOrchestrator:
                     )
 
                 if not chunks:
-                    logger.debug(f"No chunks created for {file_metadata.file_path}")
+                    logger.info(f"Skipping file (no chunks created): {file_metadata.file_path}")
+                    job.files_skipped += 1
                     continue
 
                 job.chunks_generated += len(chunks)
@@ -570,15 +574,24 @@ class IndexingOrchestrator:
         # Stage 6: Store vectors in batches
         if all_vectors:
             logger.info(f"Storing {len(all_vectors)} vectors")
-            if progress_callback:
-                progress_callback(100, 100, "Storing vectors")
 
             try:
                 # Store in batches of 100
                 batch_size = 100
-                for i in range(0, len(all_vectors), batch_size):
+                total_batches = (len(all_vectors) + batch_size - 1) // batch_size
+
+                for batch_idx, i in enumerate(range(0, len(all_vectors), batch_size), 1):
                     batch = all_vectors[i : i + batch_size]
                     self.vector_store.upsert(batch)
+
+                    # Update progress after each batch
+                    if progress_callback:
+                        vectors_stored = min(i + batch_size, len(all_vectors))
+                        progress_callback(
+                            vectors_stored,
+                            len(all_vectors),
+                            f"Storing vectors ({batch_idx}/{total_batches} batches)",
+                        )
 
             except Exception as e:
                 logger.error(f"Error storing vectors: {e}")
@@ -595,7 +608,7 @@ class IndexingOrchestrator:
         logger.info(
             f"Indexing complete: {job.files_processed}/{job.files_discovered} files, "
             f"{job.chunks_generated} chunks, {job.embeddings_created} embeddings, "
-            f"{job.files_errored} errors"
+            f"{job.files_skipped} skipped, {job.files_errored} errors"
         )
 
         # T053: Output failure summary if there were plugin failures
@@ -747,6 +760,8 @@ class IndexingOrchestrator:
                     text = self.extractor.extract(file_metadata.file_path)
 
                 if not text or not text.strip():
+                    logger.info(f"Skipping empty file: {file_metadata.file_path}")
+                    job.files_skipped += 1
                     continue
 
                 # Use plugin chunking strategy if available
@@ -774,6 +789,8 @@ class IndexingOrchestrator:
                     )
 
                 if not chunks:
+                    logger.info(f"Skipping file (no chunks created): {file_metadata.file_path}")
+                    job.files_skipped += 1
                     continue
 
                 job.chunks_generated += len(chunks)
@@ -824,15 +841,24 @@ class IndexingOrchestrator:
         # Stage 6: Store vectors in batches
         if all_vectors:
             logger.info(f"Storing {len(all_vectors)} vectors")
-            if progress_callback:
-                progress_callback(100, 100, "Storing vectors")
 
             try:
                 # Store in batches of 100
                 batch_size = 100
-                for i in range(0, len(all_vectors), batch_size):
+                total_batches = (len(all_vectors) + batch_size - 1) // batch_size
+
+                for batch_idx, i in enumerate(range(0, len(all_vectors), batch_size), 1):
                     batch = all_vectors[i : i + batch_size]
                     self.vector_store.upsert(batch)
+
+                    # Update progress after each batch
+                    if progress_callback:
+                        vectors_stored = min(i + batch_size, len(all_vectors))
+                        progress_callback(
+                            vectors_stored,
+                            len(all_vectors),
+                            f"Storing vectors ({batch_idx}/{total_batches} batches)",
+                        )
 
             except Exception as e:
                 logger.error(f"Error storing vectors: {e}")

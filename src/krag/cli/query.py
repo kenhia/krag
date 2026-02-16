@@ -135,6 +135,11 @@ def query_command(
             llm_client = LLMClient(
                 model=config.llm_model,
                 max_tokens=2000,
+                n_ctx=config.llm_context_size,
+                n_threads=config.llm_num_threads,
+                n_gpu_layers=config.llm_n_gpu_layers,
+                temperature=config.llm_temperature,
+                model_cache_path=config.model_cache_path,
             )
 
         # Initialize query engine
@@ -147,6 +152,20 @@ def query_command(
         )
 
         # Execute query
+        # Log the command invocation for audit trail
+        cmd_parts = ["krag", "query", f'"{query}"']
+        if top_k != 5:
+            cmd_parts.extend(["--top-k", str(top_k)])
+        if no_synthesis:
+            cmd_parts.append("--no-synthesis")
+        if not show_sources:
+            cmd_parts.append("--no-sources")
+        if format != OutputFormat.TEXT:
+            cmd_parts.extend(["--format", format])
+        if config_path:
+            cmd_parts.extend(["--config", str(config_path)])
+        logger.info(f"Starting query command: {' '.join(cmd_parts)}")
+
         console.print(f"\n[bold]Query:[/bold] {query}\n")
 
         if no_synthesis:

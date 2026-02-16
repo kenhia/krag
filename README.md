@@ -19,10 +19,11 @@ A local-first system for indexing personal files (PC and NAS storage) and queryi
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.11+ (tested on 3.11, 3.12, 3.13)
 - [uv](https://github.com/astral-sh/uv) (recommended) or pip
 - 4GB+ RAM for embedding models and LLM
 - Storage space for vector embeddings (~1-2GB per 10k documents)
+- **Optional**: NVIDIA GPU with CUDA for accelerated LLM inference
 
 ## Quick Start
 
@@ -139,7 +140,44 @@ Key settings:
 - `llm_model`: HuggingFace model name or local GGUF path
 - `path_aliases`: Display path reductions (e.g., `/home/ken:~`)
 
+**Custom Storage Paths** (optional):
+
+```toml
+[storage]
+vector_store_path = "/krag/index"
+model_cache_path = "/krag/models"
+corpus_cache_path = "/krag/corpus"
+logs_path = "/krag/logs"
+```
+
+**GPU Acceleration** (optional):
+
+```toml
+[llm]
+n_gpu_layers = -1  # Full GPU offload (-1), partial (24), or CPU-only (0)
+```
+
 See [docs/configuration.md](docs/configuration.md) for full details.
+
+## GPU Acceleration
+
+krag supports GPU-accelerated LLM inference via CUDA:
+
+```bash
+# Check GPU status
+krag gpu status
+
+# Get recommended GPU settings
+krag gpu recommend
+
+# Show GPU configuration
+krag config show --gpu-only
+
+# Show storage paths
+krag config show --paths-only
+```
+
+See [docs/migration-guide.md](docs/migration-guide.md) for full GPU setup instructions.
 
 ## Plugin System
 

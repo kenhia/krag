@@ -5,8 +5,12 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from krag.config.xdg import get_krag_state_dir
+
+if TYPE_CHECKING:
+    from krag.models.configuration import Configuration
 
 
 class SafeStreamHandler(logging.StreamHandler):
@@ -30,6 +34,7 @@ def setup_logging(
     log_dir: Path | None = None,
     show_logs: bool = False,
     verbose: bool = False,
+    config: "Configuration | None" = None,
 ) -> None:
     """Configure logging for krag application.
 
@@ -41,8 +46,11 @@ def setup_logging(
         log_dir: Directory for log files (defaults to XDG_STATE_HOME/krag/logs)
         show_logs: Enable console logging for INFO+ application messages
         verbose: Enable DEBUG level logging (applies to both file and console)
+        config: Configuration object; if provided, logs_path overrides log_dir
     """
-    # Determine log directory
+    # Determine log directory: config.logs_path > explicit log_dir > XDG default
+    if config is not None and log_dir is None:
+        log_dir = config.logs_path
     if log_dir is None:
         log_dir = get_krag_state_dir() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)

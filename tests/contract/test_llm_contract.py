@@ -74,3 +74,37 @@ class TestLLMClientContract:
 
         client = LLMClient(model=None, max_tokens=512)
         assert client.max_tokens == 512, "Should store max_tokens"
+
+    # --- T033: LLMClient passes n_gpu_layers to Llama() init ---
+
+    def test_llm_client_accepts_n_gpu_layers(self) -> None:
+        """Test that LLMClient accepts n_gpu_layers parameter."""
+        from krag.synthesis.llm_client import LLMClient
+
+        client = LLMClient(model=None, n_gpu_layers=-1)
+        assert client.n_gpu_layers == -1, "Should store n_gpu_layers"
+
+    # --- T034: LLMClient with n_gpu_layers=0 uses CPU only ---
+
+    def test_llm_client_default_n_gpu_layers_is_zero(self) -> None:
+        """Test that n_gpu_layers defaults to 0 (CPU only)."""
+        from krag.synthesis.llm_client import LLMClient
+
+        client = LLMClient(model=None)
+        assert client.n_gpu_layers == 0, "n_gpu_layers should default to 0 (CPU only)"
+
+    # --- T035: LLMClient with n_gpu_layers=-1 attempts full GPU offload ---
+
+    def test_llm_client_full_gpu_offload(self) -> None:
+        """Test that LLMClient accepts -1 for full GPU offload."""
+        from krag.synthesis.llm_client import LLMClient
+
+        client = LLMClient(model=None, n_gpu_layers=-1)
+        assert client.n_gpu_layers == -1, "Should accept -1 for full GPU offload"
+
+    def test_llm_client_partial_gpu_offload(self) -> None:
+        """Test that LLMClient accepts positive values for partial GPU offload."""
+        from krag.synthesis.llm_client import LLMClient
+
+        client = LLMClient(model=None, n_gpu_layers=24)
+        assert client.n_gpu_layers == 24, "Should accept partial GPU layer count"

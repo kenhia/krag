@@ -1,0 +1,35 @@
+# Test configuration with /krag storage paths and GPU settings
+# Used for Phase 7 re-indexing validation
+
+[directories]
+paths = [
+    "/home/ken/src/krag/tests/fixtures/sample_files",
+]
+
+[storage]
+vector_store_path = "/krag/index"
+model_cache_path = "/krag/models"
+corpus_cache_path = "/krag/corpus"
+logs_path = "/krag/logs"
+
+[embedding]
+model = "sentence-transformers/all-MiniLM-L6-v2"
+device = "cpu"
+
+[llm]
+model = "microsoft/Phi-3-mini-4k-instruct-gguf"
+n_gpu_layers = 0
+temperature = 0.7
+context_size = 2048
+num_threads = 4
+
+[chunking]
+size = 512
+overlap = 50
+
+[vector_store]
+collection_name = "krag_embeddings"
+distance_metric = "cosine"
+
+[retrieval]
+top_k = 5

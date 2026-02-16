@@ -17,6 +17,36 @@ def _get_default_vector_store_path() -> Path:
     return get_krag_cache_dir() / "storage"
 
 
+def _get_default_model_cache_path() -> Path:
+    """Get default model cache path using XDG cache directory.
+
+    Imports lazily to avoid circular dependency.
+    """
+    from krag.config.xdg import get_krag_cache_dir
+
+    return get_krag_cache_dir() / "models"
+
+
+def _get_default_corpus_cache_path() -> Path:
+    """Get default corpus cache path using XDG cache directory.
+
+    Imports lazily to avoid circular dependency.
+    """
+    from krag.config.xdg import get_krag_cache_dir
+
+    return get_krag_cache_dir() / "corpus"
+
+
+def _get_default_logs_path() -> Path:
+    """Get default logs path using XDG state directory.
+
+    Imports lazily to avoid circular dependency.
+    """
+    from krag.config.xdg import get_krag_state_dir
+
+    return get_krag_state_dir() / "logs"
+
+
 def _get_default_llm_model() -> str:
     """Get default LLM model name.
 
@@ -189,6 +219,20 @@ class Configuration(BaseSettings):
     collection_name: str = Field(default="krag_embeddings", description="Collection name")
     distance_metric: str = Field(default="cosine", description="Distance metric")
 
+    # Storage Paths (configurable, XDG defaults)
+    model_cache_path: Path = Field(
+        default_factory=_get_default_model_cache_path,
+        description="Path to cached models (XDG_CACHE_HOME/krag/models)",
+    )
+    corpus_cache_path: Path = Field(
+        default_factory=_get_default_corpus_cache_path,
+        description="Path to corpus cache (XDG_CACHE_HOME/krag/corpus)",
+    )
+    logs_path: Path = Field(
+        default_factory=_get_default_logs_path,
+        description="Path to log files (XDG_STATE_HOME/krag/logs)",
+    )
+
     # Retrieval
     top_k: int = Field(default=5, gt=0, description="Number of results to retrieve")
 
@@ -201,6 +245,17 @@ class Configuration(BaseSettings):
     llm_num_threads: int = Field(default=4, gt=0, description="Number of threads for inference")
     llm_temperature: float = Field(
         default=0.7, ge=0.0, le=2.0, description="Temperature for generation"
+    )
+    llm_n_gpu_layers: int = Field(
+        default=0,
+        ge=-1,
+        description=(
+            "Number of model layers to offload to GPU for llama-cpp-python. "
+            "0 = CPU only (default), "
+            "-1 = full offload (recommended if CUDA available), "
+            "1-N = hybrid offload (N layers on GPU, rest on CPU). "
+            "Requires llama-cpp-python built with CUDA support."
+        ),
     )
 
     # Path Reductions
@@ -238,4 +293,33 @@ class Configuration(BaseSettings):
         """Ensure chunk_overlap < chunk_size."""
         if "chunk_size" in info.data and v >= info.data["chunk_size"]:
             raise ValueError("chunk_overlap must be less than chunk_size")
+        return v
+
+    @field_validator(
+        "vector_store_path",
+        "model_cache_path",
+        "corpus_cache_path",
+        "logs_path",
+        mode="before",
+    )
+    @classmethod
+    def expand_user_paths(cls, v: Any) -> Any:
+        """Expand ~ in paths before validation."""
+        if isinstance(v, str):
+            return Path(v).expanduser()
+        if isinstance(v, Path):
+            return v.expanduser()
+        return v
+
+    @field_validator(
+        "model_cache_path",
+        "corpus_cache_path",
+        "logs_path",
+        mode="after",
+    )
+    @classmethod
+    def validate_absolute_paths(cls, v: Path) -> Path:
+        """Ensure storage paths are absolute."""
+        if not v.is_absolute():
+            raise ValueError(f"Path must be absolute: {v}")
         return v

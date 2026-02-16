@@ -70,6 +70,15 @@ DEFAULT_LLM_TEMPERATURE = 0.7
 DEFAULT_CONFIG_DIR = get_krag_config_dir()
 DEFAULT_CACHE_DIR = get_krag_cache_dir()
 DEFAULT_STATE_DIR = get_krag_state_dir()
+
+# Storage paths (derived from XDG directories)
+DEFAULT_VECTOR_STORE_PATH = DEFAULT_CACHE_DIR / "storage"
+DEFAULT_MODEL_CACHE_PATH = DEFAULT_CACHE_DIR / "models"
+DEFAULT_CORPUS_CACHE_PATH = DEFAULT_CACHE_DIR / "corpus"
+DEFAULT_LOGS_PATH = DEFAULT_STATE_DIR / "logs"
+
+# GPU defaults
+DEFAULT_LLM_N_GPU_LAYERS = 0  # CPU only by default
 DEFAULT_VECTOR_STORE_PATH = DEFAULT_CACHE_DIR / "storage"
 DEFAULT_LLM_MODEL_PATH = DEFAULT_CACHE_DIR / "models" / "model.gguf"
 DEFAULT_LOG_DIR = DEFAULT_STATE_DIR / "logs"
