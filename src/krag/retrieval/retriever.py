@@ -63,10 +63,11 @@ class Retriever:
         query_results = []
         for rank, result in enumerate(results, start=1):
             payload = result.get("payload", {})
+            score = float(result["score"])
 
             query_result = QueryResult(
                 chunk_id=result["id"],
-                score=float(result["score"]),
+                score=score,
                 rank=rank,
                 chunk_content=payload.get("content", ""),
                 file_path=Path(payload.get("file_path", "")),
@@ -74,6 +75,12 @@ class Retriever:
                 file_type=payload.get("file_type", "unknown"),
             )
             query_results.append(query_result)
+            logger.debug(
+                "  [%d] score=%.4f file=%s",
+                rank,
+                score,
+                payload.get("file_path", ""),
+            )
 
         # Apply similarity threshold filtering
         if similarity_threshold is not None:

@@ -304,6 +304,12 @@ class LLMClient:
 
         logger.debug("Generating response from %d messages", len(messages))
 
+        # Log complete messages at DEBUG for diagnostics
+        for i, msg in enumerate(messages):
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            logger.debug("  Message[%d] role=%s len=%d", i, role, len(content))
+
         # Use provided values or defaults
         temp = temperature if temperature is not None else self.temperature
         max_tok = max_tokens if max_tokens is not None else self.max_tokens

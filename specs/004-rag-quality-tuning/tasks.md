@@ -134,13 +134,13 @@
 
 ### Tests for User Story 5
 
-- [ ] T027 [US5] Write integration test verifying DEBUG log output contains chunk scores, threshold filtering, complete prompt, and generation summary for a full query pipeline run in tests/integration/test_query_pipeline.py
+- [x] T027 [US5] Write integration test verifying DEBUG log output contains chunk scores, threshold filtering, complete prompt, and generation summary for a full query pipeline run in tests/integration/test_query_pipeline.py
 
 ### Implementation for User Story 5
 
-- [ ] T028 [P] [US5] Add DEBUG-level logging for each retrieved chunk (score, source file, threshold pass/fail) in src/krag/retrieval/retriever.py
-- [ ] T029 [P] [US5] Add DEBUG-level logging for complete chat messages before generation in src/krag/synthesis/llm_client.py
-- [ ] T030 [P] [US5] Add DEBUG-level logging for pipeline stages (retrieval count, prompt size, generation duration) in src/krag/orchestration/query_engine.py
+- [x] T028 [P] [US5] Add DEBUG-level logging for each retrieved chunk (score, source file, threshold pass/fail) in src/krag/retrieval/retriever.py
+- [x] T029 [P] [US5] Add DEBUG-level logging for complete chat messages before generation in src/krag/synthesis/llm_client.py
+- [x] T030 [P] [US5] Add DEBUG-level logging for pipeline stages (retrieval count, prompt size, generation duration) in src/krag/orchestration/query_engine.py
 
 **Checkpoint**: `krag query --log-level DEBUG` reveals full pipeline state for diagnosis
 
