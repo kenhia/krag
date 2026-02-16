@@ -1,5 +1,6 @@
 """Query engine for orchestrating retrieval and synthesis."""
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -7,18 +8,19 @@ from typing import Any
 from krag.models.query_result import QueryResult
 from krag.retrieval.retriever import Retriever
 from krag.synthesis.llm_client import LLMClient
-from krag.synthesis.prompt_builder import PromptBuilder
+from krag.synthesis.prompt_builder import INSUFFICIENT_CONTEXT_PHRASE, PromptBuilder
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class QueryResponse:
-    """Response from query engine containing answer and sources."""
+    """Response from query engine containing answer, sources, and prompt."""
 
     answer: str
     sources: list[QueryResult]
     query: str
+    prompt: str = ""
 
 
 class QueryEngine:
@@ -35,6 +37,9 @@ class QueryEngine:
         top_k: int = 5,
         max_context_length: int = 4000,
         path_aliases: list[str] | None = None,
+        preset_name: str = "balanced",
+        system_prompt_override: str | None = None,
+        similarity_threshold: float | None = None,
     ):
         """Initialize query engine.
 
@@ -45,13 +50,20 @@ class QueryEngine:
             top_k: Number of results to retrieve
             max_context_length: Max context characters
             path_aliases: Optional path aliases for display reduction
+            preset_name: Prompt preset name (strict, balanced, verbose)
+            system_prompt_override: Custom system prompt that replaces preset prompt
+            similarity_threshold: Minimum similarity score for retrieval results
         """
         self.retriever = Retriever(vector_store, embedding_generator)
         self.prompt_builder = PromptBuilder(
-            max_context_length=max_context_length, path_aliases=path_aliases
+            max_context_length=max_context_length,
+            path_aliases=path_aliases,
+            preset_name=preset_name,
+            system_prompt_override=system_prompt_override,
         )
         self.llm_client = llm_client
         self.top_k = top_k
+        self.similarity_threshold = similarity_threshold
 
     def query(
         self,
@@ -65,7 +77,7 @@ class QueryEngine:
             top_k: Override default top_k
 
         Returns:
-            QueryResponse with answer and sources
+            QueryResponse with answer, sources, and prompt
         """
         logger.info(f"Processing query: {query_text[:100]}...")
 
@@ -84,17 +96,40 @@ class QueryEngine:
         results = self.retriever.retrieve(query_text, top_k=k)
         logger.info(f"Retrieved {len(results)} results")
 
-        # Build prompt
-        prompt = self.prompt_builder.build(query_text, results)
-        logger.debug(f"Built prompt with {len(prompt)} characters")
+        # Apply similarity threshold filtering if configured
+        if self.similarity_threshold is not None and results:
+            pre_count = len(results)
+            results = [r for r in results if r.score >= self.similarity_threshold]
+            logger.info(
+                "Retrieved %d, kept %d after threshold %.2f",
+                pre_count,
+                len(results),
+                self.similarity_threshold,
+            )
 
-        # Generate answer
+        # Build chat messages
+        messages = self.prompt_builder.build(query_text, results)
+        prompt_str = json.dumps(messages, indent=2)
+        logger.debug("Built prompt with %d messages", len(messages))
+
+        # Skip LLM call if no results (empty retrieval → insufficient context)
+        if not results:
+            logger.info("No results after retrieval/filtering, returning insufficient context")
+            return QueryResponse(
+                answer=INSUFFICIENT_CONTEXT_PHRASE,
+                sources=[],
+                query=query_text,
+                prompt=prompt_str,
+            )
+
+        # Generate answer via chat completion
         logger.debug("Generating LLM response")
-        answer = self.llm_client.generate(query_text, prompt)
+        answer = self.llm_client.generate(messages=messages)
         logger.info(f"Query completed, answer length: {len(answer)} characters")
 
         return QueryResponse(
             answer=answer,
             sources=results,
             query=query_text,
+            prompt=prompt_str,
         )

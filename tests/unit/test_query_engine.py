@@ -177,12 +177,16 @@ def test_query_calls_llm_with_context(query_engine, mock_vector_store):
 
     query_engine.query("test query")
 
-    # Verify LLM was called
+    # Verify LLM was called with chat messages
     mock_llm.generate.assert_called_once()
     call_args = mock_llm.generate.call_args
-    assert call_args[0][0] == "test query"  # First arg is query
-    # Second arg (context/prompt) should contain the chunk content
-    assert "Test content" in call_args[0][1]
+    messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else None)
+    assert isinstance(messages, list), "generate should receive a messages list"
+    # System message should contain the chunk content
+    system_content = messages[0]["content"]
+    assert "Test content" in system_content
+    # User message should contain the query
+    assert messages[1]["content"] == "test query"
 
 
 def test_query_response_contains_sources(query_engine, mock_vector_store):

@@ -48,15 +48,15 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T006 [P] [US1] Write unit tests for PromptPreset dataclass (built-in presets, validation, available_presets()) and PromptBuilder.build() returning chat messages with numbered citations in tests/unit/test_prompt_builder.py
-- [ ] T007 [P] [US1] Write unit tests for LLMClient.generate() accepting chat messages list, per-call param overrides, and error handling in tests/unit/test_llm_client.py
+- [x] T006 [P] [US1] Write unit tests for PromptPreset dataclass (built-in presets, validation, available_presets()) and PromptBuilder.build() returning chat messages with numbered citations in tests/unit/test_prompt_builder.py
+- [x] T007 [P] [US1] Write unit tests for LLMClient.generate() accepting chat messages list, per-call param overrides, and error handling in tests/unit/test_llm_client.py
 
 ### Implementation for User Story 1
 
-- [ ] T008 [P] [US1] Implement PromptPreset dataclass with strict/balanced/verbose built-in presets (system prompts, generation params per research.md) in src/krag/synthesis/prompt_builder.py
-- [ ] T009 [US1] Refactor PromptBuilder.build() to return list[dict[str, str]] chat messages with numbered [1], [2] source citations and "insufficient context" system message for empty results in src/krag/synthesis/prompt_builder.py
-- [ ] T010 [P] [US1] Migrate LLMClient.generate() from model() text completion to model.create_chat_completion(), change signature from (query, context) to (messages), add top_p/repeat_penalty/min_p params in src/krag/synthesis/llm_client.py
-- [ ] T011 [US1] Add prompt field to QueryResponse dataclass, update QueryEngine to pass preset_name and system_prompt_override to PromptBuilder, skip LLM call on empty retrieval results in src/krag/orchestration/query_engine.py
+- [x] T008 [P] [US1] Implement PromptPreset dataclass with strict/balanced/verbose built-in presets (system prompts, generation params per research.md) in src/krag/synthesis/prompt_builder.py
+- [x] T009 [US1] Refactor PromptBuilder.build() to return list[dict[str, str]] chat messages with numbered [1], [2] source citations and "insufficient context" system message for empty results in src/krag/synthesis/prompt_builder.py
+- [x] T010 [P] [US1] Migrate LLMClient.generate() from model() text completion to model.create_chat_completion(), change signature from (query, context) to (messages), add top_p/repeat_penalty/min_p params in src/krag/synthesis/llm_client.py
+- [x] T011 [US1] Add prompt field to QueryResponse dataclass, update QueryEngine to pass preset_name and system_prompt_override to PromptBuilder, skip LLM call on empty retrieval results in src/krag/orchestration/query_engine.py
 
 **Checkpoint**: Queries return grounded answers with source citations; out-of-scope queries return "insufficient context"
 
