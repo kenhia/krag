@@ -72,12 +72,12 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T012 [US2] Write contract tests for Retriever.retrieve() similarity_threshold parameter — verify filtering, empty results when all below threshold, score ordering in tests/contract/test_retriever_contract.py
+- [x] T012 [US2] Write contract tests for Retriever.retrieve() similarity_threshold parameter — verify filtering, empty results when all below threshold, score ordering in tests/contract/test_retriever_contract.py
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Add similarity_threshold parameter to Retriever.retrieve() with post-retrieval filtering (fetch top_k from Qdrant, filter by threshold in Python) and INFO-level summary logging in src/krag/retrieval/retriever.py
-- [ ] T014 [US2] Wire similarity_threshold from QueryEngine constructor to Retriever.retrieve() calls in src/krag/orchestration/query_engine.py
+- [x] T013 [US2] Add similarity_threshold parameter to Retriever.retrieve() with post-retrieval filtering (fetch top_k from Qdrant, filter by threshold in Python) and INFO-level summary logging in src/krag/retrieval/retriever.py
+- [x] T014 [US2] Wire similarity_threshold from QueryEngine constructor to Retriever.retrieve() calls in src/krag/orchestration/query_engine.py
 
 **Checkpoint**: Low-scoring chunks filtered; retriever logs show filtering summary
 

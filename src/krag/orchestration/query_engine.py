@@ -90,22 +90,13 @@ class QueryEngine:
                 query=query_text,
             )
 
-        # Retrieve relevant chunks
+        # Retrieve relevant chunks (with threshold filtering if configured)
         k = top_k if top_k is not None else self.top_k
         logger.debug(f"Retrieving top {k} results")
-        results = self.retriever.retrieve(query_text, top_k=k)
+        results = self.retriever.retrieve(
+            query_text, top_k=k, similarity_threshold=self.similarity_threshold
+        )
         logger.info(f"Retrieved {len(results)} results")
-
-        # Apply similarity threshold filtering if configured
-        if self.similarity_threshold is not None and results:
-            pre_count = len(results)
-            results = [r for r in results if r.score >= self.similarity_threshold]
-            logger.info(
-                "Retrieved %d, kept %d after threshold %.2f",
-                pre_count,
-                len(results),
-                self.similarity_threshold,
-            )
 
         # Build chat messages
         messages = self.prompt_builder.build(query_text, results)

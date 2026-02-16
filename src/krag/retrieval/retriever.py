@@ -29,12 +29,22 @@ class Retriever:
         self.vector_store = vector_store
         self.embedding_generator = embedding_generator
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[QueryResult]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        similarity_threshold: float | None = None,
+    ) -> list[QueryResult]:
         """Retrieve most relevant chunks for a query.
+
+        Fetches top_k results from vector store, then optionally filters
+        by similarity_threshold in Python. This post-retrieval filtering
+        approach is compatible with all vector store backends.
 
         Args:
             query: User query string
-            top_k: Number of results to return
+            top_k: Number of results to retrieve from vector store
+            similarity_threshold: Minimum similarity score to keep (None = no filtering)
 
         Returns:
             List of QueryResult objects ranked by relevance
@@ -64,5 +74,16 @@ class Retriever:
                 file_type=payload.get("file_type", "unknown"),
             )
             query_results.append(query_result)
+
+        # Apply similarity threshold filtering
+        if similarity_threshold is not None:
+            pre_count = len(query_results)
+            query_results = [r for r in query_results if r.score >= similarity_threshold]
+            logger.info(
+                "Retrieved %d, kept %d after threshold %.2f",
+                pre_count,
+                len(query_results),
+                similarity_threshold,
+            )
 
         return query_results
