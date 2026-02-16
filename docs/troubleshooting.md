@@ -161,3 +161,110 @@ This converts `config.yaml` to `config.toml` format.
 3. Run `krag plugin validate` for plugin diagnostics
 4. Review logs in `~/.local/state/krag/logs/`
 5. File an issue on the project repository
+
+## Quality Tuning
+
+### Prompt Presets
+
+krag includes three built-in prompt presets that control how the LLM generates answers:
+
+| Preset | Temperature | Max Tokens | Description |
+|--------|-------------|------------|-------------|
+| `strict` | 0.1 | 256 | Concise, source-grounded answers only |
+| `balanced` | 0.2 | 512 | Detailed answers with citations (default) |
+| `verbose` | 0.3 | 1024 | Exploratory answers with full context |
+
+**Config file** (`~/.config/krag/config.toml`):
+
+```toml
+[prompt]
+preset = "strict"
+# system_override = "Custom system prompt..."
+```
+
+**CLI override** (takes precedence over config):
+
+```bash
+krag query "What is RAG?" --preset strict
+```
+
+### Similarity Threshold
+
+Controls the minimum relevance score for retrieved chunks. Chunks below this threshold are filtered out before reaching the LLM.
+
+```toml
+[retrieval]
+similarity_threshold = 0.3  # default; range 0.0–1.0
+```
+
+- **Lower values** (0.1–0.2): Include more context, may add noise
+- **Default** (0.3): Good balance for most use cases
+- **Higher values** (0.5+): Only highly relevant chunks, may miss useful context
+
+### LLM Parameters
+
+Fine-tune generation behavior:
+
+```toml
+[llm]
+temperature = 0.2         # Lower = more deterministic
+top_p = 0.9               # Nucleus sampling threshold
+repeat_penalty = 1.1      # Penalize repeated tokens
+min_p = 0.05              # Minimum probability threshold
+```
+
+### Evaluation Workflow
+
+Run a suite of test queries to measure answer quality:
+
+```bash
+# Create an evaluation file (TOML format)
+cat > eval-queries.toml << 'EOF'
+[[queries]]
+query = "What is the default chunk size?"
+
+[[queries.checks]]
+type = "substring"
+value = "512"
+
+[[queries.checks]]
+type = "source_cited"
+value = "defaults.py"
+
+[[queries]]
+query = "What is quantum computing?"
+
+[[queries.checks]]
+type = "no_hallucination"
+EOF
+
+# Run evaluation
+krag eval eval-queries.toml
+
+# With specific preset
+krag eval eval-queries.toml --preset strict
+```
+
+**Check types**:
+
+| Type | Description |
+|------|-------------|
+| `substring` | Answer must contain the specified text (case-insensitive) |
+| `source_cited` | At least one retrieved source path must contain the value |
+| `no_hallucination` | Answer either acknowledges insufficient context or has sources |
+
+The eval command outputs JSON to stdout and a human summary to stderr. Exit code is 0 if all checks pass, 1 if any fail.
+
+### Debugging Queries
+
+Enable DEBUG logging to see the full pipeline state:
+
+```bash
+krag query "test query" --log-level DEBUG
+```
+
+This reveals:
+- Each retrieved chunk with score and source file
+- Threshold filtering results
+- Complete chat messages sent to the LLM
+- Generation parameter values

@@ -150,10 +150,10 @@
 
 **Purpose**: Documentation, validation, and final quality gates
 
-- [ ] T031 [P] Update docs with quality tuning guidance (preset reference, threshold tuning, eval workflow) in docs/troubleshooting.md
-- [ ] T032 [P] Write end-to-end evaluation pipeline integration test in tests/integration/test_evaluation_pipeline.py
-- [ ] T033 Run quickstart.md scenario validation against implementation
-- [ ] T034 Run pre-commit validation (uv run ruff format . && uv run ruff check --fix . && uv run pytest)
+- [x] T031 [P] Update docs with quality tuning guidance (preset reference, threshold tuning, eval workflow) in docs/troubleshooting.md
+- [x] T032 [P] Write end-to-end evaluation pipeline integration test in tests/integration/test_evaluation_pipeline.py
+- [x] T033 Run quickstart.md scenario validation against implementation
+- [x] T034 Run pre-commit validation (uv run ruff format . && uv run ruff check --fix . && uv run pytest)
 
 ---
 
