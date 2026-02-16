@@ -3,6 +3,7 @@
 import os
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from pydantic import ValidationError
@@ -12,6 +13,9 @@ from rich.table import Table
 from krag.cli.utils import exit_with_code
 from krag.config.settings import ConfigManager
 from krag.config.xdg import get_krag_config_dir
+
+if TYPE_CHECKING:
+    from krag.models.configuration import Configuration
 
 # Create config subcommand app
 config_app = typer.Typer(
@@ -76,6 +80,17 @@ def config_validate(
         if not is_valid:
             console.print("\n[red]✗ Validation failed:[/red]\n")
             console.print(f"  {error_message}")
+            # Provide actionable hints for common path issues
+            if error_message and (
+                "not writable" in error_message or "permission denied" in error_message.lower()
+            ):
+                console.print("\n[yellow]Hint:[/yellow] Check directory ownership and permissions.")
+                console.print("  For shared /krag paths, ensure your user is in the 'krag' group:")
+                console.print("    sudo usermod -aG krag $USER")
+                console.print("    newgrp krag")
+            elif error_message and "does not exist" in error_message and "Storage" in error_message:
+                console.print("\n[yellow]Hint:[/yellow] The parent directory does not exist.")
+                console.print("  Create it with: sudo mkdir -p <path>")
             exit_with_code(1)
         else:
             console.print("\n[green]✓ Configuration is valid[/green]")
@@ -88,6 +103,22 @@ def config_validate(
             console.print(f"  Exclusions: {len(config.exclusion_patterns)} patterns")
             console.print(f"  Chunk size: {config.chunk_size} characters")
             console.print(f"  Embedding model: {config.embedding_model}")
+
+            # Show storage paths summary
+            console.print("\n[cyan]Storage Paths:[/cyan]")
+            console.print(f"  Vector store: {config.vector_store_path}")
+            console.print(f"  Model cache:  {config.model_cache_path}")
+            console.print(f"  Corpus cache: {config.corpus_cache_path}")
+            console.print(f"  Logs:         {config.logs_path}")
+
+            # Show GPU summary
+            if config.llm_n_gpu_layers != 0:
+                gpu_desc = (
+                    "full offload"
+                    if config.llm_n_gpu_layers == -1
+                    else f"{config.llm_n_gpu_layers} layers"
+                )
+                console.print(f"\n[cyan]GPU:[/cyan] {gpu_desc}")
 
     except ValidationError as e:
         console.print("\n[red]Validation errors:[/red]\n")
@@ -109,6 +140,16 @@ def config_show(
         "-c",
         help="Configuration file path (default: auto-detect in XDG config dir)",
     ),
+    paths_only: bool = typer.Option(
+        False,
+        "--paths-only",
+        help="Show only storage paths",
+    ),
+    gpu_only: bool = typer.Option(
+        False,
+        "--gpu-only",
+        help="Show only GPU/LLM configuration",
+    ),
 ) -> None:
     """Display current configuration.
 
@@ -118,6 +159,12 @@ def config_show(
 
         # Show default config
         krag config show
+
+        # Show only storage paths
+        krag config show --paths-only
+
+        # Show only GPU configuration
+        krag config show --gpu-only
 
         # Show specific config file
         krag config show --config /path/to/config.toml
@@ -146,12 +193,24 @@ def config_show(
 
         console.print(f"\n[cyan]Configuration:[/cyan] {config_path}\n")
 
+        if paths_only:
+            _show_storage_paths(config)
+            return
+
+        if gpu_only:
+            _show_gpu_config(config)
+            return
+
         # Directories
         table = Table(title="Directories", show_header=True)
         table.add_column("Path", style="cyan")
         for path in config.directory_paths:
             table.add_row(str(path))
         console.print(table)
+        console.print()
+
+        # Storage Paths
+        _show_storage_paths(config)
         console.print()
 
         # File Processing
@@ -182,24 +241,8 @@ def config_show(
         console.print(table)
         console.print()
 
-        # Vector Store
-        table = Table(title="Vector Store", show_header=True)
-        table.add_column("Setting", style="cyan")
-        table.add_column("Value", style="white")
-        table.add_row("Path", str(config.vector_store_path))
-        table.add_row("Distance metric", config.distance_metric)
-        console.print(table)
-        console.print()
-
-        # LLM
-        table = Table(title="LLM (Language Model)", show_header=True)
-        table.add_column("Setting", style="cyan")
-        table.add_column("Value", style="white")
-        table.add_row("Model", config.llm_model)
-        table.add_row("Context size", str(config.llm_context_size))
-        table.add_row("Threads", str(config.llm_num_threads))
-        table.add_row("Temperature", str(config.llm_temperature))
-        console.print(table)
+        # LLM (includes GPU)
+        _show_gpu_config(config)
         console.print()
 
         # Query
@@ -212,6 +255,70 @@ def config_show(
     except Exception as e:
         console.print(f"[red]Error reading configuration: {e}[/red]")
         exit_with_code(1)
+
+
+def _show_storage_paths(config: "Configuration") -> None:
+    """Display storage paths table."""
+    from krag.config.xdg import get_krag_cache_dir, get_krag_state_dir
+
+    table = Table(title="Storage Paths", show_header=True)
+    table.add_column("Path Type", style="cyan")
+    table.add_column("Location", style="white")
+    table.add_column("Source", style="dim")
+    table.add_column("Status", style="white")
+
+    # Determine source and status for each path
+    cache_dir = get_krag_cache_dir()
+    state_dir = get_krag_state_dir()
+
+    paths = [
+        ("Vector Store", config.vector_store_path, cache_dir / "storage"),
+        ("Model Cache", config.model_cache_path, cache_dir / "models"),
+        ("Corpus Cache", config.corpus_cache_path, cache_dir / "corpus"),
+        ("Logs", config.logs_path, state_dir / "logs"),
+    ]
+
+    for label, actual_path, default_path in paths:
+        source = "default (XDG)" if actual_path == default_path else "config"
+        status = "[green]exists[/green]" if actual_path.exists() else "[yellow]pending[/yellow]"
+        table.add_row(label, str(actual_path), source, status)
+
+    console.print(table)
+
+
+def _show_gpu_config(config: "Configuration") -> None:
+    """Display GPU/LLM configuration table."""
+    table = Table(title="LLM (Language Model)", show_header=True)
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="white")
+    table.add_row("Model", config.llm_model)
+    table.add_row("Context size", str(config.llm_context_size))
+    table.add_row("Threads", str(config.llm_num_threads))
+    table.add_row("Temperature", str(config.llm_temperature))
+
+    # GPU status
+    gpu_desc = str(config.llm_n_gpu_layers)
+    if config.llm_n_gpu_layers == 0:
+        gpu_desc += " (CPU only)"
+    elif config.llm_n_gpu_layers == -1:
+        gpu_desc += " (full GPU offload)"
+    else:
+        gpu_desc += f" (partial: {config.llm_n_gpu_layers} layers on GPU)"
+    table.add_row("GPU layers", gpu_desc)
+
+    # Try to detect GPU availability
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            device_name = torch.cuda.get_device_name(0)
+            table.add_row("CUDA status", f"[green]Available[/green] ({device_name})")
+        else:
+            table.add_row("CUDA status", "[yellow]Not available[/yellow]")
+    except ImportError:
+        table.add_row("CUDA status", "[dim]torch not installed[/dim]")
+
+    console.print(table)
 
 
 @config_app.command(name="edit")

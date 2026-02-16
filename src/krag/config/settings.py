@@ -1,6 +1,7 @@
 """Configuration management."""
 
 # Use built-in tomllib for Python 3.11+, fallback to tomli for older versions
+import os
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -127,6 +128,20 @@ class ConfigManager:
                 config_dict["llm_num_threads"] = llm_section["num_threads"]
             if "temperature" in llm_section:
                 config_dict["llm_temperature"] = llm_section["temperature"]
+            if "n_gpu_layers" in llm_section:
+                config_dict["llm_n_gpu_layers"] = llm_section["n_gpu_layers"]
+
+        # [storage] section (new: configurable storage paths)
+        if "storage" in toml_data:
+            storage_section = toml_data["storage"]
+            if "vector_store_path" in storage_section:
+                config_dict["vector_store_path"] = Path(storage_section["vector_store_path"])
+            if "model_cache_path" in storage_section:
+                config_dict["model_cache_path"] = Path(storage_section["model_cache_path"])
+            if "corpus_cache_path" in storage_section:
+                config_dict["corpus_cache_path"] = Path(storage_section["corpus_cache_path"])
+            if "logs_path" in storage_section:
+                config_dict["logs_path"] = Path(storage_section["logs_path"])
 
         # [path_reductions] section
         if "path_reductions" in toml_data:
@@ -219,6 +234,12 @@ class ConfigManager:
                     "max_file_size_mb": default_config.max_file_size_mb,
                     "skip_binary_files": default_config.skip_binary_files,
                 },
+                "storage": {
+                    "vector_store_path": str(default_config.vector_store_path),
+                    "model_cache_path": str(default_config.model_cache_path),
+                    "corpus_cache_path": str(default_config.corpus_cache_path),
+                    "logs_path": str(default_config.logs_path),
+                },
                 "embedding": {
                     "model": default_config.embedding_model,
                     "batch_size": default_config.embedding_batch_size,
@@ -229,7 +250,6 @@ class ConfigManager:
                     "overlap": default_config.chunk_overlap,
                 },
                 "vector_store": {
-                    "path": str(default_config.vector_store_path),
                     "collection_name": default_config.collection_name,
                     "distance_metric": default_config.distance_metric,
                 },
@@ -241,6 +261,7 @@ class ConfigManager:
                     "context_size": default_config.llm_context_size,
                     "num_threads": default_config.llm_num_threads,
                     "temperature": default_config.llm_temperature,
+                    "n_gpu_layers": default_config.llm_n_gpu_layers,
                 },
                 "path_reductions": {
                     "aliases": default_config.path_aliases,
@@ -297,6 +318,12 @@ class ConfigManager:
                 "max_file_size_mb": config.max_file_size_mb,
                 "skip_binary_files": config.skip_binary_files,
             },
+            "storage": {
+                "vector_store_path": str(config.vector_store_path),
+                "model_cache_path": str(config.model_cache_path),
+                "corpus_cache_path": str(config.corpus_cache_path),
+                "logs_path": str(config.logs_path),
+            },
             "embedding": {
                 "model": config.embedding_model,
                 "batch_size": config.embedding_batch_size,
@@ -307,7 +334,6 @@ class ConfigManager:
                 "overlap": config.chunk_overlap,
             },
             "vector_store": {
-                "path": str(config.vector_store_path),
                 "collection_name": config.collection_name,
                 "distance_metric": config.distance_metric,
             },
@@ -319,6 +345,7 @@ class ConfigManager:
                 "context_size": config.llm_context_size,
                 "num_threads": config.llm_num_threads,
                 "temperature": config.llm_temperature,
+                "n_gpu_layers": config.llm_n_gpu_layers,
             },
             "path_reductions": {
                 "aliases": config.path_aliases,
@@ -356,12 +383,45 @@ class ConfigManager:
                 if not path.is_dir():
                     return False, f"Path is not a directory: {path}"
 
-            # Check vector store path is writable
-            if not config.vector_store_path.parent.exists():
-                return (
-                    False,
-                    f"Vector store parent directory does not exist: {config.vector_store_path.parent}",
-                )
+            # Validate and create storage directories
+            storage_paths = {
+                "vector_store_path": config.vector_store_path,
+                "model_cache_path": config.model_cache_path,
+                "corpus_cache_path": config.corpus_cache_path,
+                "logs_path": config.logs_path,
+            }
+
+            for name, path in storage_paths.items():
+                # Find the nearest existing ancestor to check writability
+                check_path = path
+                while not check_path.exists():
+                    check_path = check_path.parent
+                    if check_path == check_path.parent:
+                        # Reached filesystem root
+                        return (
+                            False,
+                            f"Storage path {name} parent does not exist: {path.parent}",
+                        )
+
+                if not os.access(check_path, os.W_OK):
+                    return (
+                        False,
+                        f"Storage path {name} is not writable: {check_path}",
+                    )
+
+                # Create directory if it doesn't exist
+                try:
+                    path.mkdir(parents=True, exist_ok=True)
+                except PermissionError:
+                    return (
+                        False,
+                        f"Cannot create storage directory {name}: {path} (permission denied)",
+                    )
+                except OSError as e:
+                    return (
+                        False,
+                        f"Cannot create storage directory {name}: {path} ({e})",
+                    )
 
             # Check LLM model exists if it's a local path (not a HuggingFace model name)
             if (

@@ -1,0 +1,69 @@
+# Example krag configuration with custom /krag storage paths
+#
+# This configuration is designed for native Linux installations
+# with a dedicated storage drive mounted at /krag.
+#
+# Copy to: ~/.config/krag/config.toml
+# Validate: krag config validate
+
+# Directories to index (your corpus)
+[directories]
+paths = [
+    "/krag/corpus/docs",
+    "/krag/corpus/code",
+]
+
+# Custom storage paths (e.g., on dedicated NVME drive)
+# When omitted, XDG defaults are used:
+#   vector_store_path = ~/.cache/krag/chroma
+#   model_cache_path  = ~/.cache/krag/models
+#   corpus_cache_path = ~/.cache/krag/corpus
+#   logs_path         = ~/.local/state/krag/logs
+[storage]
+vector_store_path = "/krag/index"
+model_cache_path = "/krag/models"
+corpus_cache_path = "/krag/corpus"
+logs_path = "/krag/logs"
+
+# Embedding model configuration
+[embedding]
+model = "sentence-transformers/all-MiniLM-L6-v2"
+device = "cuda"  # Use "cpu" if no GPU available
+
+# LLM configuration
+[llm]
+model = "microsoft/Phi-3-mini-4k-instruct-gguf"
+temperature = 0.7
+max_tokens = 512
+n_ctx = 2048
+# GPU offloading:
+#   -1 = full offload (recommended for >= 8GB VRAM)
+#   32 = partial offload (>= 4GB VRAM)
+#   16 = minimal offload (>= 2GB VRAM)
+#    0 = CPU only (no GPU)
+n_gpu_layers = -1
+
+# Chunking parameters
+[chunking]
+size = 512
+overlap = 50
+
+# Vector store settings
+[vector_store]
+collection_name = "krag_embeddings"
+distance_metric = "cosine"
+
+# Retrieval parameters
+[retrieval]
+top_k = 5
+min_score = 0.7
+
+# Path display reductions (optional)
+[path_reductions]
+"/krag/corpus/docs" = "docs:"
+"/krag/corpus/code" = "code:"
+
+# Plugin configuration (optional)
+[plugins]
+enabled = []
+disabled = []

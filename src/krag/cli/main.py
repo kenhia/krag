@@ -14,6 +14,7 @@ from rich.table import Table
 
 from krag import __version__
 from krag.cli.config import config_app
+from krag.cli.gpu import gpu_app
 from krag.cli.index import index_command
 from krag.cli.plugin import plugin_app
 from krag.cli.query import query_command
@@ -45,6 +46,7 @@ app.command(name="query")(query_command)
 app.command(name="index")(index_command)
 app.add_typer(config_app, name="config")
 app.add_typer(plugin_app, name="plugin")
+app.add_typer(gpu_app, name="gpu")
 
 # Console for rich output
 console = Console()

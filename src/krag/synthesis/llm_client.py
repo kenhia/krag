@@ -23,6 +23,8 @@ class LLMClient:
         max_tokens: int = 512,
         n_ctx: int = 2048,
         n_threads: int | None = None,
+        n_gpu_layers: int = 0,
+        model_cache_path: str | Path | None = None,
     ):
         """Initialize LLM client.
 
@@ -33,18 +35,45 @@ class LLMClient:
             max_tokens: Maximum tokens to generate
             n_ctx: Context window size
             n_threads: Number of threads (None for auto)
+            n_gpu_layers: Number of layers to offload to GPU (0=CPU, -1=full, N=partial)
+            model_cache_path: Custom path for model cache. If None, uses XDG cache default.
         """
         self.model_identifier = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.n_ctx = n_ctx
         self.n_threads = n_threads
+        self.n_gpu_layers = n_gpu_layers
+        self.model_cache_path = Path(model_cache_path) if model_cache_path else None
         self.model: Any = None
         self.model_path: Path | None = None
+
+        # Warn if GPU layers requested but CUDA may not be available
+        if n_gpu_layers != 0:
+            self._check_gpu_availability()
 
         # Load model if identifier provided
         if model is not None:
             self._resolve_and_load_model()
+
+    def _check_gpu_availability(self) -> None:
+        """Check GPU availability and warn if GPU layers requested but unavailable."""
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                logger.warning(
+                    "n_gpu_layers=%d requested but CUDA is not available. "
+                    "Model will run on CPU. Install PyTorch with CUDA support "
+                    "and ensure NVIDIA drivers are installed.",
+                    self.n_gpu_layers,
+                )
+        except ImportError:
+            logger.warning(
+                "n_gpu_layers=%d requested but torch is not installed. "
+                "Cannot verify GPU availability. Model may fall back to CPU.",
+                self.n_gpu_layers,
+            )
 
     def _resolve_and_load_model(self) -> None:
         """Resolve model identifier to path and load the model."""
@@ -109,8 +138,11 @@ class LLMClient:
                 "Q5_K.gguf",
             ]
 
-            # Try to find a GGUF file
-            cache_dir = get_krag_cache_dir() / "models" / "huggingface"
+            # Try to find a GGUF file - use configured path or fall back to XDG default
+            if self.model_cache_path:
+                cache_dir = self.model_cache_path / "huggingface"
+            else:
+                cache_dir = get_krag_cache_dir() / "models" / "huggingface"
             cache_dir.mkdir(parents=True, exist_ok=True)
 
             # Try each quantization pattern
@@ -191,6 +223,7 @@ class LLMClient:
                         model_path=str(self.model_path),
                         n_ctx=self.n_ctx,
                         n_threads=self.n_threads,
+                        n_gpu_layers=self.n_gpu_layers,
                         verbose=False,
                     )
                 finally:
@@ -200,6 +233,7 @@ class LLMClient:
                     model_path=str(self.model_path),
                     n_ctx=self.n_ctx,
                     n_threads=self.n_threads,
+                    n_gpu_layers=self.n_gpu_layers,
                     verbose=True,
                 )
 

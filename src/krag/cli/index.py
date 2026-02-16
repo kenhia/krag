@@ -154,6 +154,23 @@ def index_command(
         console.print(f"[cyan]Vector store:[/cyan] {vector_store or 'in-memory'}")
         console.print(f"[cyan]Mode:[/cyan] {'Full reindex' if full else 'Incremental'}\n")
 
+        # Log the command invocation for audit trail
+        cmd_parts = ["krag", "index"]
+        if full:
+            cmd_parts.append("--full")
+        if directories:
+            for d in directories:
+                cmd_parts.extend(["--dir", str(d)])
+        if file_types:
+            for ft in file_types:
+                cmd_parts.extend(["--type", ft])
+        if exclude:
+            for ex in exclude:
+                cmd_parts.extend(["--exclude", ex])
+        if vector_store_path:
+            cmd_parts.extend(["--vector-store", str(vector_store_path)])
+        logger.info(f"Starting index command: {' '.join(cmd_parts)}")
+
         # Enhanced Progress tracking with ETA and completion count
         progress = Progress(
             SpinnerColumn(),
@@ -170,21 +187,36 @@ def index_command(
         # Track progress state and timing for rate calculation
         progress_task_id = None
         start_time = None
+        last_stage = None
 
         def progress_callback(current: int, total: int, stage: str) -> None:
             """Update progress bar with enhanced information."""
-            nonlocal progress_task_id, start_time
+            nonlocal progress_task_id, start_time, last_stage
 
             if progress_task_id is None:
                 progress_task_id = progress.add_task(f"[cyan]{stage}[/cyan]", total=total)
                 start_time = progress.get_time()
+                last_stage = stage
             else:
+                # Reset timing when stage changes
+                if stage != last_stage:
+                    start_time = progress.get_time()
+                    last_stage = stage
+
                 # Calculate processing rate if applicable
                 if current > 0 and start_time:
                     elapsed = progress.get_time() - start_time
                     rate = current / elapsed if elapsed > 0 else 0
                     if rate > 1:
-                        rate_text = f" ({rate:.1f}/sec)"
+                        # Format rate with K/M/G suffix for readability
+                        if rate >= 1_000_000_000:
+                            rate_text = f" ({rate / 1_000_000_000:.1f}G/sec)"
+                        elif rate >= 1_000_000:
+                            rate_text = f" ({rate / 1_000_000:.1f}M/sec)"
+                        elif rate >= 1_000:
+                            rate_text = f" ({rate / 1_000:.1f}K/sec)"
+                        else:
+                            rate_text = f" ({rate:.1f}/sec)"
                     else:
                         rate_text = ""
                     description = f"[cyan]{stage}[/cyan]{rate_text}"
@@ -194,6 +226,7 @@ def index_command(
                 progress.update(
                     progress_task_id,
                     completed=current,
+                    total=total,
                     description=description,
                 )
 
@@ -205,7 +238,9 @@ def index_command(
                 result = orchestrator.index_incremental(progress_callback=progress_callback)
 
         # Close orchestrator resources
+        logger.info("Closing resources (vector store, models)...")
         orchestrator.close()
+        logger.info("Resources closed successfully")
 
         # Display results
         _display_results(result, full)
@@ -289,6 +324,10 @@ def _display_results(result: IndexingJob, full: bool) -> None:
         table.add_row("Files modified", str(result.files_modified))
         table.add_row("Files deleted", str(result.files_deleted))
         table.add_row("Files skipped", str(result.files_skipped))
+    else:
+        # Show skipped count for full reindex too
+        if result.files_skipped > 0:
+            table.add_row("Files skipped", str(result.files_skipped))
 
     table.add_row("Chunks generated", str(result.chunks_generated))
     table.add_row("Embeddings created", str(result.embeddings_created))
