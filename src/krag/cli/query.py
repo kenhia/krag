@@ -52,6 +52,12 @@ def query_command(
         "-f",
         help="Output format (text, json, markdown)",
     ),
+    preset: str | None = typer.Option(
+        None,
+        "--preset",
+        "-p",
+        help="Prompt preset (strict, balanced, verbose). Overrides config file setting.",
+    ),
     config_path: Path | None = typer.Option(
         None,
         "--config",
@@ -140,7 +146,13 @@ def query_command(
                 n_gpu_layers=config.llm_n_gpu_layers,
                 temperature=config.llm_temperature,
                 model_cache_path=config.model_cache_path,
+                top_p=config.llm_top_p,
+                repeat_penalty=config.llm_repeat_penalty,
+                min_p=config.llm_min_p,
             )
+
+        # Determine prompt preset: CLI flag overrides config file
+        active_preset = preset if preset else config.prompt_preset
 
         # Initialize query engine
         query_engine = QueryEngine(
@@ -149,6 +161,9 @@ def query_command(
             llm_client=llm_client,
             top_k=top_k,
             path_aliases=config.path_aliases,
+            preset_name=active_preset,
+            system_prompt_override=config.prompt_system_override,
+            similarity_threshold=config.similarity_threshold,
         )
 
         # Execute query
@@ -164,6 +179,8 @@ def query_command(
             cmd_parts.extend(["--format", format])
         if config_path:
             cmd_parts.extend(["--config", str(config_path)])
+        if preset:
+            cmd_parts.extend(["--preset", preset])
         logger.info(f"Starting query command: {' '.join(cmd_parts)}")
 
         console.print(f"\n[bold]Query:[/bold] {query}\n")

@@ -206,7 +206,7 @@ sequenceDiagram
 
    Splitting is recursive: if a chunk exceeds `chunk_size`, it is re-split using the next separator in the hierarchy. Overlap of `chunk_overlap` characters is prepended from the previous chunk's tail.
 
-5. **Embedding Generation** — `EmbeddingGenerator.generate_batch()` encodes chunk text into dense vectors using `sentence-transformers`. Default model: `all-MiniLM-L6-v2` (384 dimensions). Embeddings are L2-normalized. Empty text produces a zero vector.
+5. **Embedding Generation** — `EmbeddingGenerator.generate_batch()` encodes chunk text into dense vectors using `sentence-transformers`. Default model: `BAAI/bge-base-en-v1.5` (768 dimensions). Embeddings are L2-normalized. Empty text produces a zero vector.
 
 6. **Vector Storage** — `QdrantVectorStore.upsert()` persists embedding vectors with metadata payloads (file path, chunk index, file type, modification time). String UUIDs are converted to integer IDs via SHA-256 hashing for Qdrant compatibility. Upserts are batched in groups of 100.
 
@@ -654,8 +654,8 @@ The configuration system supports two file formats with automatic detection:
   paths = ["/home/user/documents"]
 
   [embedding]
-  model = "all-MiniLM-L6-v2"
-  batch_size = 32
+  model = "BAAI/bge-base-en-v1.5"
+  batch_size = 64
   ```
 
 - **YAML** (legacy) — Flat key layout with migration support
@@ -753,7 +753,7 @@ Tests are configured in `pyproject.toml`:
 | Decision | Rationale |
 |----------|-----------|
 | **Embedded Qdrant** (no server) | Zero service management for single-user desktop use. The embedded Rust core provides full vector search capabilities without running a separate process. |
-| **sentence-transformers for embeddings** | Most mature Python embedding library with broad model selection. Default model (`all-MiniLM-L6-v2`, 384-dim) balances speed and quality. |
+| **sentence-transformers for embeddings** | Most mature Python embedding library with broad model selection. Default model (`BAAI/bge-base-en-v1.5`, 768-dim) provides strong retrieval quality for both natural language and code content. |
 | **llama-cpp-python for LLM** | Efficient local inference via the llama.cpp C++ backend. Supports quantized GGUF models for reduced memory footprint. No separate service required. |
 | **Pydantic for data models** | Runtime validation, serialization, and type safety. `BaseSettings` integration provides environment variable support for configuration. |
 | **SHA-256 content hashing** | Reliable change detection for incremental indexing. Prevents unnecessary re-indexing when files are moved (changing mtime) without content modification. |

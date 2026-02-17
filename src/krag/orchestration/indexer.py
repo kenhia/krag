@@ -36,10 +36,10 @@ class IndexingOrchestrator:
         vector_store_path: Path | None = None,
         supported_file_types: list[str] | None = None,
         exclusion_patterns: list[str] | None = None,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
+        chunk_size: int = 384,
+        chunk_overlap: int = 64,
         collection_name: str = "krag",
-        embedding_model: str = "all-MiniLM-L6-v2",
+        embedding_model: str = "BAAI/bge-base-en-v1.5",
         device: str = "cpu",
         config: Configuration | None = None,
     ):

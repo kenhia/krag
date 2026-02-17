@@ -200,16 +200,16 @@ class Configuration(BaseSettings):
 
     # Embedding
     embedding_model: str = Field(
-        default="sentence-transformers/all-MiniLM-L6-v2", description="Embedding model name"
+        default="BAAI/bge-base-en-v1.5", description="Embedding model name"
     )
     embedding_batch_size: int = Field(
-        default=32, gt=0, description="Batch size for embedding generation"
+        default=64, gt=0, description="Batch size for embedding generation"
     )
     embedding_device: str = Field(default="cpu", description="Device to use (cpu, cuda, mps)")
 
     # Chunking
-    chunk_size: int = Field(default=512, gt=0, description="Target chunk size in tokens")
-    chunk_overlap: int = Field(default=50, ge=0, description="Overlap between chunks in tokens")
+    chunk_size: int = Field(default=384, gt=0, description="Target chunk size in tokens")
+    chunk_overlap: int = Field(default=64, ge=0, description="Overlap between chunks in tokens")
 
     # Vector Store
     vector_store_path: Path = Field(
@@ -235,16 +235,31 @@ class Configuration(BaseSettings):
 
     # Retrieval
     top_k: int = Field(default=5, gt=0, description="Number of results to retrieve")
+    similarity_threshold: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Minimum cosine similarity score for chunk inclusion (0.0-1.0)",
+    )
 
     # LLM
     llm_model: str = Field(
         default_factory=_get_default_llm_model,
         description="HuggingFace model name (e.g., 'TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF') or local path to GGUF file",
     )
-    llm_context_size: int = Field(default=2048, gt=0, description="Context window size")
-    llm_num_threads: int = Field(default=4, gt=0, description="Number of threads for inference")
+    llm_context_size: int = Field(default=8192, gt=0, description="Context window size")
+    llm_num_threads: int = Field(default=8, gt=0, description="Number of threads for inference")
     llm_temperature: float = Field(
-        default=0.7, ge=0.0, le=2.0, description="Temperature for generation"
+        default=0.2, ge=0.0, le=2.0, description="Temperature for generation"
+    )
+    llm_top_p: float = Field(
+        default=0.9, ge=0.0, le=1.0, description="Nucleus sampling cutoff (0.0-1.0)"
+    )
+    llm_repeat_penalty: float = Field(
+        default=1.1, ge=1.0, description="Repetition penalty multiplier (>=1.0)"
+    )
+    llm_min_p: float = Field(
+        default=0.05, ge=0.0, le=1.0, description="Minimum p filter for llama.cpp (0.0-1.0)"
     )
     llm_n_gpu_layers: int = Field(
         default=0,
@@ -262,6 +277,16 @@ class Configuration(BaseSettings):
     path_aliases: list[str] = Field(
         default_factory=list,
         description="Path display aliases in 'full_path:alias' format, e.g., '/home/ken:~'",
+    )
+
+    # Prompt Configuration
+    prompt_preset: str = Field(
+        default="balanced",
+        description="Active prompt preset name (strict, balanced, verbose)",
+    )
+    prompt_system_override: str | None = Field(
+        default=None,
+        description="Custom system prompt override (replaces preset's system prompt when set)",
     )
 
     # Plugin System
@@ -293,6 +318,15 @@ class Configuration(BaseSettings):
         """Ensure chunk_overlap < chunk_size."""
         if "chunk_size" in info.data and v >= info.data["chunk_size"]:
             raise ValueError("chunk_overlap must be less than chunk_size")
+        return v
+
+    @field_validator("prompt_preset")
+    @classmethod
+    def prompt_preset_is_valid(cls, v: str) -> str:
+        """Ensure prompt preset is a known built-in name."""
+        valid_presets = {"strict", "balanced", "verbose"}
+        if v not in valid_presets:
+            raise ValueError(f"prompt_preset must be one of {sorted(valid_presets)}, got: {v}")
         return v
 
     @field_validator(

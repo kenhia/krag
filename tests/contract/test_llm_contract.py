@@ -16,18 +16,30 @@ class TestLLMClientContract:
         assert hasattr(LLMClient, "generate"), "LLMClient must have generate method"
 
     def test_generate_accepts_query_and_context(self) -> None:
-        """Test that generate method accepts query and context."""
+        """Test that generate method accepts query and context (legacy positional)."""
         from krag.synthesis.llm_client import LLMClient
 
         # Should be able to instantiate with model
         client = LLMClient(model=None)  # None for testing
 
-        # Should accept query and context
-        # Will fail if not implemented
+        # Legacy positional call (query, context) still works
         response = client.generate(
-            query="What is RAG?",
-            context="RAG is Retrieval-Augmented Generation.",
+            "What is RAG?",
+            "RAG is Retrieval-Augmented Generation.",
         )
+        assert isinstance(response, str), "generate must return string"
+
+    def test_generate_accepts_messages(self) -> None:
+        """Test that generate method accepts chat messages list."""
+        from krag.synthesis.llm_client import LLMClient
+
+        client = LLMClient(model=None)
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "What is RAG?"},
+        ]
+        response = client.generate(messages=messages)
         assert isinstance(response, str), "generate must return string"
 
     def test_generate_returns_string(self) -> None:

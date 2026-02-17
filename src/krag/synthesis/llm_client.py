@@ -25,6 +25,9 @@ class LLMClient:
         n_threads: int | None = None,
         n_gpu_layers: int = 0,
         model_cache_path: str | Path | None = None,
+        top_p: float = 0.9,
+        repeat_penalty: float = 1.1,
+        min_p: float = 0.05,
     ):
         """Initialize LLM client.
 
@@ -37,6 +40,9 @@ class LLMClient:
             n_threads: Number of threads (None for auto)
             n_gpu_layers: Number of layers to offload to GPU (0=CPU, -1=full, N=partial)
             model_cache_path: Custom path for model cache. If None, uses XDG cache default.
+            top_p: Nucleus sampling threshold (0.0-1.0)
+            repeat_penalty: Repetition penalty (>=1.0)
+            min_p: Minimum probability threshold (0.0-1.0)
         """
         self.model_identifier = model
         self.temperature = temperature
@@ -45,6 +51,9 @@ class LLMClient:
         self.n_threads = n_threads
         self.n_gpu_layers = n_gpu_layers
         self.model_cache_path = Path(model_cache_path) if model_cache_path else None
+        self.top_p = top_p
+        self.repeat_penalty = repeat_penalty
+        self.min_p = min_p
         self.model: Any = None
         self.model_path: Path | None = None
 
@@ -207,6 +216,10 @@ class LLMClient:
             return
 
         logger.info(f"Loading LLM model from {self.model_path}")
+        logger.info(
+            f"LLM config: n_gpu_layers={self.n_gpu_layers}, n_ctx={self.n_ctx}, "
+            f"n_threads={self.n_threads if self.n_threads else 'auto'}"
+        )
         try:
             from llama_cpp import Llama
 
@@ -250,66 +263,121 @@ class LLMClient:
 
     def generate(
         self,
-        query: str,
-        context: str,
+        messages: list[dict[str, str]] | str | None = None,
+        context: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        top_p: float | None = None,
+        repeat_penalty: float | None = None,
     ) -> str:
-        """Generate answer based on query and context.
+        """Generate answer from chat messages or legacy query+context.
+
+        Preferred usage (chat messages)::
+
+            client.generate(messages=[
+                {"role": "system", "content": "..."},
+                {"role": "user", "content": "..."},
+            ])
+
+        Legacy usage (backward compatible)::
+
+            client.generate("query", "context")
 
         Args:
-            query: User's query
-            context: Retrieved context (formatted prompt)
-            temperature: Override default temperature
-            max_tokens: Override default max_tokens
+            messages: List of chat message dicts, or legacy query string.
+            context: Legacy context string (only used when messages is a query string).
+            temperature: Override default temperature.
+            max_tokens: Override default max_tokens.
+            top_p: Override default top_p.
+            repeat_penalty: Override default repeat_penalty.
 
         Returns:
-            Generated answer string
+            Generated answer string.
         """
-        logger.debug(f"Generating response for query: {query[:50]}...")
+        # Handle legacy (query, context) call pattern
+        if isinstance(messages, str):
+            query = messages
+            legacy_messages: list[dict[str, str]] = []
+            if context:
+                legacy_messages.append({"role": "system", "content": context})
+            legacy_messages.append({"role": "user", "content": query})
+            messages = legacy_messages
+
+        if not messages:
+            return self._generate_fallback([])
+
+        logger.debug("Generating response from %d messages", len(messages))
+
+        # Log complete messages at DEBUG for diagnostics
+        for i, msg in enumerate(messages):
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            logger.debug("  Message[%d] role=%s len=%d", i, role, len(content))
+
         # Use provided values or defaults
         temp = temperature if temperature is not None else self.temperature
         max_tok = max_tokens if max_tokens is not None else self.max_tokens
+        t_p = top_p if top_p is not None else self.top_p
+        r_p = repeat_penalty if repeat_penalty is not None else self.repeat_penalty
 
         # If no model loaded (testing mode), return placeholder
         if self.model is None:
             logger.debug("No model loaded, using fallback response")
-            return self._generate_fallback(query, context)
+            return self._generate_fallback(messages)
 
-        # Generate with llama-cpp-python
-        logger.debug(f"Generating with temperature={temp}, max_tokens={max_tok}")
+        # Generate with llama-cpp-python chat completion API
+        logger.debug(
+            "Generating with temperature=%.2f, max_tokens=%d, top_p=%.2f, repeat_penalty=%.2f",
+            temp,
+            max_tok,
+            t_p,
+            r_p,
+        )
         try:
-            response = self.model(
-                context,
+            response = self.model.create_chat_completion(
+                messages=messages,
                 max_tokens=max_tok,
                 temperature=temp,
-                stop=["User Question:", "\n\n\n"],  # Stop sequences
+                top_p=t_p,
+                repeat_penalty=r_p,
+                min_p=self.min_p,
             )
 
-            # Extract text from response
+            # Extract text from chat completion response
             if isinstance(response, dict):
-                answer = response.get("choices", [{}])[0].get("text", "").strip()
+                choices = response.get("choices", [])
+                if choices:
+                    message = choices[0].get("message", {})
+                    answer = message.get("content", "").strip()
+                else:
+                    answer = ""
             else:
                 answer = str(response).strip()
 
-            logger.info(f"Generated answer: {len(answer)} characters")
+            logger.info("Generated answer: %d characters", len(answer))
             return answer
 
         except Exception as e:
-            logger.error(f"LLM generation failed: {e}")
+            logger.error("LLM generation failed: %s", e)
             return f"Error generating response: {e}"
 
-    def _generate_fallback(self, query: str, context: str) -> str:
+    def _generate_fallback(self, messages: list[dict[str, str]]) -> str:
         """Fallback response when no model is loaded.
 
         Args:
-            query: User query
-            context: Context string
+            messages: Chat messages list
 
         Returns:
             Fallback message
         """
-        if not context or "did not return any relevant results" in context:
+        # Check if system message indicates no context
+        system_content = ""
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_content = msg.get("content", "")
+                break
+
+        if not system_content or "did not return any relevant results" in system_content:
             return "I don't have enough context to answer that question."
 
         return (

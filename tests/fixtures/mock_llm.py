@@ -22,37 +22,63 @@ class MockLLMClient:
         self.last_prompt = None
         self.last_context = None
 
-    def generate(self, prompt: str, context: str, **kwargs: Any) -> str:
-        """Generate a mock response.
+    def generate(
+        self,
+        messages: list[dict[str, str]] | str | None = None,
+        context: str | None = None,
+        **kwargs: Any,
+    ) -> str:
+        """Generate a mock response from chat messages or legacy args.
 
         Args:
-            prompt: The user's query/prompt
-            context: Retrieved context chunks
-            **kwargs: Additional generation parameters (ignored in mock)
+            messages: Chat message dicts list, or legacy query string.
+            context: Legacy context string (only when messages is a query string).
+            **kwargs: Additional generation parameters (ignored in mock).
 
         Returns:
-            Mock generated response
+            Mock generated response.
         """
         self.call_count += 1
-        self.last_prompt = prompt
-        self.last_context = context
+
+        # Extract prompt and context from messages
+        if isinstance(messages, list):
+            prompt = ""
+            ctx = ""
+            for msg in messages:
+                if msg.get("role") == "user":
+                    prompt = msg.get("content", "")
+                elif msg.get("role") == "system":
+                    ctx = msg.get("content", "")
+            self.last_prompt = prompt
+            self.last_context = ctx
+        else:
+            # Legacy positional call
+            prompt = messages or ""
+            ctx = context or ""
+            self.last_prompt = prompt
+            self.last_context = ctx
 
         # Simple pattern matching for test assertions
         if "fibonacci" in prompt.lower():
             return "The Fibonacci function calculates the nth Fibonacci number using recursion."
 
-        if "RAG" in context or "Retrieval-Augmented Generation" in context:
+        if (
+            "RAG" in ctx
+            or "RAG" in prompt
+            or "Retrieval-Augmented Generation" in ctx
+            or "Retrieval-Augmented Generation" in prompt
+        ):
             return "RAG (Retrieval-Augmented Generation) combines information retrieval with LLM generation to produce accurate, grounded responses."
 
-        if "vector store" in prompt.lower() or "vector store" in context.lower():
+        if "vector store" in prompt.lower() or "vector store" in ctx.lower():
             return "A vector store maintains embeddings and performs similarity search to find relevant chunks."
 
-        if not context or context.strip() == "":
+        if not ctx or ctx.strip() == "":
             return "I don't have enough context to answer that question."
 
         return self.default_response
 
-    def generate_stream(self, prompt: str, context: str, **kwargs: Any) -> list[str]:
+    def generate_stream(self, prompt: str, context: str = "", **kwargs: Any) -> list[str]:
         """Generate streaming response (returns list of chunks for testing).
 
         Args:

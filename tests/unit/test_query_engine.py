@@ -86,24 +86,29 @@ def test_query_with_whitespace_only(query_engine):
 
 
 def test_query_with_top_k_override(query_engine, mock_vector_store):
-    """Test query respects top_k override parameter."""
+    """Test query respects top_k override parameter (with over-fetch for dedup)."""
+    from krag.retrieval.retriever import Retriever
+
     query_engine.query("test query", top_k=10)
 
-    # Verify retriever was called with overridden top_k
-    # The mock vector_store.search should be called with limit from retriever
+    # Retriever over-fetches by _OVERFETCH_FACTOR for dedup headroom
     mock_vector_store.search.assert_called_once()
     call_args = mock_vector_store.search.call_args
-    assert call_args[1]["limit"] == 10
+    expected = 10 * Retriever._OVERFETCH_FACTOR
+    assert call_args[1]["limit"] == expected
 
 
 def test_query_uses_default_top_k(query_engine, mock_vector_store):
-    """Test query uses default top_k when not overridden."""
+    """Test query uses default top_k when not overridden (with over-fetch for dedup)."""
+    from krag.retrieval.retriever import Retriever
+
     query_engine.query("test query")
 
-    # Should use default top_k=3
+    # Should use default top_k=3 * over-fetch factor
     mock_vector_store.search.assert_called_once()
     call_args = mock_vector_store.search.call_args
-    assert call_args[1]["limit"] == 3
+    expected = 3 * Retriever._OVERFETCH_FACTOR
+    assert call_args[1]["limit"] == expected
 
 
 def test_query_with_no_results(query_engine, mock_vector_store):
@@ -177,12 +182,15 @@ def test_query_calls_llm_with_context(query_engine, mock_vector_store):
 
     query_engine.query("test query")
 
-    # Verify LLM was called
+    # Verify LLM was called with chat messages
     mock_llm.generate.assert_called_once()
     call_args = mock_llm.generate.call_args
-    assert call_args[0][0] == "test query"  # First arg is query
-    # Second arg (context/prompt) should contain the chunk content
-    assert "Test content" in call_args[0][1]
+    messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else None)
+    assert isinstance(messages, list), "generate should receive a messages list"
+    # User message should contain the chunk content and the query
+    user_content = messages[1]["content"]
+    assert "Test content" in user_content
+    assert "test query" in user_content
 
 
 def test_query_response_contains_sources(query_engine, mock_vector_store):

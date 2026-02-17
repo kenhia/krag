@@ -1,15 +1,24 @@
-"""Default configuration values."""
+"""Default configuration values for krag.
+
+This module defines all default configuration constants used throughout krag.
+These values are used when the user has not specified overrides in their
+config.toml configuration file.
+"""
 
 from pathlib import Path
 
 from krag.config.xdg import get_krag_cache_dir, get_krag_config_dir, get_krag_state_dir
 
-# Default directory paths (user should customize)
+# Default directory paths that krag will scan for documents to index.
+# Users should customize this list in their config.toml to point at their
+# own project directories, notes folders, or documentation trees.
 DEFAULT_DIRECTORIES = [
     Path.home() / "Documents",
 ]
 
-# Default exclusion patterns
+# Default glob patterns for excluding files and directories from indexing.
+# These patterns prevent krag from indexing build artifacts, virtual
+# environments, caches, and other generated content.
 DEFAULT_EXCLUSION_PATTERNS = [
     "**/node_modules/**",
     "**/.git/**",
@@ -25,7 +34,9 @@ DEFAULT_EXCLUSION_PATTERNS = [
     "**/.vscode/**",
 ]
 
-# Default supported file types
+# Default list of file extensions that krag will index. Only files with
+# these extensions are processed during indexing. Includes common source
+# code, documentation, and configuration file types.
 DEFAULT_SUPPORTED_FILE_TYPES = [
     ".txt",
     ".md",
@@ -51,20 +62,45 @@ DEFAULT_SUPPORTED_FILE_TYPES = [
     ".cfg",
 ]
 
-# Default embedding model
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# The default embedding model used by krag for generating vector embeddings.
+# krag uses BAAI/bge-base-en-v1.5 which produces 768-dimensional vectors.
+# BGE-base provides strong retrieval quality across both natural language and
+# code content, outperforming smaller models on semantic similarity tasks.
+DEFAULT_EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"
 
-# Default chunking parameters
-DEFAULT_CHUNK_SIZE = 512
-DEFAULT_CHUNK_OVERLAP = 50
+# The default chunk size in characters used when splitting documents for indexing.
+# krag splits files into chunks of 384 characters by default. This size is tuned
+# for the BGE-base-en-v1.5 embedding model's optimal input length, balancing
+# context preservation with retrieval precision.
+DEFAULT_CHUNK_SIZE = 384
 
-# Default retrieval parameters
+# The default overlap in characters between consecutive chunks. An overlap of
+# 64 characters ensures that content near chunk boundaries is not missed
+# during retrieval, tuned for the 384-character chunk size.
+DEFAULT_CHUNK_OVERLAP = 64
+
+# The default number of top results returned by krag's retrieval engine.
+# When querying, krag retrieves the 5 most similar chunks by default.
 DEFAULT_TOP_K = 5
 
-# Default LLM parameters
-DEFAULT_LLM_CONTEXT_SIZE = 2048
-DEFAULT_LLM_NUM_THREADS = 4
-DEFAULT_LLM_TEMPERATURE = 0.7
+# The default minimum similarity threshold for filtering retrieval results.
+# Chunks with a cosine similarity score below 0.2 are discarded. This threshold
+# is tuned for the BGE-base-en-v1.5 model which produces more conservative
+# similarity scores than smaller models. Lower values return more results;
+# higher values return only highly relevant chunks.
+DEFAULT_SIMILARITY_THRESHOLD = 0.2
+
+# Default LLM (large language model) parameters for answer generation.
+# These control the behavior of the local GGUF model used for synthesis.
+DEFAULT_LLM_CONTEXT_SIZE = 8192  # Maximum context window in tokens
+DEFAULT_LLM_NUM_THREADS = 8  # CPU threads for LLM inference
+DEFAULT_LLM_TEMPERATURE = 0.2  # Sampling temperature (lower = more deterministic)
+DEFAULT_LLM_TOP_P = 0.9  # Nucleus sampling probability cutoff
+DEFAULT_LLM_REPEAT_PENALTY = 1.1  # Penalty for repeating tokens
+DEFAULT_LLM_MIN_P = 0.05  # Minimum probability threshold for sampling
+
+# Default prompt parameters
+DEFAULT_PROMPT_PRESET = "balanced"
 
 # XDG Base Directory paths
 DEFAULT_CONFIG_DIR = get_krag_config_dir()

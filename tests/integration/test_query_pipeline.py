@@ -122,8 +122,9 @@ class TestQueryPipeline:
         assert source.file_path == Path("/test/file.txt"), "Should have correct file path"
 
     def test_query_pipeline_respects_top_k(self) -> None:
-        """Test that pipeline respects top_k parameter."""
+        """Test that pipeline over-fetches for dedup based on top_k."""
         from krag.orchestration.query_engine import QueryEngine
+        from krag.retrieval.retriever import Retriever
         from tests.fixtures.mock_embeddings import MockEmbeddingGenerator
         from tests.fixtures.mock_llm import MockLLMClient
 
@@ -144,4 +145,99 @@ class TestQueryPipeline:
         )
 
         engine.query("test")
-        assert mock_store.last_limit == 10, "Should use configured top_k"
+        # Retriever over-fetches by _OVERFETCH_FACTOR for dedup headroom
+        expected = 10 * Retriever._OVERFETCH_FACTOR
+        assert mock_store.last_limit == expected, (
+            f"Should over-fetch {Retriever._OVERFETCH_FACTOR}x top_k "
+            f"(expected {expected}, got {mock_store.last_limit})"
+        )
+
+
+class TestQueryPipelineDiagnosticLogging:
+    """Integration tests for DEBUG-level diagnostic logging (US5)."""
+
+    def _make_engine(self, similarity_threshold: float | None = None):
+        """Create a QueryEngine with mock components."""
+        from krag.orchestration.query_engine import QueryEngine
+        from tests.fixtures.mock_embeddings import MockEmbeddingGenerator
+        from tests.fixtures.mock_llm import MockLLMClient
+
+        class MockVectorStore:
+            def search(self, vector, limit=5):
+                return [
+                    {
+                        "id": f"chunk{i}",
+                        "score": score,
+                        "payload": {
+                            "content": f"Content for chunk {i}.",
+                            "file_path": f"/test/doc{i}.md",
+                            "chunk_index": 0,
+                            "file_type": "markdown",
+                        },
+                    }
+                    for i, score in enumerate([0.95, 0.7, 0.3], start=1)
+                ]
+
+        return QueryEngine(
+            vector_store=MockVectorStore(),
+            embedding_generator=MockEmbeddingGenerator(),
+            llm_client=MockLLMClient(),
+            similarity_threshold=similarity_threshold,
+        )
+
+    def test_debug_log_contains_chunk_scores(self, caplog) -> None:
+        """Test that DEBUG log includes retrieved chunk scores."""
+        import logging
+
+        engine = self._make_engine()
+
+        with caplog.at_level(logging.DEBUG):
+            engine.query("Test query")
+
+        log_text = caplog.text
+        # Should log about retrieval
+        assert "retriev" in log_text.lower(), "Should log retrieval activity"
+
+    def test_debug_log_contains_threshold_filtering(self, caplog) -> None:
+        """Test that INFO log shows threshold filtering when threshold is set."""
+        import logging
+
+        engine = self._make_engine(similarity_threshold=0.5)
+
+        with caplog.at_level(logging.DEBUG):
+            engine.query("Test query")
+
+        log_text = caplog.text
+        # Should mention threshold filtering
+        assert "threshold" in log_text.lower() or "kept" in log_text.lower(), (
+            "Should log threshold filtering"
+        )
+
+    def test_debug_log_contains_prompt_info(self, caplog) -> None:
+        """Test that DEBUG log includes prompt building information."""
+        import logging
+
+        engine = self._make_engine()
+
+        with caplog.at_level(logging.DEBUG):
+            engine.query("Test query")
+
+        log_text = caplog.text
+        assert "prompt" in log_text.lower() or "messages" in log_text.lower(), (
+            "Should log prompt building"
+        )
+
+    def test_debug_log_contains_generation_summary(self, caplog) -> None:
+        """Test that log includes generation duration/length information."""
+        import logging
+
+        engine = self._make_engine()
+
+        with caplog.at_level(logging.DEBUG):
+            engine.query("Test query")
+
+        log_text = caplog.text
+        # Should log generation results
+        assert "characters" in log_text.lower() or "generat" in log_text.lower(), (
+            "Should log generation summary"
+        )

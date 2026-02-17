@@ -14,12 +14,18 @@ def test_configuration_default_values() -> None:
 
     assert config.max_file_size_mb == 10
     assert config.skip_binary_files is True
-    assert config.embedding_model == "sentence-transformers/all-MiniLM-L6-v2"
-    assert config.embedding_batch_size == 32
-    assert config.chunk_size == 512
-    assert config.chunk_overlap == 50
+    assert config.embedding_model == "BAAI/bge-base-en-v1.5"
+    assert config.embedding_batch_size == 64
+    assert config.chunk_size == 384
+    assert config.chunk_overlap == 64
     assert config.top_k == 5
-    assert config.llm_temperature == 0.7
+    assert config.llm_temperature == 0.2
+    assert config.similarity_threshold == 0.2
+    assert config.llm_top_p == 0.9
+    assert config.llm_repeat_penalty == 1.1
+    assert config.llm_min_p == 0.05
+    assert config.prompt_preset == "balanced"
+    assert config.prompt_system_override is None
 
 
 def test_configuration_requires_directory_paths() -> None:
