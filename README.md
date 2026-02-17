@@ -41,6 +41,20 @@ uv sync
 pip install -e ".[dev]"
 ```
 
+### Tool Installation (Optional)
+
+To install krag as a globally available command-line tool:
+
+```bash
+# Install from local project directory
+uv tool install --with pip --reinstall --force -e /path/to/krag
+
+# For GPU acceleration (NVIDIA CUDA), rebuild llama-cpp-python with CUDA support:
+CMAKE_ARGS="-DGGML_CUDA=on" ~/.local/share/uv/tools/krag/bin/pip install llama-cpp-python --force-reinstall --no-cache-dir
+```
+
+**Note**: The default PyPI wheel for `llama-cpp-python` is CPU-only. GPU users must rebuild from source with CUDA support as shown above.
+
 ### Initialize
 
 ```bash
@@ -136,7 +150,7 @@ Key settings:
 - `exclusion_patterns`: Glob patterns to exclude
 - `supported_file_types`: File extensions to process
 - `chunk_size` / `chunk_overlap`: Chunking parameters
-- `embedding_model`: sentence-transformers model name
+- `embedding_model`: Embedding model name (default: BAAI/bge-base-en-v1.5)
 - `llm_model`: HuggingFace model name or local GGUF path
 - `path_aliases`: Display path reductions (e.g., `/home/ken:~`)
 
@@ -175,6 +189,19 @@ krag config show --gpu-only
 
 # Show storage paths
 krag config show --paths-only
+```
+
+**Verify GPU Support** (for tool installations):
+
+After rebuilding `llama-cpp-python` with CUDA support, verify it's working:
+
+```bash
+# Check if GPU offload is supported in the tool environment
+~/.local/share/uv/tools/krag/bin/python -c "from llama_cpp import llama_cpp as lib; print('GPU offload supported:', lib.llama_supports_gpu_offload())"
+
+# Monitor GPU during a query (should show ~10-12GB VRAM and 50-90% utilization)
+nvidia-smi dmon -s um -c 20 -d 1 &
+krag query "test query" --top-k 3
 ```
 
 See [docs/migration-guide.md](docs/migration-guide.md) for full GPU setup instructions.

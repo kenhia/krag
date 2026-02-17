@@ -216,6 +216,10 @@ class LLMClient:
             return
 
         logger.info(f"Loading LLM model from {self.model_path}")
+        logger.info(
+            f"LLM config: n_gpu_layers={self.n_gpu_layers}, n_ctx={self.n_ctx}, "
+            f"n_threads={self.n_threads if self.n_threads else 'auto'}"
+        )
         try:
             from llama_cpp import Llama
 

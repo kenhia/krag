@@ -30,6 +30,51 @@ def version_callback(value: bool) -> None:
     if value:
         console = Console()
         console.print(f"krag version {__version__}")
+
+        # Core library versions
+        try:
+            import llama_cpp
+
+            llama_version = getattr(llama_cpp, "__version__", "unknown")
+            console.print(f"  llama-cpp-python: {llama_version}")
+        except ImportError:
+            console.print("  llama-cpp-python: [red]not installed[/red]")
+
+        try:
+            import sentence_transformers
+
+            st_version = getattr(sentence_transformers, "__version__", "unknown")
+            console.print(f"  sentence-transformers: {st_version}")
+        except ImportError:
+            console.print("  sentence-transformers: [red]not installed[/red]")
+
+        try:
+            import qdrant_client
+
+            qd_version = getattr(qdrant_client, "__version__", "unknown")
+            console.print(f"  qdrant-client: {qd_version}")
+        except ImportError:
+            console.print("  qdrant-client: [red]not installed[/red]")
+
+        try:
+            import torch
+
+            console.print(f"  torch: {torch.__version__}")
+        except ImportError:
+            console.print("  torch: [red]not installed[/red]")
+
+        # GPU support status
+        try:
+            from llama_cpp import llama_cpp as lib
+
+            gpu_supported = lib.llama_supports_gpu_offload()
+            if gpu_supported:
+                console.print("  GPU offload: [green]supported (CUDA)[/green]")
+            else:
+                console.print("  GPU offload: [yellow]not available (CPU-only build)[/yellow]")
+        except Exception:
+            console.print("  GPU offload: [yellow]unknown[/yellow]")
+
         raise typer.Exit()
 
 
@@ -389,7 +434,7 @@ def status(
 
             vector_store = QdrantVectorStore(
                 collection_name=config.collection_name,
-                vector_size=384,  # Default for all-MiniLM-L6-v2
+                vector_size=768,  # Default for BAAI/bge-base-en-v1.5
                 storage_path=config.vector_store_path,
             )
 

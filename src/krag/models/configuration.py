@@ -200,16 +200,16 @@ class Configuration(BaseSettings):
 
     # Embedding
     embedding_model: str = Field(
-        default="sentence-transformers/all-MiniLM-L6-v2", description="Embedding model name"
+        default="BAAI/bge-base-en-v1.5", description="Embedding model name"
     )
     embedding_batch_size: int = Field(
-        default=32, gt=0, description="Batch size for embedding generation"
+        default=64, gt=0, description="Batch size for embedding generation"
     )
     embedding_device: str = Field(default="cpu", description="Device to use (cpu, cuda, mps)")
 
     # Chunking
-    chunk_size: int = Field(default=512, gt=0, description="Target chunk size in tokens")
-    chunk_overlap: int = Field(default=50, ge=0, description="Overlap between chunks in tokens")
+    chunk_size: int = Field(default=384, gt=0, description="Target chunk size in tokens")
+    chunk_overlap: int = Field(default=64, ge=0, description="Overlap between chunks in tokens")
 
     # Vector Store
     vector_store_path: Path = Field(
@@ -236,7 +236,7 @@ class Configuration(BaseSettings):
     # Retrieval
     top_k: int = Field(default=5, gt=0, description="Number of results to retrieve")
     similarity_threshold: float = Field(
-        default=0.3,
+        default=0.2,
         ge=0.0,
         le=1.0,
         description="Minimum cosine similarity score for chunk inclusion (0.0-1.0)",
@@ -247,8 +247,8 @@ class Configuration(BaseSettings):
         default_factory=_get_default_llm_model,
         description="HuggingFace model name (e.g., 'TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF') or local path to GGUF file",
     )
-    llm_context_size: int = Field(default=2048, gt=0, description="Context window size")
-    llm_num_threads: int = Field(default=4, gt=0, description="Number of threads for inference")
+    llm_context_size: int = Field(default=8192, gt=0, description="Context window size")
+    llm_num_threads: int = Field(default=8, gt=0, description="Number of threads for inference")
     llm_temperature: float = Field(
         default=0.2, ge=0.0, le=2.0, description="Temperature for generation"
     )

@@ -63,33 +63,37 @@ DEFAULT_SUPPORTED_FILE_TYPES = [
 ]
 
 # The default embedding model used by krag for generating vector embeddings.
-# krag uses sentence-transformers/all-MiniLM-L6-v2 which produces 384-dimensional
-# vectors and supports semantic similarity search over text content.
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# krag uses BAAI/bge-base-en-v1.5 which produces 768-dimensional vectors.
+# BGE-base provides strong retrieval quality across both natural language and
+# code content, outperforming smaller models on semantic similarity tasks.
+DEFAULT_EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"
 
 # The default chunk size in characters used when splitting documents for indexing.
-# krag splits files into chunks of 512 characters by default. Larger chunks
-# preserve more context but reduce retrieval precision.
-DEFAULT_CHUNK_SIZE = 512
+# krag splits files into chunks of 384 characters by default. This size is tuned
+# for the BGE-base-en-v1.5 embedding model's optimal input length, balancing
+# context preservation with retrieval precision.
+DEFAULT_CHUNK_SIZE = 384
 
 # The default overlap in characters between consecutive chunks. An overlap of
-# 50 characters ensures that content near chunk boundaries is not missed
-# during retrieval.
-DEFAULT_CHUNK_OVERLAP = 50
+# 64 characters ensures that content near chunk boundaries is not missed
+# during retrieval, tuned for the 384-character chunk size.
+DEFAULT_CHUNK_OVERLAP = 64
 
 # The default number of top results returned by krag's retrieval engine.
 # When querying, krag retrieves the 5 most similar chunks by default.
 DEFAULT_TOP_K = 5
 
 # The default minimum similarity threshold for filtering retrieval results.
-# Chunks with a cosine similarity score below 0.3 are discarded. Lower values
-# return more results; higher values return only highly relevant chunks.
-DEFAULT_SIMILARITY_THRESHOLD = 0.3
+# Chunks with a cosine similarity score below 0.2 are discarded. This threshold
+# is tuned for the BGE-base-en-v1.5 model which produces more conservative
+# similarity scores than smaller models. Lower values return more results;
+# higher values return only highly relevant chunks.
+DEFAULT_SIMILARITY_THRESHOLD = 0.2
 
 # Default LLM (large language model) parameters for answer generation.
 # These control the behavior of the local GGUF model used for synthesis.
-DEFAULT_LLM_CONTEXT_SIZE = 2048  # Maximum context window in tokens
-DEFAULT_LLM_NUM_THREADS = 4  # CPU threads for LLM inference
+DEFAULT_LLM_CONTEXT_SIZE = 8192  # Maximum context window in tokens
+DEFAULT_LLM_NUM_THREADS = 8  # CPU threads for LLM inference
 DEFAULT_LLM_TEMPERATURE = 0.2  # Sampling temperature (lower = more deterministic)
 DEFAULT_LLM_TOP_P = 0.9  # Nucleus sampling probability cutoff
 DEFAULT_LLM_REPEAT_PENALTY = 1.1  # Penalty for repeating tokens

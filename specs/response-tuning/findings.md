@@ -82,11 +82,24 @@ When the retrieved context doesn't contain the answer (because the right chunks 
 
 **Impact**: Pass rate improved from 33% → 67%. The model now correctly grounds its answer for Q1 (default chunk size = 512) and Q3 (quantum computing not related). Q2 (embedding model) fails because the model generalizes to "SentenceTransformer" instead of quoting the exact model name "all-MiniLM-L6-v2".
 
+### Evolution 3: Model and Parameter Upgrades
+
+After the code-level fixes in Evolution 2, the remaining quality gap was traced to model capabilities:
+
+- **Embedding model upgrade**: Replaced `sentence-transformers/all-MiniLM-L6-v2` (384-dim) with `BAAI/bge-base-en-v1.5` (768-dim). BGE-base provides significantly stronger semantic matching for both natural language and code content.
+- **LLM upgrade**: Replaced Q2_K quantization (~2.5GB) with Q5_K_M quantization (~10GB) of Phi-3-medium-128k-instruct. The higher-quality quantization dramatically improves instruction following and grounding.
+- **Chunking tuned**: 512/50 → 384/64, optimized for BGE-base's input characteristics.
+- **Context window**: 2048 → 8192 tokens, allowing the LLM to process more retrieved context.
+- **Similarity threshold**: 0.3 → 0.2, calibrated for BGE-base's more conservative scoring.
+- **Threading/batching**: Threads 4→8, batch size 32→64, for better hardware utilization.
+
+**Impact**: Pass rate 67% → 100% (3/3). All evaluation queries now produce correctly grounded answers. The model accurately quotes specific values from retrieved context and appropriately refuses to answer when information is not in the corpus.
+
 ## Future Work
 
 ### Near-term
 
-- [ ] **Code-aware embedding model**: Replace `all-MiniLM-L6-v2` with a model trained on code+NL (e.g., `code-search-net`, `codesage`, `nomic-embed-code`). This is the most impactful single change. Deserves a full spec (005-code-embeddings or similar).
+- [x] **Embedding model upgrade**: Upgraded to `BAAI/bge-base-en-v1.5` (768-dim) from `all-MiniLM-L6-v2` (384-dim). BGE-base provides strong retrieval quality for both NL and code content without requiring a code-specific model.
 - [ ] **Chunking strategy for config/constants files**: Small files with many constants get chunked poorly. Consider a "whole-file" or "logical-block" chunking strategy for short config-like files.
 - [ ] **Source diversity enforcement**: Ensure top-k results include chunks from at least N different files, not all from one file.
 
@@ -112,28 +125,30 @@ When the retrieved context doesn't contain the answer (because the right chunks 
 | 2026-02-16 | eval_queries.toml (3q) | balanced | 33% | Same results as strict |
 | 2026-02-16 | eval_queries.toml (3q) | balanced | 33% | After fixes 2A+2B+2C, retrieval fixed but LLM still hallucinates |
 | 2026-02-16 | eval_queries.toml (3q) | balanced | 67% | After fix 2D (context in user message), Q1+Q3 pass, Q2 fails (model generalizes) |
+| 2026-02-16 | eval_queries.toml (3q) | balanced | 100% | After model upgrades (BGE-base + Q5_K_M + tuned params), all 3 pass |
 
 ## Key Configuration Reference
 
 ```toml
 [retrieval]
-similarity_threshold = 0.3
+similarity_threshold = 0.2
 
 [prompt]
 preset = "balanced"
 
 [embedding]
-model = "sentence-transformers/all-MiniLM-L6-v2"
+model = "BAAI/bge-base-en-v1.5"
+batch_size = 64
 
 [chunking]
-size = 512
-overlap = 50
+size = 384
+overlap = 64
 ```
 
 ## Technical Notes
 
 - Vector store: Qdrant (local/disk mode at `/krag/index`)
-- Embedding dimension: 384 (all-MiniLM-L6-v2)
-- LLM: Phi-3-medium-128k-instruct-GGUF (Q2_K quantization)
-- Index size: 5,016 chunks from 219 files
+- Embedding dimension: 768 (BAAI/bge-base-en-v1.5)
+- LLM: Phi-3-medium-128k-instruct-GGUF (Q5_K_M quantization, ~10GB)
+- Context window: 8192 tokens
 - Similarity metric: Cosine distance

@@ -167,11 +167,11 @@ As a krag developer, I want to see what context was retrieved and what prompt wa
 ## Assumptions
 
 - The existing llama-cpp-python backend and Qdrant vector store are adequate for achieving quality goals; no infrastructure replacement is needed.
-- The current embedding model (sentence-transformers/all-MiniLM-L6-v2) is reasonable for general-purpose retrieval; model swap is out of scope but the architecture should not preclude it.
+- The default embedding model (BAAI/bge-base-en-v1.5) provides strong retrieval quality for both natural language and code content. Model swap is supported but the current default is tuned for krag's use case.
 - The user's document corpus is primarily text-based (code, markdown, text files) as currently supported.
 - A curated evaluation set of 10–20 queries is sufficient for the pragmatic quality loop targeted by this evolution; large-scale benchmarking is out of scope.
 - LLM parameter defaults (e.g., temperature 0.2, top_p 0.9, repeat_penalty 1.1) are reasonable starting points for factual grounding; exact values will be validated during implementation.
-- The similarity score threshold default of 0.3 is appropriate for the all-MiniLM-L6-v2 embedding model; may need adjustment if the embedding model changes.
+- The similarity score threshold default of 0.2 is appropriate for the BAAI/bge-base-en-v1.5 embedding model; may need adjustment if the embedding model changes.
 - The existing TOML-based configuration system can accommodate the new parameters without structural changes.
 - Prompt template customization via configuration file strings is sufficient; a full prompt-template-file system is out of scope for this evolution.
 
