@@ -14,6 +14,24 @@ from krag.storage.vector_store import VectorStore
 logger = logging.getLogger(__name__)
 
 
+class _NamedSearchResult:
+    """A search result from a named vector space.
+
+    Has .id, .score, .payload attributes matching the ScoredPointLike
+    protocol used by reciprocal_rank_fusion().
+    """
+
+    __slots__ = ("id", "score", "payload")
+
+    def __init__(self, id: Any, score: float, payload: dict[str, Any]) -> None:
+        self.id = id
+        self.score = score
+        self.payload = payload
+
+    def __repr__(self) -> str:
+        return f"_NamedSearchResult(id={self.id!r}, score={self.score:.4f})"
+
+
 class QdrantVectorStore(VectorStore):
     """Vector store implementation using Qdrant.
 
@@ -27,18 +45,31 @@ class QdrantVectorStore(VectorStore):
         vector_size: int,
         storage_path: str | Path | None = None,
         distance: str = "cosine",
+        vectors_config: dict[str, VectorParams] | None = None,
+        allow_recreate: bool = False,
     ):
         """Initialize Qdrant vector store.
 
         Args:
             collection_name: Name of the collection
-            vector_size: Dimension of vectors
+            vector_size: Dimension of vectors (used for single-vector mode)
             storage_path: Path for persistent storage (None for in-memory)
             distance: Distance metric ('cosine', 'euclidean', 'dot')
+            vectors_config: Named vectors configuration for multi-model mode.
+                If provided, creates collection with named vectors instead
+                of a single unnamed vector. E.g.,
+                {"text": VectorParams(size=768, distance=COSINE),
+                 "code": VectorParams(size=768, distance=COSINE)}.
+            allow_recreate: If True, allow dropping and recreating the collection
+                when its format does not match the requested configuration.
+                Should only be True during indexing; query/eval should leave
+                this False so they never destroy stored data.
         """
         self.collection_name = collection_name
         self.vector_size = vector_size
         self.storage_path = Path(storage_path) if storage_path else None
+        self._vectors_config = vectors_config
+        self._allow_recreate = allow_recreate
 
         # Initialize client
         if self.storage_path:
@@ -63,6 +94,11 @@ class QdrantVectorStore(VectorStore):
         # Create or recreate collection
         self._ensure_collection()
 
+    @property
+    def is_named_vectors(self) -> bool:
+        """Whether this store uses named vectors (multi-model mode)."""
+        return self._vectors_config is not None
+
     def _ensure_collection(self) -> None:
         """Ensure collection exists with correct configuration."""
         collections = self.client.get_collections().collections
@@ -70,15 +106,116 @@ class QdrantVectorStore(VectorStore):
 
         if self.collection_name not in collection_names:
             logger.info(f"Creating collection: {self.collection_name}")
-            self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(
-                    size=self.vector_size,
-                    distance=self.distance,
-                ),
-            )
+            if self._vectors_config:
+                # Named vectors mode: create with multiple vector spaces
+                self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=self._vectors_config,
+                )
+                logger.info(
+                    f"Created collection with named vectors: {list(self._vectors_config.keys())}"
+                )
+            else:
+                # Single vector mode (backward compatible)
+                self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=VectorParams(
+                        size=self.vector_size,
+                        distance=self.distance,
+                    ),
+                )
         else:
             logger.debug(f"Collection {self.collection_name} already exists")
+            # Auto-detect vector size from existing collection if it differs
+            collection_info = self.client.get_collection(self.collection_name)
+            vectors_cfg = collection_info.config.params.vectors
+            if isinstance(vectors_cfg, dict):
+                # Existing collection uses named vectors
+                existing_named = True
+                existing_keys = set(vectors_cfg.keys())
+            else:
+                existing_named = False
+                existing_keys = set()
+
+            want_named = self._vectors_config is not None
+
+            if want_named and not existing_named:
+                # Existing collection is single-vector; we need named vectors
+                if self._allow_recreate:
+                    logger.warning(
+                        f"Collection '{self.collection_name}' exists as single-vector format "
+                        f"but named vectors {list(self._vectors_config.keys())} are required. "
+                        f"Recreating collection."
+                    )
+                    self.client.delete_collection(self.collection_name)
+                    self.client.create_collection(
+                        collection_name=self.collection_name,
+                        vectors_config=self._vectors_config,
+                    )
+                    logger.info(
+                        f"Recreated collection with named vectors: {list(self._vectors_config.keys())}"
+                    )
+                else:
+                    logger.warning(
+                        f"Collection '{self.collection_name}' is single-vector but named vectors "
+                        f"{list(self._vectors_config.keys())} are configured. "
+                        f"Re-index with 'krag index --full' to upgrade the collection."
+                    )
+            elif not want_named and existing_named:
+                # Existing collection is named-vector; we now want single-vector
+                if self._allow_recreate:
+                    logger.warning(
+                        f"Collection '{self.collection_name}' exists with named vectors {list(existing_keys)} "
+                        f"but single-vector mode is required. Recreating collection."
+                    )
+                    self.client.delete_collection(self.collection_name)
+                    self.client.create_collection(
+                        collection_name=self.collection_name,
+                        vectors_config=VectorParams(
+                            size=self.vector_size,
+                            distance=self.distance,
+                        ),
+                    )
+                    logger.info(f"Recreated collection in single-vector mode (dim={self.vector_size})")
+                else:
+                    logger.debug(
+                        f"Collection uses named vectors {list(existing_keys)}; "
+                        f"query will use existing vector spaces."
+                    )
+            elif want_named and existing_named:
+                # Both named — check if new vector names need to be added
+                want_keys = set(self._vectors_config.keys())
+                missing = want_keys - existing_keys
+                if missing and self._allow_recreate:
+                    logger.info(
+                        f"Collection '{self.collection_name}' missing vector spaces {missing}, "
+                        f"recreating with full config."
+                    )
+                    self.client.delete_collection(self.collection_name)
+                    self.client.create_collection(
+                        collection_name=self.collection_name,
+                        vectors_config=self._vectors_config,
+                    )
+                    logger.info(
+                        f"Recreated collection with named vectors: {list(self._vectors_config.keys())}"
+                    )
+                elif missing:
+                    logger.warning(
+                        f"Collection missing vector spaces {missing}. "
+                        f"Re-index with 'krag index --full' to add them."
+                    )
+                else:
+                    logger.debug(f"Collection uses named vectors: {list(existing_keys)}")
+            else:
+                # Both single-vector — check size mismatch
+                if hasattr(vectors_cfg, "size"):
+                    actual_size = vectors_cfg.size
+                    if actual_size != self.vector_size:
+                        logger.warning(
+                            f"Vector size mismatch: specified {self.vector_size} but "
+                            f"collection has {actual_size}. Using collection's vector size."
+                        )
+                        self.vector_size = actual_size
 
     def upsert(self, vectors: list[dict[str, Any]]) -> None:
         """Add or update vectors in the store.
@@ -119,12 +256,19 @@ class QdrantVectorStore(VectorStore):
         Returns:
             List of results with 'id', 'score', and 'payload' fields
         """
-        # Perform search
-        results = self.client.query_points(
-            collection_name=self.collection_name,
-            query=query_vector,
-            limit=limit,
-        )
+        # When the collection uses named vectors we must specify which space to
+        # search.  Fall back to the "text" space so single-model queries still
+        # work against a multi-model (named-vector) collection.
+        kwargs: dict[str, Any] = {
+            "collection_name": self.collection_name,
+            "query": query_vector,
+            "limit": limit,
+        }
+        if self.is_named_vectors:
+            kwargs["using"] = "text"
+            logger.debug("search() falling back to 'text' vector space on named-vector collection")
+
+        results = self.client.query_points(**kwargs)
 
         # Format results
         formatted = [
@@ -138,6 +282,50 @@ class QdrantVectorStore(VectorStore):
 
         logger.debug(f"Search returned {len(formatted)} results")
         return formatted
+
+    def search_named(
+        self,
+        query_vector: list[float],
+        vector_name: str,
+        limit: int = 10,
+    ) -> list[Any]:
+        """Search a specific named vector space.
+
+        Returns Qdrant ScoredPoint-like objects with .id, .score, .payload
+        attributes, suitable for use with reciprocal_rank_fusion().
+
+        Args:
+            query_vector: Query vector to search for
+            vector_name: Name of the vector space to search (e.g. "text", "code")
+            limit: Maximum number of results to return
+
+        Returns:
+            List of ScoredPoint-like objects from the named vector space.
+        """
+        results = self.client.query_points(
+            collection_name=self.collection_name,
+            query=query_vector,
+            using=vector_name,
+            limit=limit,
+        )
+
+        # Restore original IDs in the returned points
+        points = []
+        for point in results.points:
+            # Replace numeric hash ID with original string ID in payload
+            original_id = point.payload.get("_original_id", str(point.id))
+            # Strip the internal tracking key from payload
+            cleaned_payload = {k: v for k, v in point.payload.items() if k != "_original_id"}
+            points.append(
+                _NamedSearchResult(
+                    id=original_id,
+                    score=point.score,
+                    payload=cleaned_payload,
+                )
+            )
+
+        logger.debug(f"Named search '{vector_name}' returned {len(points)} results")
+        return points
 
     def delete(self, ids: list[str]) -> None:
         """Delete vectors by their IDs.

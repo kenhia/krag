@@ -162,17 +162,59 @@ This converts `config.yaml` to `config.toml` format.
 4. Review logs in `~/.local/state/krag/logs/`
 5. File an issue on the project repository
 
+## GPU and LLM Issues
+
+### "VRAM insufficient for simultaneous models"
+
+**Symptom**: Warning during indexing that VRAM is insufficient for simultaneous embedding models.
+
+**Cause**: Your GPU can't hold both the text and code embedding models at the same time.
+
+**Solution**: No action needed. Indexing automatically falls back to sequential two-pass mode (slower but functionally identical). Each model is loaded, used, and unloaded in turn.
+
+### "VRAM insufficient for multi-LLM mode, falling back to hot-swap"
+
+**Symptom**: Warning when `load_multi_llm = true` but both LLMs don't fit in VRAM.
+
+**Cause**: The text LLM (e.g., Phi-3-medium ~8 GB) plus the code LLM (e.g., Qwen2.5-Coder-7B ~5.4 GB) exceed available VRAM when combined with embedding models.
+
+**Solutions**:
+1. **Hot-swap mode** (default, recommended): Set `load_multi_llm = false`. Only one LLM is loaded at a time. When routing switches models, the old one is unloaded and the new one loaded (~30-60s swap time).
+2. **Explicit selection**: Use `--llm code` or `--llm text` to choose the LLM per query, avoiding hot-swap entirely.
+3. **Reduce VRAM usage**: Use smaller quantization (Q4_K_M instead of Q5_K_M) for one or both models.
+
+### Hot-Swap Takes Too Long
+
+**Symptom**: Noticeable delay (30-60s) when the LLM switches between text and code models.
+
+**Cause**: Hot-swap unloads the current model and loads the new one from disk.
+
+**Solutions**:
+1. Use an NVMe SSD for model storage (reduces load time)
+2. Pre-select the model with `--llm code` or `--llm text` to avoid swap
+3. If you have sufficient VRAM (≥14 GB free after embeddings), set `load_multi_llm = true` for simultaneous mode
+
+### GPU Not Detected
+
+**Symptom**: `krag gpu status` shows no GPU or 0 VRAM.
+
+**Solutions**:
+1. Verify NVIDIA drivers: `nvidia-smi`
+2. Check pynvml: `python -c "import pynvml; pynvml.nvmlInit(); print('OK')"`
+3. Rebuild llama-cpp-python with CUDA: see GPU Acceleration in README
+
 ## Quality Tuning
 
 ### Prompt Presets
 
-krag includes three built-in prompt presets that control how the LLM generates answers:
+krag includes four built-in prompt presets that control how the LLM generates answers:
 
 | Preset | Temperature | Max Tokens | Description |
 |--------|-------------|------------|-------------|
 | `strict` | 0.1 | 256 | Concise, source-grounded answers only |
 | `balanced` | 0.2 | 512 | Detailed answers with citations (default) |
 | `verbose` | 0.3 | 1024 | Exploratory answers with full context |
+| `code` | 0.1 | 768 | Code-aware answers with technical precision |
 
 **Config file** (`~/.config/krag/config.toml`):
 

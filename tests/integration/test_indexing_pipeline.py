@@ -211,12 +211,14 @@ class TestIndexingPipeline:
 
         # Verify metadata is stored
         # Access vector store to check
+        # Note: Pass any initial vector_size; it will auto-detect from existing collection
         vector_store = QdrantVectorStore(
             collection_name="krag", vector_size=384, storage_path=tmp_path / "vector_store"
         )
 
         # Search should return results with metadata
-        query_vector = [0.1] * 384
+        # Use the actual vector size from the collection
+        query_vector = [0.1] * vector_store.vector_size
         results = vector_store.search(query_vector, limit=1)
 
         assert len(results) > 0, "Should have stored vectors"

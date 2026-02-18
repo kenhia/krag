@@ -81,6 +81,23 @@ PROMPT_PRESETS: dict[str, PromptPreset] = {
         repeat_penalty=1.05,
         max_tokens=1024,
     ),
+    "code": PromptPreset(
+        name="code",
+        description="Code-focused answers with snippets, symbols, and file references",
+        system_prompt=(
+            "You are a code-aware assistant that answers questions about source code. "
+            "Answer ONLY using the provided context. Do NOT use outside knowledge. "
+            "Include relevant code snippets in fenced code blocks when they help explain the answer. "
+            "Reference function names, class names, and other symbols precisely. "
+            "Cite source files by number, e.g. (1), including file paths. "
+            "Keep answers technically precise and concise. "
+            f'If the context does not contain enough information, respond exactly: "{INSUFFICIENT_CONTEXT_PHRASE}"'
+        ),
+        temperature=0.1,
+        top_p=0.9,
+        repeat_penalty=1.1,
+        max_tokens=768,
+    ),
 }
 
 

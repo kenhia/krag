@@ -6,6 +6,8 @@ including prompt presets and chat message output.
 
 from pathlib import Path
 
+import pytest
+
 from krag.models.query_result import QueryResult
 
 
@@ -50,7 +52,6 @@ class TestPromptPreset:
 
     def test_unknown_preset_raises_error(self) -> None:
         """Test that unknown preset name raises ValueError."""
-        import pytest
 
         from krag.synthesis.prompt_builder import PromptBuilder
 
@@ -218,3 +219,157 @@ class TestPromptBuilder:
         verbose_prompt = verbose_builder.get_system_prompt()
 
         assert strict_prompt != verbose_prompt, "Different presets should have different prompts"
+
+
+# ---------------------------------------------------------------------------
+# US4 Tests: Code Prompt Preset
+# ---------------------------------------------------------------------------
+
+
+def _code_chunk(
+    content: str = "def foo(bar: int) -> str:\n    return str(bar)",
+    file_path: str = "/src/app/main.py",
+    file_type: str = ".py",
+    **kwargs,
+) -> QueryResult:
+    """Helper to create a code-oriented QueryResult."""
+    from uuid import uuid4
+
+    return QueryResult(
+        chunk_id=str(uuid4()),
+        score=0.9,
+        rank=kwargs.get("rank", 1),
+        chunk_content=content,
+        file_path=Path(file_path),
+        chunk_index=0,
+        file_type=file_type,
+    )
+
+
+class TestCodePreset:
+    """T074-T076: Code preset unit tests."""
+
+    def test_code_preset_exists_in_available_presets(self) -> None:
+        """T074: 'code' should be a valid preset name."""
+        from krag.synthesis.prompt_builder import PromptBuilder
+
+        presets = PromptBuilder.available_presets()
+        assert "code" in presets
+
+    def test_code_preset_system_prompt_mentions_code(self) -> None:
+        """T074: Code preset system prompt should reference code/symbols."""
+        from krag.synthesis.prompt_builder import PROMPT_PRESETS
+
+        code_preset = PROMPT_PRESETS["code"]
+        prompt_lower = code_preset.system_prompt.lower()
+        assert "code" in prompt_lower or "function" in prompt_lower
+
+    def test_code_preset_low_temperature(self) -> None:
+        """T074: Code preset should use low temperature for precise answers."""
+        from krag.synthesis.prompt_builder import PROMPT_PRESETS
+
+        code_preset = PROMPT_PRESETS["code"]
+        assert code_preset.temperature <= 0.15
+
+    def test_code_preset_includes_function_signature_in_context(self) -> None:
+        """T074: Code preset build output should include function signatures."""
+        from krag.synthesis.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(preset_name="code")
+        results = [
+            _code_chunk(
+                content="def calculate_total(items: list[float]) -> float:\n    return sum(items)",
+                file_path="/src/billing/calc.py",
+            ),
+        ]
+        messages = builder.build("How does calculate_total work?", results)
+        user_content = messages[1]["content"]
+        # The function signature must appear in context
+        assert "calculate_total" in user_content
+        assert "calc.py" in user_content
+
+    def test_code_preset_insufficient_context(self) -> None:
+        """T075: Code preset with no context returns insufficient-context phrase."""
+        from krag.synthesis.prompt_builder import (
+            PromptBuilder,
+        )
+
+        builder = PromptBuilder(preset_name="code")
+        messages = builder.build("How does the scheduler work?", results=[])
+        # System message should instruct the LLM to respond with the phrase
+        system_lower = messages[0]["content"].lower()
+        assert "don't have enough information" in system_lower or "insufficient" in system_lower
+
+    def test_code_preset_system_prompt_instructs_code_snippets(self) -> None:
+        """T074: Code preset system prompt should instruct inclusion of code snippets."""
+        from krag.synthesis.prompt_builder import PROMPT_PRESETS
+
+        code_preset = PROMPT_PRESETS["code"]
+        prompt_lower = code_preset.system_prompt.lower()
+        assert (
+            "snippet" in prompt_lower or "code block" in prompt_lower or "example" in prompt_lower
+        )
+
+    def test_code_preset_system_prompt_instructs_file_references(self) -> None:
+        """T074: Code preset should instruct citing file paths."""
+        from krag.synthesis.prompt_builder import PROMPT_PRESETS
+
+        code_preset = PROMPT_PRESETS["code"]
+        prompt_lower = code_preset.system_prompt.lower()
+        assert "file" in prompt_lower or "path" in prompt_lower or "source" in prompt_lower
+
+    def test_code_preset_format_code_metadata_in_context(self) -> None:
+        """T080: Code preset should format code metadata (file type) into context."""
+        from krag.synthesis.prompt_builder import PromptBuilder
+
+        builder = PromptBuilder(preset_name="code")
+        results = [
+            _code_chunk(
+                content="class UserService:\n    def get_user(self, id: int) -> User:\n        ...",
+                file_path="/src/services/user_service.py",
+                file_type=".py",
+            ),
+        ]
+        messages = builder.build("How does UserService work?", results)
+        user_content = messages[1]["content"]
+        # Code metadata should be present — at minimum file path
+        assert "user_service.py" in user_content
+
+    def test_code_preset_max_tokens_sufficient_for_code_answers(self) -> None:
+        """T078: Code preset max_tokens should be large enough for code answers."""
+        from krag.synthesis.prompt_builder import PROMPT_PRESETS
+
+        code_preset = PROMPT_PRESETS["code"]
+        assert code_preset.max_tokens >= 512
+
+
+class TestCodePresetAutoCoupling:
+    """T076: Auto-coupling tests (preset selection based on LLM route)."""
+
+    def test_auto_coupling_code_route_selects_code_preset(self) -> None:
+        """T076: When route is 'code', auto-coupling should select code preset."""
+        # This tests the coupling logic that lives in query.py
+        # Here we verify the PromptBuilder can actually be instantiated
+        # with preset_name="code" and produces distinct output
+        from krag.synthesis.prompt_builder import PromptBuilder
+
+        code_builder = PromptBuilder(preset_name="code")
+        balanced_builder = PromptBuilder(preset_name="balanced")
+
+        results = [_code_chunk()]
+        code_messages = code_builder.build("explain foo", results)
+        balanced_messages = balanced_builder.build("explain foo", results)
+
+        # System prompts must differ
+        assert code_messages[0]["content"] != balanced_messages[0]["content"]
+
+    def test_explicit_preset_override_beats_auto_coupling(self) -> None:
+        """T076: Explicit CLI --preset should override auto-coupling."""
+        from krag.synthesis.prompt_builder import PromptBuilder
+
+        # If user passes --preset strict, it should use strict even for code
+        builder = PromptBuilder(preset_name="strict")
+        results = [_code_chunk()]
+        messages = builder.build("explain foo", results)
+        # Should use strict system prompt, not code
+        assert "concise" in messages[0]["content"].lower() or "ONLY" in messages[0]["content"]

@@ -20,6 +20,9 @@ dependencies = [
     "tomli>=2.0.0 ; python_version < '3.11'",
     "tomli-w>=1.0.0",
     "pyyaml>=6.0.1",
+    "tree-sitter>=0.23.0",
+    "tree-sitter-python>=0.23.0",
+    "tree-sitter-rust>=0.23.0",
 ]
 
 [dependency-groups]
@@ -28,6 +31,9 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.0",
+    "krag-plugin-code @ file://${PROJECT_ROOT}/examples/krag-plugin-code",
+    "krag-plugin-logs @ file://${PROJECT_ROOT}/examples/krag-plugin-logs",
+    "krag-plugin-markdown @ file://${PROJECT_ROOT}/examples/krag-plugin-markdown",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +54,7 @@ build-backend = "hatchling.build"
 [tool.ruff]
 line-length = 100
 target-version = "py311"  # Can use py313 features when ready
+exclude = ["tests/fixtures/"]
 
 [tool.ruff.lint]
 select = [

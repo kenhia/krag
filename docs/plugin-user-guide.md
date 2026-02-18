@@ -199,6 +199,64 @@ enabled = ["markdown_pro", "markdown_basic"]
 2. Uninstall the package: `uv pip uninstall krag-plugin-pdf`
 3. (Optional) Remove config section from `config.toml`
 
+## Code Plugin
+
+The `krag-plugin-code` plugin adds code-aware indexing using tree-sitter AST parsing.
+
+### Installation
+
+```bash
+# From the krag repo root:
+cd examples/krag-plugin-code
+uv pip install -e .
+```
+
+Verify installation:
+```bash
+krag plugin list
+# ✅ code (v0.1.0) — .py, .rs
+```
+
+### What It Does
+
+- Parses Python and Rust files using tree-sitter grammars
+- Chunks code into semantic units (functions, classes, methods) instead of character-based splitting
+- Embeds code chunks with a specialized code embedding model (`jinaai/jina-embeddings-v2-base-code`)
+- Enriches chunks with code metadata: language, function name, class name, line numbers
+- Metadata-aware score boosting ranks code chunks matching query symbols higher
+
+### Configuration
+
+```toml
+[plugins.code]
+code_chunk_size = 2048       # Max chunk size in chars (default: 2048)
+# languages = ["python"]     # Restrict to specific languages (default: all installed)
+```
+
+### Code LLM Integration
+
+For improved code-specific answers, configure the code LLM:
+
+```toml
+[llm]
+code_model = "/path/to/qwen2.5-coder-7b-instruct-q5_k_m.gguf"
+load_multi_llm = false    # true = try to load both simultaneously
+```
+
+Query with the code LLM:
+```bash
+krag query --llm code "explain the Retriever class"
+```
+
+### Adding Language Support
+
+Install additional tree-sitter grammars:
+```bash
+uv pip install tree-sitter-javascript tree-sitter-go tree-sitter-c
+```
+
+No plugin code changes needed — grammars are discovered dynamically.
+
 ## See Also
 
 - [Plugin Development Guide](plugin-development.md) — Create your own plugins

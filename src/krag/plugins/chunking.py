@@ -171,7 +171,7 @@ class ChunkingStrategyResolver:
         - None → default chunker
         - ChunkingStrategy.DEFAULT → default chunker
         - ChunkingStrategy.SEMANTIC → default chunker (not yet implemented)
-        - ChunkingStrategy.CODE_AWARE → default chunker (not yet implemented)
+        - ChunkingStrategy.CODE_AWARE → default chunker (plugin handles chunking via chunk_file())
         - Custom TextChunker → validate and return
         - Object with chunk_text() → wrap in CustomChunkerAdapter
         - Invalid → log warning and return default
@@ -288,9 +288,9 @@ class ChunkingStrategyResolver:
             return self._get_default_chunker()
 
         elif strategy == ChunkingStrategy.CODE_AWARE:
-            logger.warning(
-                f"{plugin_label} requested CODE_AWARE strategy, but it's not yet implemented. "
-                f"Using DEFAULT strategy as fallback."
+            logger.debug(
+                f"{plugin_label} requested CODE_AWARE strategy — "
+                f"plugin handles chunking via chunk_file(); using default chunker as fallback."
             )
             return self._get_default_chunker()
 

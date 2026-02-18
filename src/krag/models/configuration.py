@@ -272,6 +272,14 @@ class Configuration(BaseSettings):
             "Requires llama-cpp-python built with CUDA support."
         ),
     )
+    llm_code_model: str | None = Field(
+        default=None,
+        description="Path to code-specialized LLM GGUF file for multi-LLM routing",
+    )
+    load_multi_llm: bool = Field(
+        default=False,
+        description="Enable simultaneous loading of text and code LLMs when VRAM permits",
+    )
 
     # Path Reductions
     path_aliases: list[str] = Field(
@@ -324,7 +332,7 @@ class Configuration(BaseSettings):
     @classmethod
     def prompt_preset_is_valid(cls, v: str) -> str:
         """Ensure prompt preset is a known built-in name."""
-        valid_presets = {"strict", "balanced", "verbose"}
+        valid_presets = {"strict", "balanced", "verbose", "code"}
         if v not in valid_presets:
             raise ValueError(f"prompt_preset must be one of {sorted(valid_presets)}, got: {v}")
         return v

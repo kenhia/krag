@@ -276,6 +276,25 @@ class FileTypeHandler(ABC):
         """
         return file_path.suffix.lower() in [ext.lower() for ext in self.supported_extensions()]
 
+    def get_embedding_model(self) -> str | None:  # noqa: B027
+        """Declare the preferred embedding model for files handled by this plugin.
+
+        Plugins can override this to specify a specialized embedding model.
+        The EmbeddingOrchestrator will load and route embeddings accordingly.
+        Plugins that don't override this method use the system default model.
+
+        Returns:
+            A HuggingFace model name or local path to a SentenceTransformer-compatible
+            model, or None to use the system default (BAAI/bge-base-en-v1.5).
+
+        Example:
+            >>> handler.get_embedding_model()
+            "jinaai/jina-embeddings-v2-base-code"
+            >>> handler.get_embedding_model()  # default implementation
+            None
+        """
+        return None
+
     def config_schema(self) -> type[BaseModel] | None:
         """Return Pydantic model class for validating plugin-specific settings.
 

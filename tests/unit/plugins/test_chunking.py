@@ -122,13 +122,16 @@ class TestStrategyResolution:
         )
 
     def test_resolve_code_aware_strategy_falls_back_to_default(self, resolver, caplog):
-        """resolve should fall back to default for CODE_AWARE strategy (not implemented)."""
-        chunker = resolver.resolve(ChunkingStrategy.CODE_AWARE, plugin_name="test_plugin")
+        """resolve should fall back to default for CODE_AWARE silently (plugin handles chunking)."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG):
+            chunker = resolver.resolve(ChunkingStrategy.CODE_AWARE, plugin_name="test_plugin")
 
         assert isinstance(chunker, TextChunker)
-        # Should log warning about fallback
-        assert any(
-            "CODE_AWARE" in record.message and "not yet implemented" in record.message
+        # Should NOT emit a warning — CODE_AWARE is handled at DEBUG level
+        assert not any(
+            record.levelno >= logging.WARNING and "CODE_AWARE" in record.message
             for record in caplog.records
         )
 
@@ -201,12 +204,20 @@ class TestEnumStrategyResolution:
             for record in caplog.records
         )
 
-    def test_resolve_enum_strategy_code_aware_logs_warning(self, resolver, caplog):
-        """_resolve_enum_strategy should log warning for CODE_AWARE."""
-        resolver._resolve_enum_strategy(ChunkingStrategy.CODE_AWARE, "test_plugin")
+    def test_resolve_enum_strategy_code_aware_logs_debug(self, resolver, caplog):
+        """_resolve_enum_strategy should log at DEBUG (not WARNING) for CODE_AWARE."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG):
+            resolver._resolve_enum_strategy(ChunkingStrategy.CODE_AWARE, "test_plugin")
 
         assert any(
             "CODE_AWARE" in record.message and "test_plugin" in record.message
+            for record in caplog.records
+        )
+        # Must not be a warning
+        assert not any(
+            record.levelno >= logging.WARNING and "CODE_AWARE" in record.message
             for record in caplog.records
         )
 

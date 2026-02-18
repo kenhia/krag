@@ -1,7 +1,5 @@
 """Unit tests for Retriever deduplication and keyword boost."""
 
-
-
 from krag.retrieval.retriever import Retriever
 
 # ── Helpers ──────────────────────────────────────────────────────────────
