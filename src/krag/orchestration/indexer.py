@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from krag.discovery.scanner import FileScanner
-from krag.embeddings.generator import EmbeddingGenerator
+from krag.embeddings.orchestrator import EmbeddingOrchestrator
 from krag.extraction.chunker import TextChunker
 from krag.extraction.text_extractor import TextExtractor
 from krag.models.configuration import Configuration
@@ -109,17 +109,11 @@ class IndexingOrchestrator:
         self.chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
         logger.info(f"Loading embedding model: {embedding_model}")
-        self.embedding_generator = EmbeddingGenerator(model_name=embedding_model, device=device)
-
-        # Get embedding dimension
-        embedding_dim = self.embedding_generator.get_dimension()
-
-        logger.info(f"Initializing vector store (dim={embedding_dim})")
-        self.vector_store = QdrantVectorStore(
-            collection_name=collection_name,
-            vector_size=embedding_dim,
-            storage_path=self.vector_store_path,
+        self.embedding_orchestrator = EmbeddingOrchestrator(
+            default_model=embedding_model, device=device
         )
+        # Keep a reference to the default generator for backward-compat PluginContext
+        self.embedding_generator = self.embedding_orchestrator._models["text"]
 
         # Initialize change detector for incremental updates
         self.change_detector = ChangeDetector(storage_path=self.vector_store_path or Path("."))
@@ -144,10 +138,14 @@ class IndexingOrchestrator:
                     plugin_name=None,  # Will be set by specific plugin calls
                 )
 
+            # Create a temporary vector store placeholder for PluginContext
+            # (will be replaced below once we know the full vector config)
+            self.vector_store: QdrantVectorStore | None = None  # type: ignore[assignment]
+
             # Initialize plugin context with access to krag services
             self.plugin_context = PluginContext(
                 embedding_generator=self.embedding_generator,
-                vector_store=self.vector_store,
+                vector_store=self.vector_store,  # type: ignore[arg-type]
                 chunker=self.chunker,
                 logger=logging.getLogger("krag.plugins"),
                 report_indexing_failure=report_plugin_failure,
@@ -161,6 +159,9 @@ class IndexingOrchestrator:
                 chunking_overrides=chunking_overrides,
             )
 
+            # Scan loaded plugins for additional embedding models (T049/T050)
+            self._collect_plugin_embedding_models()
+
             logger.info(
                 f"Plugin system initialized: {len(self.plugin_registry.list_plugins())} plugins discovered"
             )
@@ -171,6 +172,34 @@ class IndexingOrchestrator:
             self.chunking_resolver = None
             self.failure_collector = None
             logger.debug("Plugin system disabled (no configuration provided)")
+
+        # Initialize vector store with correct vector config
+        embedding_dim = self.embedding_orchestrator.dimension
+        if self.embedding_orchestrator.is_multi_model:
+            vectors_config = self.embedding_orchestrator.get_vector_config()
+            logger.info(
+                f"Initializing vector store with named vectors: "
+                f"{list(vectors_config.keys())} (dim={embedding_dim})"
+            )
+            self.vector_store = QdrantVectorStore(
+                collection_name=collection_name,
+                vector_size=embedding_dim,
+                storage_path=self.vector_store_path,
+                vectors_config=vectors_config,
+                allow_recreate=True,
+            )
+        else:
+            logger.info(f"Initializing vector store (dim={embedding_dim})")
+            self.vector_store = QdrantVectorStore(
+                collection_name=collection_name,
+                vector_size=embedding_dim,
+                storage_path=self.vector_store_path,
+                allow_recreate=True,
+            )
+
+        # Update plugin context with the real vector store
+        if self.plugin_context is not None:
+            self.plugin_context.vector_store = self.vector_store
 
         # Track indexed files for incremental updates (metadata storage)
         self.indexed_files: dict[str, FileMetadata] = {}  # path -> FileMetadata
@@ -210,6 +239,35 @@ class IndexingOrchestrator:
                 )
 
         return overrides
+
+    def _collect_plugin_embedding_models(self) -> None:
+        """Scan loaded plugins for additional embedding models.
+
+        Iterates through discovered plugins, loads their handlers, and registers
+        any declared embedding models with the EmbeddingOrchestrator.
+        """
+        if self.plugin_registry is None:
+            return
+
+        seen_models: set[str] = set()
+        for plugin_meta in self.plugin_registry.list_plugins(filter_status="enabled"):
+            handler = self.plugin_registry.load_plugin(plugin_meta.name, self.plugin_context)
+            if handler is None:
+                continue
+
+            model_name = handler.get_embedding_model()
+            if model_name is None or model_name in seen_models:
+                continue
+
+            seen_models.add(model_name)
+            # Derive vector_name from plugin name (e.g., "code" plugin → "code")
+            vector_name = plugin_meta.name
+            loaded = self.embedding_orchestrator.register_model(vector_name, model_name)
+            if loaded:
+                logger.info(
+                    f"Plugin '{plugin_meta.name}' registered embedding model "
+                    f"'{model_name}' as vector '{vector_name}'"
+                )
 
     def __enter__(self) -> "IndexingOrchestrator":
         """Context manager entry."""
@@ -526,27 +584,57 @@ class IndexingOrchestrator:
 
                 job.chunks_generated += len(chunks)
 
-                # Generate embeddings
-                chunk_texts = [chunk.content for chunk in chunks]
-                embeddings = self.embedding_generator.generate_batch(
-                    chunk_texts, show_progress=False
+                # Determine vector_name based on plugin's embedding model (T050)
+                vector_name = "text"  # default
+                if plugin_handler is not None:
+                    emb_model = plugin_handler.get_embedding_model()
+                    if emb_model is not None:
+                        resolved = self.embedding_orchestrator.get_vector_name_for_model(emb_model)
+                        if resolved is not None:
+                            vector_name = resolved
+
+                # Generate embeddings using the orchestrator
+                embeddings = self.embedding_orchestrator.embed_chunks(
+                    chunks, vector_name=vector_name
                 )
                 job.embeddings_created += len(embeddings)
 
                 # Prepare vectors for storage
+                # Check if the active chunker provides code-aware metadata
+                _active_chunker = chunker if "chunker" in locals() else self.chunker
+                _has_chunk_meta = hasattr(_active_chunker, "get_chunk_metadata")
+
                 for chunk, embedding in zip(chunks, embeddings, strict=True):
+                    payload = {
+                        "content": chunk.content,
+                        "file_path": str(chunk.file_path),
+                        "file_type": file_metadata.file_type,
+                        "chunk_index": chunk.chunk_index,
+                        "start_char": chunk.start_char,
+                        "end_char": chunk.end_char,
+                        "token_count": chunk.token_count,
+                        "embedding_model": self.embedding_orchestrator._model_names.get(
+                            vector_name, ""
+                        ),
+                    }
+                    # Inject code-aware metadata if available
+                    if _has_chunk_meta:
+                        try:
+                            code_meta = _active_chunker.get_chunk_metadata(chunk)
+                            if code_meta:
+                                payload.update(code_meta)
+                        except Exception:
+                            pass  # Don't fail indexing for metadata errors
+                    # Use named vector format when multi-model, flat otherwise
+                    vec_value: Any = (
+                        {vector_name: embedding}
+                        if self.embedding_orchestrator.is_multi_model
+                        else embedding
+                    )
                     vector = {
                         "id": chunk.chunk_id,
-                        "vector": embedding,
-                        "payload": {
-                            "content": chunk.content,
-                            "file_path": str(chunk.file_path),
-                            "file_type": file_metadata.file_type,
-                            "chunk_index": chunk.chunk_index,
-                            "start_char": chunk.start_char,
-                            "end_char": chunk.end_char,
-                            "token_count": chunk.token_count,
-                        },
+                        "vector": vec_value,
+                        "payload": payload,
                     }
                     all_vectors.append(vector)
 
@@ -795,25 +883,56 @@ class IndexingOrchestrator:
 
                 job.chunks_generated += len(chunks)
 
-                chunk_texts = [chunk.content for chunk in chunks]
-                embeddings = self.embedding_generator.generate_batch(
-                    chunk_texts, show_progress=False
+                # Determine vector_name based on plugin's embedding model (T050)
+                vector_name = "text"  # default
+                if plugin_handler is not None:
+                    emb_model = plugin_handler.get_embedding_model()
+                    if emb_model is not None:
+                        resolved = self.embedding_orchestrator.get_vector_name_for_model(emb_model)
+                        if resolved is not None:
+                            vector_name = resolved
+
+                # Generate embeddings using the orchestrator
+                embeddings = self.embedding_orchestrator.embed_chunks(
+                    chunks, vector_name=vector_name
                 )
                 job.embeddings_created += len(embeddings)
 
+                # Check if the active chunker provides code-aware metadata
+                _active_chunker = chunker if "chunker" in locals() else self.chunker
+                _has_chunk_meta = hasattr(_active_chunker, "get_chunk_metadata")
+
                 for chunk, embedding in zip(chunks, embeddings, strict=True):
+                    payload = {
+                        "content": chunk.content,
+                        "file_path": str(chunk.file_path),
+                        "file_type": file_metadata.file_type,
+                        "chunk_index": chunk.chunk_index,
+                        "start_char": chunk.start_char,
+                        "end_char": chunk.end_char,
+                        "token_count": chunk.token_count,
+                        "embedding_model": self.embedding_orchestrator._model_names.get(
+                            vector_name, ""
+                        ),
+                    }
+                    # Inject code-aware metadata if available
+                    if _has_chunk_meta:
+                        try:
+                            code_meta = _active_chunker.get_chunk_metadata(chunk)
+                            if code_meta:
+                                payload.update(code_meta)
+                        except Exception:
+                            pass  # Don't fail indexing for metadata errors
+                    # Use named vector format when multi-model, flat otherwise
+                    vec_value: Any = (
+                        {vector_name: embedding}
+                        if self.embedding_orchestrator.is_multi_model
+                        else embedding
+                    )
                     vector = {
                         "id": chunk.chunk_id,
-                        "vector": embedding,
-                        "payload": {
-                            "content": chunk.content,
-                            "file_path": str(chunk.file_path),
-                            "file_type": file_metadata.file_type,
-                            "chunk_index": chunk.chunk_index,
-                            "start_char": chunk.start_char,
-                            "end_char": chunk.end_char,
-                            "token_count": chunk.token_count,
-                        },
+                        "vector": vec_value,
+                        "payload": payload,
                     }
                     all_vectors.append(vector)
 

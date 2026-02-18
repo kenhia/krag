@@ -384,6 +384,15 @@ class MyFileTypeHandler(FileTypeHandler):
 - Release resources, close handles
 - Clean up temporary files
 
+**`get_embedding_model()`** (optional)
+- Declares a preferred embedding model for the plugin's files
+- Return a HuggingFace model name (e.g., `"jinaai/jina-embeddings-v2-base-code"`)
+- Return `None` to use the system default embedding model
+- Multiple plugins declaring the same model share a single loaded instance
+- Files are embedded with the declared model and stored in a named vector namespace
+- The EmbeddingOrchestrator routes files accordingly during indexing
+- At query time, all vector namespaces are searched and merged via Reciprocal Rank Fusion
+
 **`config_schema()`** (optional class method)
 - Returns Pydantic model for config validation
 - Enables type-safe configuration

@@ -56,7 +56,12 @@ def query_command(
         None,
         "--preset",
         "-p",
-        help="Prompt preset (strict, balanced, verbose). Overrides config file setting.",
+        help="Prompt preset (strict, balanced, verbose, code). Overrides config file setting.",
+    ),
+    llm: str | None = typer.Option(
+        None,
+        "--llm",
+        help="LLM to use for synthesis: 'text' (general) or 'code' (code-specialized).",
     ),
     config_path: Path | None = typer.Option(
         None,
@@ -118,9 +123,11 @@ def query_command(
             exit_with_code(1)
 
         from krag.embeddings.generator import EmbeddingGenerator
+        from krag.embeddings.orchestrator import EmbeddingOrchestrator
         from krag.orchestration.query_engine import QueryEngine
         from krag.storage.qdrant_impl import QdrantVectorStore
         from krag.synthesis.llm_client import LLMClient
+        from krag.synthesis.llm_pool import LLMPool
 
         # Initialize embedding generator first (to get dimension)
         embedding_generator = EmbeddingGenerator(
@@ -128,28 +135,80 @@ def query_command(
             device=config.embedding_device,
         )
 
-        # Initialize vector store with embedding dimension
-        vector_store = QdrantVectorStore(
-            storage_path=str(config.vector_store_path),
-            collection_name=config.collection_name,
-            vector_size=embedding_generator.get_dimension(),
+        # Build orchestrator with plugin embedding models (enables named-vector search)
+        embedding_orchestrator = EmbeddingOrchestrator(
+            default_model=config.embedding_model,
+            device=config.embedding_device,
         )
+        if config.plugins is not None:
+            from krag.plugins.registry import PluginRegistry
 
-        # Initialize LLM client (if synthesis is needed)
+            _registry = PluginRegistry(config.plugins)
+            _registry.discover_plugins()
+            for _meta in _registry.list_plugins(filter_status="enabled"):
+                _handler = _registry.load_plugin(_meta.name)
+                if _handler is not None:
+                    _em = getattr(_handler, "get_embedding_model", lambda: None)()
+                    if _em:
+                        embedding_orchestrator.register_model(_meta.name, _em)
+
+        # Initialize vector store — use named vectors config when multi-model
+        _vs_kwargs: dict = {
+            "storage_path": str(config.vector_store_path),
+            "collection_name": config.collection_name,
+            "vector_size": embedding_generator.get_dimension(),
+        }
+        if embedding_orchestrator.is_multi_model:
+            _vs_kwargs["vectors_config"] = embedding_orchestrator.get_vector_config()
+        vector_store = QdrantVectorStore(**_vs_kwargs)
+
+        # Initialize LLM client or pool (if synthesis is needed)
         llm_client = None
+        llm_pool = None
+        use_pool = bool(config.llm_code_model or llm)
+
         if not no_synthesis:
-            llm_client = LLMClient(
-                model=config.llm_model,
-                max_tokens=2000,
-                n_ctx=config.llm_context_size,
-                n_threads=config.llm_num_threads,
-                n_gpu_layers=config.llm_n_gpu_layers,
-                temperature=config.llm_temperature,
-                model_cache_path=config.model_cache_path,
-                top_p=config.llm_top_p,
-                repeat_penalty=config.llm_repeat_penalty,
-                min_p=config.llm_min_p,
-            )
+            if use_pool:
+                # Multi-LLM routing via LLMPool
+                code_path = Path(config.llm_code_model) if config.llm_code_model else None
+                llm_pool = LLMPool(
+                    text_model_path=Path(str(config.llm_model)),
+                    code_model_path=code_path,
+                    load_multi_llm=config.load_multi_llm,
+                    n_ctx=config.llm_context_size,
+                    n_gpu_layers=config.llm_n_gpu_layers,
+                    temperature=config.llm_temperature,
+                    max_tokens=2000,
+                    top_p=config.llm_top_p,
+                    repeat_penalty=config.llm_repeat_penalty,
+                    min_p=config.llm_min_p,
+                )
+                # Create a thin LLMClient wrapper for QueryEngine compatibility
+                llm_client = LLMClient(
+                    model=config.llm_model,
+                    max_tokens=2000,
+                    n_ctx=config.llm_context_size,
+                    n_threads=config.llm_num_threads,
+                    n_gpu_layers=config.llm_n_gpu_layers,
+                    temperature=config.llm_temperature,
+                    model_cache_path=config.model_cache_path,
+                    top_p=config.llm_top_p,
+                    repeat_penalty=config.llm_repeat_penalty,
+                    min_p=config.llm_min_p,
+                )
+            else:
+                llm_client = LLMClient(
+                    model=config.llm_model,
+                    max_tokens=2000,
+                    n_ctx=config.llm_context_size,
+                    n_threads=config.llm_num_threads,
+                    n_gpu_layers=config.llm_n_gpu_layers,
+                    temperature=config.llm_temperature,
+                    model_cache_path=config.model_cache_path,
+                    top_p=config.llm_top_p,
+                    repeat_penalty=config.llm_repeat_penalty,
+                    min_p=config.llm_min_p,
+                )
 
         # Determine prompt preset: CLI flag overrides config file
         active_preset = preset if preset else config.prompt_preset
@@ -164,6 +223,7 @@ def query_command(
             preset_name=active_preset,
             system_prompt_override=config.prompt_system_override,
             similarity_threshold=config.similarity_threshold,
+            embedding_orchestrator=embedding_orchestrator,
         )
 
         # Execute query
@@ -189,7 +249,9 @@ def query_command(
             # Just retrieve, don't synthesize
             from krag.retrieval.retriever import Retriever
 
-            retriever = Retriever(vector_store, embedding_generator)
+            retriever = Retriever(
+                vector_store, embedding_generator, embedding_orchestrator=embedding_orchestrator
+            )
             results = retriever.retrieve(query, top_k=top_k)
 
             console.print("[cyan]📄 Results (retrieval only):[/cyan]")
@@ -202,7 +264,64 @@ def query_command(
                 console.print()
         else:
             # Full query with synthesis
-            response = query_engine.query(query, top_k=top_k)
+            if llm_pool is not None:
+                # Multi-LLM routing path
+                from krag.retrieval.retriever import Retriever as SynthRetriever
+                from krag.synthesis.prompt_builder import PromptBuilder
+
+                retriever = SynthRetriever(
+                    vector_store, embedding_generator, embedding_orchestrator=embedding_orchestrator
+                )
+                results = retriever.retrieve(
+                    query,
+                    top_k=top_k,
+                    similarity_threshold=config.similarity_threshold,
+                )
+
+                if not results:
+                    console.print(
+                        Panel(
+                            "No relevant results found for your query.",
+                            title="💡 Answer",
+                            border_style="yellow",
+                        )
+                    )
+                    return
+
+                # Determine route and auto-couple preset
+                route = llm_pool.determine_route(results, override=llm)
+                if preset:
+                    active_preset = preset
+                elif route == "code":
+                    active_preset = "code"
+                else:
+                    active_preset = config.prompt_preset
+
+                prompt_builder = PromptBuilder(
+                    path_aliases=config.path_aliases,
+                    preset_name=active_preset,
+                    system_prompt_override=config.prompt_system_override,
+                )
+                messages = prompt_builder.build(query, results)
+
+                # Generate with spinner for potential hot-swap
+                with console.status(
+                    f"[bold green]Generating with {route} LLM...",
+                    spinner="dots",
+                ):
+                    answer, llm_used = llm_pool.route_and_generate(
+                        messages, results, llm_override=llm
+                    )
+
+                logger.info("Response generated by %s LLM", llm_used)
+
+                from krag.orchestration.query_engine import QueryResponse
+
+                response = QueryResponse(answer=answer, sources=results, query=query)
+                llm_pool.close()
+            else:
+                response = query_engine.query(query, top_k=top_k)
+
             path_reducer = PathReducer(config.path_aliases)
             _display_full_response(response, show_sources, format, path_reducer)
 
@@ -240,6 +359,7 @@ def _display_full_response(
             "sources": [
                 {
                     "file_path": path_reducer.reduce(result.file_path),
+                    "source_ref": result.format_source_ref(),
                     "chunk_content": result.chunk_content,
                     "score": result.score,
                     "rank": result.rank,
@@ -256,8 +376,8 @@ def _display_full_response(
         if show_sources and response.sources:
             output += "## Sources\n\n"
             for result in response.sources:
-                reduced_path = path_reducer.reduce(result.file_path)
-                output += f"### {reduced_path} (score: {result.score:.3f})\n\n"
+                source_ref = result.format_source_ref()
+                output += f"### {source_ref} (score: {result.score:.3f})\n\n"
                 output += f"```\n{result.chunk_content}\n```\n\n"
         console.print(Markdown(output))
 
@@ -276,9 +396,9 @@ def _display_full_response(
         if show_sources and response.sources:
             console.print("\n[bold]📚 Sources:[/bold]\n")
             for result in response.sources:
-                reduced_path = path_reducer.reduce(result.file_path)
+                source_ref = result.format_source_ref()
                 console.print(
-                    f"  [cyan]{result.rank}.[/cyan] {reduced_path} "
+                    f"  [cyan]{result.rank}.[/cyan] {source_ref} "
                     f"[dim](score: {result.score:.3f})[/dim]"
                 )
 
@@ -299,6 +419,7 @@ def _display_sources_only(
         output = [
             {
                 "file_path": path_reducer.reduce(result.file_path),
+                "source_ref": result.format_source_ref(),
                 "chunk_content": result.chunk_content,
                 "score": result.score,
                 "rank": result.rank,
@@ -310,8 +431,8 @@ def _display_sources_only(
     elif format == OutputFormat.MARKDOWN:
         output = "# Retrieved Chunks\n\n"
         for result in sources:
-            reduced_path = path_reducer.reduce(result.file_path)
-            output += f"## {result.rank}. {reduced_path} (score: {result.score:.3f})\n\n"
+            source_ref = result.format_source_ref()
+            output += f"## {result.rank}. {source_ref} (score: {result.score:.3f})\n\n"
             output += f"```\n{result.chunk_content}\n```\n\n"
         console.print(Markdown(output))
 
@@ -323,7 +444,7 @@ def _display_sources_only(
         table.add_column("Content Preview", style="white", width=60)
 
         for result in sources:
-            reduced_path = path_reducer.reduce(result.file_path)
+            source_ref = result.format_source_ref()
             preview = (
                 result.chunk_content[:100] + "..."
                 if len(result.chunk_content) > 100
@@ -331,7 +452,7 @@ def _display_sources_only(
             )
             table.add_row(
                 str(result.rank),
-                reduced_path,
+                source_ref,
                 f"{result.score:.3f}",
                 preview,
             )

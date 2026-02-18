@@ -79,6 +79,7 @@ def eval_command(
 
         # Initialize pipeline components
         from krag.embeddings.generator import EmbeddingGenerator
+        from krag.embeddings.orchestrator import EmbeddingOrchestrator
         from krag.orchestration.query_engine import QueryEngine
         from krag.storage.qdrant_impl import QdrantVectorStore
         from krag.synthesis.llm_client import LLMClient
@@ -88,11 +89,32 @@ def eval_command(
             device=config.embedding_device,
         )
 
-        vector_store = QdrantVectorStore(
-            storage_path=str(config.vector_store_path),
-            collection_name=config.collection_name,
-            vector_size=embedding_generator.get_dimension(),
+        # Build orchestrator with plugin embedding models (enables named-vector search)
+        embedding_orchestrator = EmbeddingOrchestrator(
+            default_model=config.embedding_model,
+            device=config.embedding_device,
         )
+        if config.plugins is not None:
+            from krag.plugins.registry import PluginRegistry
+
+            _registry = PluginRegistry(config.plugins)
+            _registry.discover_plugins()
+            for _meta in _registry.list_plugins(filter_status="enabled"):
+                _handler = _registry.load_plugin(_meta.name)
+                if _handler is not None:
+                    _em = getattr(_handler, "get_embedding_model", lambda: None)()
+                    if _em:
+                        embedding_orchestrator.register_model(_meta.name, _em)
+
+        # Initialize vector store — use named vectors config when multi-model
+        _vs_kwargs: dict = {
+            "storage_path": str(config.vector_store_path),
+            "collection_name": config.collection_name,
+            "vector_size": embedding_generator.get_dimension(),
+        }
+        if embedding_orchestrator.is_multi_model:
+            _vs_kwargs["vectors_config"] = embedding_orchestrator.get_vector_config()
+        vector_store = QdrantVectorStore(**_vs_kwargs)
 
         llm_client = LLMClient(
             model=config.llm_model,
@@ -119,6 +141,7 @@ def eval_command(
             preset_name=active_preset,
             system_prompt_override=config.prompt_system_override,
             similarity_threshold=config.similarity_threshold,
+            embedding_orchestrator=embedding_orchestrator,
         )
 
         # Run evaluation

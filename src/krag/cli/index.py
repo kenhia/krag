@@ -147,6 +147,7 @@ def index_command(
             collection_name=config.collection_name,
             embedding_model=config.embedding_model,
             device=config.embedding_device,
+            config=config,
         )
 
         # Show configuration

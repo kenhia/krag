@@ -164,7 +164,12 @@ class TestCodeAwareChunkingStrategy:
     """Test code-aware chunking strategy (not yet implemented)."""
 
     def test_code_aware_strategy_falls_back_to_default(self, resolver, caplog):
-        """CODE_AWARE strategy should fall back to DEFAULT (not implemented yet)."""
+        """CODE_AWARE strategy should fall back to DEFAULT chunker silently.
+
+        Plugins using CODE_AWARE handle chunking themselves via chunk_file();
+        the resolver returns the default chunker as a no-op fallback without
+        emitting a warning.
+        """
 
         class CodePlugin(MockFileTypeHandler):
             def get_chunking_strategy(self):
@@ -173,14 +178,15 @@ class TestCodeAwareChunkingStrategy:
         plugin = CodePlugin()
         strategy = plugin.get_chunking_strategy()
 
-        chunker = resolver.resolve(strategy, plugin_name="code_plugin")
+        with caplog.at_level(logging.DEBUG):
+            chunker = resolver.resolve(strategy, plugin_name="code_plugin")
 
-        # Should fall back to default
+        # Should fall back to default chunker
         assert isinstance(chunker, TextChunker)
 
-        # Should log warning
-        assert any(
-            "CODE_AWARE" in record.message and "not yet implemented" in record.message
+        # Should NOT emit a warning — CODE_AWARE is handled silently at DEBUG level
+        assert not any(
+            record.levelno >= logging.WARNING and "CODE_AWARE" in record.message
             for record in caplog.records
         )
 

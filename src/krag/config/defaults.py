@@ -102,6 +102,9 @@ DEFAULT_LLM_MIN_P = 0.05  # Minimum probability threshold for sampling
 # Default prompt parameters
 DEFAULT_PROMPT_PRESET = "balanced"
 
+# Code-aware indexing defaults
+DEFAULT_CODE_CHUNK_SIZE = 2048  # Max chunk size in chars for code files
+
 # XDG Base Directory paths
 DEFAULT_CONFIG_DIR = get_krag_config_dir()
 DEFAULT_CACHE_DIR = get_krag_cache_dir()

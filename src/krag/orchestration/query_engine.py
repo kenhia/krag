@@ -40,6 +40,7 @@ class QueryEngine:
         preset_name: str = "balanced",
         system_prompt_override: str | None = None,
         similarity_threshold: float | None = None,
+        embedding_orchestrator: Any | None = None,
     ):
         """Initialize query engine.
 
@@ -53,8 +54,11 @@ class QueryEngine:
             preset_name: Prompt preset name (strict, balanced, verbose)
             system_prompt_override: Custom system prompt that replaces preset prompt
             similarity_threshold: Minimum similarity score for retrieval results
+            embedding_orchestrator: Multi-model orchestrator for named-vector search
         """
-        self.retriever = Retriever(vector_store, embedding_generator)
+        self.retriever = Retriever(
+            vector_store, embedding_generator, embedding_orchestrator=embedding_orchestrator
+        )
         self.prompt_builder = PromptBuilder(
             max_context_length=max_context_length,
             path_aliases=path_aliases,

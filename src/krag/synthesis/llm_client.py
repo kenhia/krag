@@ -361,6 +361,21 @@ class LLMClient:
             logger.error("LLM generation failed: %s", e)
             return f"Error generating response: {e}"
 
+    def close(self) -> None:
+        """Release the loaded LLM model and free resources.
+
+        Calls Llama.close() for deterministic VRAM release.
+        Safe to call multiple times or when no model is loaded.
+        """
+        if self.model is not None:
+            try:
+                self.model.close()
+                logger.info("LLM model closed successfully")
+            except Exception as e:
+                logger.warning(f"Error closing LLM model: {e}")
+            finally:
+                self.model = None
+
     def _generate_fallback(self, messages: list[dict[str, str]]) -> str:
         """Fallback response when no model is loaded.
 

@@ -138,6 +138,10 @@ class ConfigManager:
                 config_dict["llm_min_p"] = llm_section["min_p"]
             if "n_gpu_layers" in llm_section:
                 config_dict["llm_n_gpu_layers"] = llm_section["n_gpu_layers"]
+            if "code_model" in llm_section:
+                config_dict["llm_code_model"] = llm_section["code_model"]
+            if "load_multi_llm" in llm_section:
+                config_dict["load_multi_llm"] = llm_section["load_multi_llm"]
 
         # [storage] section (new: configurable storage paths)
         if "storage" in toml_data:

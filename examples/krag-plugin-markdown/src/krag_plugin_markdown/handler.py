@@ -69,13 +69,23 @@ class MarkdownFileTypeHandler(FileTypeHandler):
             logger.error(f"Invalid encoding in Markdown file {file_path}: {e}")
             raise
 
-        # Remove frontmatter (will be parsed separately)
-        content = self._remove_frontmatter(content)
+        # Parse frontmatter before removing it (needed for fallback text)
+        frontmatter = self._parse_frontmatter(content, file_path)
 
-        # Strip Markdown syntax
-        text = self._strip_markdown(content)
+        # Remove frontmatter then strip Markdown syntax
+        body = self._remove_frontmatter(content)
+        text = self._strip_markdown(body).strip()
 
-        return text.strip()
+        # If the file has no body content, synthesise indexable text from
+        # frontmatter fields so the file is not silently dropped.
+        if not text and frontmatter:
+            parts = []
+            for key, value in frontmatter.items():
+                if value is not None:
+                    parts.append(f"{key}: {value}")
+            text = "\n".join(parts)
+
+        return text
 
     def extract_metadata(self, file_path: Path) -> dict[str, Any]:
         """Extract metadata from YAML frontmatter.
@@ -110,7 +120,7 @@ class MarkdownFileTypeHandler(FileTypeHandler):
         metadata: dict[str, Any] = {}
 
         # Parse frontmatter
-        frontmatter = self._parse_frontmatter(content)
+        frontmatter = self._parse_frontmatter(content, file_path)
         if frontmatter:
             metadata.update(frontmatter)
 
@@ -172,11 +182,14 @@ class MarkdownFileTypeHandler(FileTypeHandler):
         pattern = r"^---\s*\n.*?\n---\s*\n"
         return re.sub(pattern, "", content, count=1, flags=re.DOTALL)
 
-    def _parse_frontmatter(self, content: str) -> dict[str, Any] | None:
+    def _parse_frontmatter(
+        self, content: str, file_path: Path | None = None
+    ) -> dict[str, Any] | None:
         """Parse YAML frontmatter from content.
 
         Args:
             content: Full Markdown content
+            file_path: Source file path (used in warning messages)
 
         Returns:
             Dictionary of frontmatter fields or None if no frontmatter
@@ -195,7 +208,8 @@ class MarkdownFileTypeHandler(FileTypeHandler):
             if isinstance(frontmatter, dict):
                 return frontmatter
         except yaml.YAMLError as e:
-            logger.warning(f"Failed to parse YAML frontmatter: {e}")
+            location = f" in {file_path}" if file_path else ""
+            logger.warning(f"Failed to parse YAML frontmatter{location}: {e}")
 
         return None
 

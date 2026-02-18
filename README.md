@@ -15,6 +15,7 @@ A local-first system for indexing personal files (PC and NAS storage) and queryi
 - 🤖 **LLM Synthesis**: Local LLM generates coherent answers from retrieved content
 - ⚡ **Incremental Updates**: Re-index only new or modified files
 - ⚙️ **Flexible Configuration**: Customize directories, file types, chunking, models
+- 🧠 **Code-Aware Indexing**: AST-based chunking via tree-sitter, code-specialized embeddings, multi-LLM routing with hot-swap
 - 🔌 **Plugin System**: Extend with custom file type handlers for PDF, DOCX, logs, and more
 
 ## Prerequisites
@@ -278,6 +279,29 @@ class MyHandler(FileTypeHandler):
 ```
 
 See also: [docs/plugin-user-guide.md](docs/plugin-user-guide.md) for the user guide.
+
+## Code-Aware Indexing
+
+krag supports specialized code indexing via the `krag-plugin-code` plugin:
+
+- **AST-based chunking**: tree-sitter parses Python and Rust into semantic units (functions, classes, methods)
+- **Code embeddings**: uses `jinaai/jina-embeddings-v2-base-code` for code-optimized vectors
+- **Multi-LLM routing**: routes queries to a code LLM (Qwen2.5-Coder) or text LLM (Phi-3) based on retrieved content
+- **Hot-swap fallback**: single-GPU users get automatic model swapping when VRAM is limited
+- **Enriched metadata**: query results include function names, class names, and line numbers
+- **Code prompt preset**: `--preset code` for technically precise code Q&A
+
+```bash
+# Install the code plugin
+cd examples/krag-plugin-code && uv pip install -e .
+
+# Index and query
+krag index
+krag query --preset code "what does the _deduplicate method do?"
+krag query --llm code "explain the Retriever class"
+```
+
+See [docs/plugin-user-guide.md](docs/plugin-user-guide.md) for detailed setup.
 
 ## Architecture
 
