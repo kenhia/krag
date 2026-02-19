@@ -103,9 +103,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Reduce upsert log noise in `src/krag/storage/qdrant_impl.py`: change per-batch `logger.info("Upserted N vectors")` to `logger.debug()`; add single `logger.info("Storing N vectors in M batches")` before loop and `logger.info("Stored N vectors successfully")` after loop completes (FR-016)
-- [ ] T023 [US3] Create `src/krag/cli/log.py` with Typer subcommand group: implement `rotate()` (shift backups krag.log→krag.log.1, max 5), `clear()` (truncate to zero), and `path()` (print log path with exists/not-found suffix) commands using `get_log_file_path()` from T003 (FR-017, FR-018, contract: log-cli.md)
-- [ ] T024 [US3] Register `log` subcommand group in `src/krag/cli/main.py`: add `app.add_typer(log_app, name="log")` import from `cli/log.py` (FR-017, FR-018)
+- [x] T022 [US3] Reduce upsert log noise in `src/krag/storage/qdrant_impl.py`: change per-batch `logger.info("Upserted N vectors")` to `logger.debug()`; add single `logger.info("Storing N vectors in M batches")` before loop and `logger.info("Stored N vectors successfully")` after loop completes (FR-016)
+- [x] T023 [US3] Create `src/krag/cli/log.py` with Typer subcommand group: implement `rotate()` (shift backups krag.log→krag.log.1, max 5), `clear()` (truncate to zero), and `path()` (print log path with exists/not-found suffix) commands using `get_log_file_path()` from T003 (FR-017, FR-018, contract: log-cli.md)
+- [x] T024 [US3] Register `log` subcommand group in `src/krag/cli/main.py`: add `app.add_typer(log_app, name="log")` import from `cli/log.py` (FR-017, FR-018)
 
 **Checkpoint**: Upsert logging reduced from ~70 to ≤3 INFO entries. `krag log rotate`, `krag log clear`, `krag log path` all functional. All existing tests pass.
 

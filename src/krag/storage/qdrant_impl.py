@@ -244,7 +244,7 @@ class QdrantVectorStore(VectorStore):
             warnings.simplefilter("ignore", UserWarning)
             self.client.upsert(collection_name=self.collection_name, points=points)
 
-        logger.info(f"Upserted {len(points)} vectors to {self.collection_name}")
+        logger.debug(f"Upserted {len(points)} vectors to {self.collection_name}")
 
     def search(self, query_vector: list[float], limit: int = 10) -> list[dict[str, Any]]:
         """Search for similar vectors.
