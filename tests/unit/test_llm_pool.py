@@ -89,7 +89,7 @@ class TestSimultaneousRouting:
 
         # Mock VRAM check to allow simultaneous loading
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,  # 32 GB
         ):
             pool = _make_pool(text_path, code_path, load_multi_llm=True)
@@ -114,7 +114,7 @@ class TestSimultaneousRouting:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool = _make_pool(text_path, code_path, load_multi_llm=True)
@@ -137,7 +137,7 @@ class TestSimultaneousRouting:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool = _make_pool(text_path, code_path, load_multi_llm=True)
@@ -217,7 +217,7 @@ class TestVRAMFallback:
 
         # Mock very low VRAM (less than KV cache alone)
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=100,  # 100 bytes — far too low
         ):
             with caplog.at_level(logging.WARNING):
@@ -235,7 +235,7 @@ class TestVRAMFallback:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=None,  # No GPU
         ):
             pool = _make_pool(text_path, code_path, load_multi_llm=True)

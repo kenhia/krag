@@ -1,13 +1,20 @@
 """Retriever for similarity search in vector store."""
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from krag.models.query_result import QueryResult
 from krag.retrieval.rrf import reciprocal_rank_fusion
+
+if TYPE_CHECKING:
+    from krag.embeddings.generator import EmbeddingGenerator
+    from krag.embeddings.orchestrator import EmbeddingOrchestrator
+    from krag.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +41,9 @@ class Retriever:
 
     def __init__(
         self,
-        vector_store: Any,  # VectorStore protocol/interface
-        embedding_generator: Any,  # EmbeddingGenerator protocol/interface
-        embedding_orchestrator: Any | None = None,  # EmbeddingOrchestrator (optional)
+        vector_store: VectorStore,
+        embedding_generator: EmbeddingGenerator,
+        embedding_orchestrator: EmbeddingOrchestrator | None = None,
     ):
         """Initialize retriever.
 

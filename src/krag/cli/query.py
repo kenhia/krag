@@ -79,152 +79,45 @@ def query_command(
         krag query "Python async patterns" --top-k 10 --format json
     """
     try:
-        # Load configuration
-        from krag.config.settings import ConfigManager
+        from krag.cli.pipeline import build_query_pipeline
 
-        config_manager = ConfigManager()
-        if config_path:
-            config = config_manager.load(config_path)
-        else:
-            # Use default config path
-            default_config_path = Path.home() / ".config" / "krag" / "config.toml"
-            if default_config_path.exists():
-                config = config_manager.load(default_config_path)
-            else:
-                console.print(
-                    Panel(
-                        "[yellow]No configuration found![/yellow]\n\n"
-                        "You need to create a configuration file first:\n"
-                        f"  Default location: [cyan]{default_config_path}[/cyan]\n\n"
-                        "Run initialization:\n"
-                        "  [cyan]krag init[/cyan]",
-                        title="⚠️  Configuration Required",
-                        border_style="yellow",
-                    )
-                )
-                exit_with_code(1)
+        pipeline = build_query_pipeline(
+            config_path=config_path,
+            top_k=top_k,
+            preset=preset,
+        )
+        config = pipeline.config
+        vector_store = pipeline.vector_store
+        embedding_generator = pipeline.embedding_generator
+        embedding_orchestrator = pipeline.embedding_orchestrator
+        llm_pool = pipeline.llm_pool
+        query_engine = pipeline.query_engine
+
+        # Override llm_pool if user explicitly requests --llm routing
+        if llm and not llm_pool:
+            from krag.synthesis.llm_pool import LLMPool
+
+            code_path = Path(config.llm_code_model) if config.llm_code_model else None
+            llm_pool = LLMPool(
+                text_model_path=Path(str(config.llm_model)),
+                code_model_path=code_path,
+                load_multi_llm=config.load_multi_llm,
+                n_ctx=config.llm_context_size,
+                n_gpu_layers=config.llm_n_gpu_layers,
+                temperature=config.llm_temperature,
+                max_tokens=2000,
+                top_p=config.llm_top_p,
+                repeat_penalty=config.llm_repeat_penalty,
+                min_p=config.llm_min_p,
+            )
 
         # Validate query
         if not query or not query.strip():
             console.print("[red]Error:[/red] Query cannot be empty", style="bold")
             exit_with_code(1)
 
-        # Initialize components
-        if not Path(config.vector_store_path).exists():
-            console.print(
-                Panel(
-                    "[yellow]No indexed data found![/yellow]\n\n"
-                    "You need to index your documents first:\n"
-                    "  [cyan]krag index[/cyan]",
-                    title="⚠️  Storage Not Found",
-                    border_style="yellow",
-                )
-            )
-            exit_with_code(1)
-
-        from krag.embeddings.generator import EmbeddingGenerator
-        from krag.embeddings.orchestrator import EmbeddingOrchestrator
-        from krag.orchestration.query_engine import QueryEngine
-        from krag.storage.qdrant_impl import QdrantVectorStore
-        from krag.synthesis.llm_client import LLMClient
-        from krag.synthesis.llm_pool import LLMPool
-
-        # Initialize embedding generator first (to get dimension)
-        embedding_generator = EmbeddingGenerator(
-            model_name=config.embedding_model,
-            device=config.embedding_device,
-        )
-
-        # Build orchestrator with plugin embedding models (enables named-vector search)
-        embedding_orchestrator = EmbeddingOrchestrator(
-            default_model=config.embedding_model,
-            device=config.embedding_device,
-        )
-        if config.plugins is not None:
-            from krag.plugins.registry import PluginRegistry
-
-            _registry = PluginRegistry(config.plugins)
-            _registry.discover_plugins()
-            for _meta in _registry.list_plugins(filter_status="enabled"):
-                _handler = _registry.load_plugin(_meta.name)
-                if _handler is not None:
-                    _em = getattr(_handler, "get_embedding_model", lambda: None)()
-                    if _em:
-                        embedding_orchestrator.register_model(_meta.name, _em)
-
-        # Initialize vector store — use named vectors config when multi-model
-        _vs_kwargs: dict = {
-            "storage_path": str(config.vector_store_path),
-            "collection_name": config.collection_name,
-            "vector_size": embedding_generator.get_dimension(),
-        }
-        if embedding_orchestrator.is_multi_model:
-            _vs_kwargs["vectors_config"] = embedding_orchestrator.get_vector_config()
-        vector_store = QdrantVectorStore(**_vs_kwargs)
-
-        # Initialize LLM client or pool (if synthesis is needed)
-        llm_client = None
-        llm_pool = None
-        use_pool = bool(config.llm_code_model or llm)
-
-        if not no_synthesis:
-            if use_pool:
-                # Multi-LLM routing via LLMPool
-                code_path = Path(config.llm_code_model) if config.llm_code_model else None
-                llm_pool = LLMPool(
-                    text_model_path=Path(str(config.llm_model)),
-                    code_model_path=code_path,
-                    load_multi_llm=config.load_multi_llm,
-                    n_ctx=config.llm_context_size,
-                    n_gpu_layers=config.llm_n_gpu_layers,
-                    temperature=config.llm_temperature,
-                    max_tokens=2000,
-                    top_p=config.llm_top_p,
-                    repeat_penalty=config.llm_repeat_penalty,
-                    min_p=config.llm_min_p,
-                )
-                # Create a thin LLMClient wrapper for QueryEngine compatibility
-                llm_client = LLMClient(
-                    model=config.llm_model,
-                    max_tokens=2000,
-                    n_ctx=config.llm_context_size,
-                    n_threads=config.llm_num_threads,
-                    n_gpu_layers=config.llm_n_gpu_layers,
-                    temperature=config.llm_temperature,
-                    model_cache_path=config.model_cache_path,
-                    top_p=config.llm_top_p,
-                    repeat_penalty=config.llm_repeat_penalty,
-                    min_p=config.llm_min_p,
-                )
-            else:
-                llm_client = LLMClient(
-                    model=config.llm_model,
-                    max_tokens=2000,
-                    n_ctx=config.llm_context_size,
-                    n_threads=config.llm_num_threads,
-                    n_gpu_layers=config.llm_n_gpu_layers,
-                    temperature=config.llm_temperature,
-                    model_cache_path=config.model_cache_path,
-                    top_p=config.llm_top_p,
-                    repeat_penalty=config.llm_repeat_penalty,
-                    min_p=config.llm_min_p,
-                )
-
         # Determine prompt preset: CLI flag overrides config file
         active_preset = preset if preset else config.prompt_preset
-
-        # Initialize query engine
-        query_engine = QueryEngine(
-            vector_store=vector_store,
-            embedding_generator=embedding_generator,
-            llm_client=llm_client,
-            top_k=top_k,
-            path_aliases=config.path_aliases,
-            preset_name=active_preset,
-            system_prompt_override=config.prompt_system_override,
-            similarity_threshold=config.similarity_threshold,
-            embedding_orchestrator=embedding_orchestrator,
-        )
 
         # Execute query
         # Log the command invocation for audit trail

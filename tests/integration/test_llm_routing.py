@@ -71,7 +71,7 @@ class TestLLMRoutingIntegration:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool = LLMPool(
@@ -110,7 +110,7 @@ class TestLLMRoutingIntegration:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool = LLMPool(
@@ -147,7 +147,7 @@ class TestLLMRoutingIntegration:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool = LLMPool(
@@ -181,7 +181,7 @@ class TestLLMRoutingIntegration:
 
         # Force hot-swap mode by setting low VRAM
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=1_000_000_000,
         ):
             pool = LLMPool(
@@ -215,7 +215,7 @@ class TestLLMRoutingIntegration:
 
         # Simultaneous mode
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool_sim = LLMPool(

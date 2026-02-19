@@ -73,19 +73,6 @@ class LLMSlot:
     llm_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
-def _get_free_vram() -> int | None:
-    """Return free VRAM in bytes, or *None* if no CUDA GPU is available."""
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            free, _total = torch.cuda.mem_get_info()
-            return int(free)
-    except Exception:  # noqa: BLE001
-        pass
-    return None
-
-
 class LLMPool:
     """Multi-LLM lifecycle manager with routing and hot-swap.
 
@@ -229,7 +216,9 @@ class LLMPool:
 
     def get_status(self) -> dict[str, Any]:
         """Return detailed status of all LLM slots."""
-        free_vram = _get_free_vram()
+        from krag.cli.gpu import get_free_vram
+
+        free_vram = get_free_vram()
         return {
             "mode": self._mode,
             "text": self._slot_status(self._text_slot),
@@ -283,7 +272,9 @@ class LLMPool:
 
         where ``kv_cache = n_ctx × 2 MB``.
         """
-        free = _get_free_vram()
+        from krag.cli.gpu import get_free_vram
+
+        free = get_free_vram()
         if free is None:
             logger.warning("No GPU detected – cannot load both LLMs simultaneously.")
             return False

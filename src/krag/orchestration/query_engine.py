@@ -1,14 +1,21 @@
 """Query engine for orchestrating retrieval and synthesis."""
 
+from __future__ import annotations
+
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
 
 from krag.models.query_result import QueryResult
 from krag.retrieval.retriever import Retriever
 from krag.synthesis.llm_client import LLMClient
 from krag.synthesis.prompt_builder import INSUFFICIENT_CONTEXT_PHRASE, PromptBuilder
+
+if TYPE_CHECKING:
+    from krag.embeddings.generator import EmbeddingGenerator
+    from krag.embeddings.orchestrator import EmbeddingOrchestrator
+    from krag.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +38,8 @@ class QueryEngine:
 
     def __init__(
         self,
-        vector_store: Any,
-        embedding_generator: Any,
+        vector_store: VectorStore,
+        embedding_generator: EmbeddingGenerator,
         llm_client: LLMClient,
         top_k: int = 5,
         max_context_length: int = 4000,
@@ -40,7 +47,7 @@ class QueryEngine:
         preset_name: str = "balanced",
         system_prompt_override: str | None = None,
         similarity_threshold: float | None = None,
-        embedding_orchestrator: Any | None = None,
+        embedding_orchestrator: EmbeddingOrchestrator | None = None,
     ):
         """Initialize query engine.
 

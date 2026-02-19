@@ -102,7 +102,7 @@ class TestCodePresetIntegration:
 
             with patch("llama_cpp.Llama", mock_llama):
                 with patch(
-                    "krag.synthesis.llm_pool._get_free_vram",
+                    "krag.cli.gpu.get_free_vram",
                     return_value=32_000_000_000,
                 ):
                     pool = LLMPool(
