@@ -9,7 +9,6 @@ import typer
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.table import Table
 
 from krag.cli.utils import exit_with_code
 from krag.config.path_reducer import PathReducer
@@ -294,60 +293,3 @@ def _display_full_response(
                     f"  [cyan]{result.rank}.[/cyan] {source_ref} "
                     f"[dim](score: {result.score:.3f})[/dim]"
                 )
-
-
-def _display_sources_only(
-    sources,
-    format: OutputFormat,
-    path_reducer: PathReducer,
-) -> None:
-    """Display only retrieved sources without synthesis.
-
-    Args:
-        sources: List of QueryResult objects
-        format: Output format
-        path_reducer: Path reducer for display
-    """
-    if format == OutputFormat.JSON:
-        output = [
-            {
-                "file_path": path_reducer.reduce(result.file_path),
-                "source_ref": result.format_source_ref(),
-                "chunk_content": result.chunk_content,
-                "score": result.score,
-                "rank": result.rank,
-            }
-            for result in sources
-        ]
-        console.print(json.dumps(output, indent=2))
-
-    elif format == OutputFormat.MARKDOWN:
-        output = "# Retrieved Chunks\n\n"
-        for result in sources:
-            source_ref = result.format_source_ref()
-            output += f"## {result.rank}. {source_ref} (score: {result.score:.3f})\n\n"
-            output += f"```\n{result.chunk_content}\n```\n\n"
-        console.print(Markdown(output))
-
-    else:  # TEXT format
-        table = Table(title="Retrieved Chunks", show_header=True, header_style="bold")
-        table.add_column("Rank", style="cyan", width=6)
-        table.add_column("File", style="green")
-        table.add_column("Score", style="yellow", width=8)
-        table.add_column("Content Preview", style="white", width=60)
-
-        for result in sources:
-            source_ref = result.format_source_ref()
-            preview = (
-                result.chunk_content[:100] + "..."
-                if len(result.chunk_content) > 100
-                else result.chunk_content
-            )
-            table.add_row(
-                str(result.rank),
-                source_ref,
-                f"{result.score:.3f}",
-                preview,
-            )
-
-        console.print(table)

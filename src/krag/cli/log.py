@@ -1,7 +1,6 @@
 """Log management CLI commands."""
 
 import shutil
-from pathlib import Path
 
 import typer
 from rich.console import Console

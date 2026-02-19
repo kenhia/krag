@@ -18,6 +18,71 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Common stop words filtered from boost keyword extraction
+_STOP_WORDS: frozenset[str] = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "are",
+        "was",
+        "were",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "need",
+        "use",
+        "used",
+        "using",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "this",
+        "that",
+        "these",
+        "those",
+        "how",
+        "when",
+        "where",
+        "why",
+        "not",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "than",
+        "too",
+        "very",
+        "just",
+        "about",
+        "into",
+        "from",
+        "with",
+    }
+)
+
+# Minimum keyword length for boost extraction (shared by both boost methods)
+_MIN_KEYWORD_LENGTH = 3
+
 
 class Retriever:
     """Retrieves relevant chunks from vector store based on query similarity.
@@ -255,9 +320,7 @@ class Retriever:
         # Convert RRFScoredPoint objects to QueryResult
         query_results: list[QueryResult] = []
         for rank, point in enumerate(merged, start=1):
-            qr = self._payload_to_query_result(
-                str(point.id), point.score, rank, point.payload
-            )
+            qr = self._payload_to_query_result(str(point.id), point.score, rank, point.payload)
             if qr is not None:
                 query_results.append(qr)
 
@@ -306,9 +369,10 @@ class Retriever:
     ) -> list[QueryResult]:
         """Boost scores for results whose function/class name matches query terms.
 
-        Extracts meaningful words from the query and checks whether they
-        appear in each result's ``function_name`` or ``class_name``.  A
-        small bonus is added per match, and results are re-sorted.
+        Extracts meaningful words (3+ chars, no stop words) from the query
+        and checks whether they appear in each result's ``function_name``
+        or ``class_name``.  A small bonus is added per match, and results
+        are re-sorted.
 
         Args:
             query: Original user query
@@ -320,7 +384,7 @@ class Retriever:
         """
         boost_weight = self._METADATA_BOOST_WEIGHT_RRF if is_rrf else self._METADATA_BOOST_WEIGHT
         words = re.findall(r"[a-zA-Z0-9_]+", query.lower())
-        keywords = [w for w in words if len(w) >= 2]
+        keywords = [w for w in words if len(w) >= _MIN_KEYWORD_LENGTH and w not in _STOP_WORDS]
 
         if not keywords:
             return results
@@ -361,9 +425,9 @@ class Retriever:
     ) -> list[QueryResult]:
         """Boost scores for results containing query keywords.
 
-        Extracts meaningful words (3+ chars) from the query and adds a
-        small bonus for each keyword found (case-insensitive) in the chunk
-        content. Results are re-sorted by boosted score.
+        Extracts meaningful words (3+ chars, no stop words) from the query
+        and adds a small bonus for each keyword found (case-insensitive) in
+        the chunk content. Results are re-sorted by boosted score.
 
         Args:
             query: Original user query
@@ -374,68 +438,9 @@ class Retriever:
             Results re-sorted by boosted score (descending)
         """
         boost_weight = self._KEYWORD_BOOST_WEIGHT_RRF if is_rrf else self._KEYWORD_BOOST_WEIGHT
-        # Extract keywords: words with 3+ chars, lowercased, no stop words
-        stop_words = {
-            "the",
-            "and",
-            "for",
-            "are",
-            "was",
-            "were",
-            "been",
-            "being",
-            "have",
-            "has",
-            "had",
-            "does",
-            "did",
-            "will",
-            "would",
-            "could",
-            "should",
-            "may",
-            "might",
-            "shall",
-            "can",
-            "need",
-            "use",
-            "used",
-            "using",
-            "what",
-            "which",
-            "who",
-            "whom",
-            "this",
-            "that",
-            "these",
-            "those",
-            "how",
-            "when",
-            "where",
-            "why",
-            "not",
-            "all",
-            "each",
-            "every",
-            "both",
-            "few",
-            "more",
-            "most",
-            "other",
-            "some",
-            "such",
-            "than",
-            "too",
-            "very",
-            "just",
-            "about",
-            "into",
-            "from",
-            "with",
-        }
-
+        # Extract keywords using shared stop-word list and min-length
         words = re.findall(r"[a-zA-Z0-9_]+", query.lower())
-        keywords = [w for w in words if len(w) >= 3 and w not in stop_words]
+        keywords = [w for w in words if len(w) >= _MIN_KEYWORD_LENGTH and w not in _STOP_WORDS]
 
         if not keywords:
             return results

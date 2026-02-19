@@ -115,17 +115,17 @@
 
 **Purpose**: Dead code removal, import cleanup, design improvements, and final verification.
 
-- [ ] T025 [P] Remove dead function `_display_sources_only()` (~55 lines, L406–461) from `src/krag/cli/query.py` (FR-019)
-- [ ] T026 [P] Use `ScoredPointLike` protocol in `reciprocal_rank_fusion()` signature in `src/krag/retrieval/rrf.py`: change `result_lists: list[list[Any]]` to `result_lists: list[list[ScoredPointLike]]` (FR-019, research: R-09)
-- [ ] T027 [P] Remove `__del__` method from `IndexingOrchestrator` in `src/krag/orchestration/indexer.py` (~L234–236); context manager `__enter__`/`__exit__` already handles cleanup (FR-020)
-- [ ] T028 [P] Fix redundant imports in `src/krag/orchestration/indexer.py`: move `import json` to module-level; remove duplicate `from datetime import datetime` inside `_load_metadata` (~L314) (FR-021)
-- [ ] T029 [P] Remove dimension equality check in `src/krag/embeddings/orchestrator.py` (~L118–124) — Qdrant supports different dimensions per named vector space natively (FR-022)
-- [ ] T030 [P] Document `"text"` vector space invariant: add docstring comment in `src/krag/storage/qdrant_impl.py` at the `search()` fallback (~L268–271) explaining that `"text"` is the default vector space convention (research: R-05)
-- [ ] T031 [P] Unify keyword extraction in `src/krag/retrieval/retriever.py`: align `_metadata_boost` min-length (currently 2) with `_keyword_boost` min-length (currently 3); use consistent stop-word filtering in both
-- [ ] T032 Add integration test for named-vector + RRF pipeline in `tests/integration/test_named_vector_query_pipeline.py`: index sample docs with multi-model mock embeddings, query via RRF, verify expected sources in top-k results (research: R-10)
-- [ ] T033 Run full pre-commit validation: `uv run ruff format . && uv run ruff check --fix . && uv run pytest` — all 800+ tests must pass with zero regressions (SC-002)
-- [ ] T034 Run eval suite: `krag eval tests/fixtures/eval_queries.toml` — verify 3/3 pass rate restored (SC-001)
-- [ ] T035 Run quickstart.md validation: execute all validation commands from `specs/006-code-quality-sprint/quickstart.md` to verify measurable outcomes SC-001 through SC-008
+- [x] T025 [P] Remove dead function `_display_sources_only()` (~55 lines, L406–461) from `src/krag/cli/query.py` (FR-019)
+- [x] T026 [P] Use `ScoredPointLike` protocol in `reciprocal_rank_fusion()` signature in `src/krag/retrieval/rrf.py`: change `result_lists: list[list[Any]]` to `result_lists: list[list[ScoredPointLike]]` (FR-019, research: R-09)
+- [x] T027 [P] Remove `__del__` method from `IndexingOrchestrator` in `src/krag/orchestration/indexer.py` (~L234–236); context manager `__enter__`/`__exit__` already handles cleanup (FR-020)
+- [x] T028 [P] Fix redundant imports in `src/krag/orchestration/indexer.py`: move `import json` to module-level; remove duplicate `from datetime import datetime` inside `_load_metadata` (~L314) (FR-021)
+- [x] T029 [P] Remove dimension equality check in `src/krag/embeddings/orchestrator.py` (~L118–124) — Qdrant supports different dimensions per named vector space natively (FR-022)
+- [x] T030 [P] Document `"text"` vector space invariant: add docstring comment in `src/krag/storage/qdrant_impl.py` at the `search()` fallback (~L268–271) explaining that `"text"` is the default vector space convention (research: R-05)
+- [x] T031 [P] Unify keyword extraction in `src/krag/retrieval/retriever.py`: align `_metadata_boost` min-length (currently 2) with `_keyword_boost` min-length (currently 3); use consistent stop-word filtering in both
+- [x] T032 Add integration test for named-vector + RRF pipeline in `tests/integration/test_named_vector_query_pipeline.py`: index sample docs with multi-model mock embeddings, query via RRF, verify expected sources in top-k results (research: R-10)
+- [x] T033 Run full pre-commit validation: `uv run ruff format . && uv run ruff check --fix . && uv run pytest` — all 800+ tests must pass with zero regressions (SC-002)
+- [ ] T034 Run eval suite: `krag eval tests/fixtures/eval_queries.toml` — verify 3/3 pass rate restored (SC-001) *(requires indexed corpus and LLM models)*
+- [ ] T035 Run quickstart.md validation: execute all validation commands from `specs/006-code-quality-sprint/quickstart.md` to verify measurable outcomes SC-001 through SC-008 *(requires live environment)*
 
 ---
 

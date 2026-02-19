@@ -103,25 +103,14 @@ class EmbeddingOrchestrator:
             logger.info(f"Loading additional embedding model: {model_name} as '{vector_name}'")
             gen = EmbeddingGenerator(model_name=model_name, device=self._device)
 
-            # Verify dimension matches
-            default_dim = self._models["text"].get_dimension()
-            new_dim = gen.get_dimension()
-            if new_dim != default_dim:
-                raise ValueError(
-                    f"Dimension mismatch: default model has {default_dim}d, "
-                    f"but '{model_name}' has {new_dim}d. All models must "
-                    f"have the same vector dimension."
-                )
-
             self._models[vector_name] = gen
             self._model_names[vector_name] = model_name
+            new_dim = gen.get_dimension()
             logger.info(
                 f"Model '{model_name}' loaded as '{vector_name}' "
                 f"(dim={new_dim}, device={self._device})"
             )
 
-        except ValueError:
-            raise
         except Exception as e:
             logger.warning(
                 f"Failed to load model '{model_name}' for vector "

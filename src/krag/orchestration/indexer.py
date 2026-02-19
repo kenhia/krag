@@ -1,5 +1,6 @@
 """Indexing orchestration - coordinates the complete indexing pipeline."""
 
+import json
 import logging
 import uuid
 from collections.abc import Callable
@@ -295,10 +296,6 @@ class IndexingOrchestrator:
         """Context manager exit - closes resources."""
         self.close()
 
-    def __del__(self) -> None:
-        """Cleanup on deletion."""
-        self.close()
-
     def _get_metadata_path(self) -> Path:
         """Get path to metadata persistence file.
 
@@ -321,14 +318,10 @@ class IndexingOrchestrator:
             return
 
         try:
-            import json
-
             with open(metadata_path) as f:
                 data = json.load(f)
 
             # Deserialize FileMetadata objects
-            from datetime import datetime
-
             loaded_count = 0
             for item in data:
                 # Convert datetime strings back to datetime objects
@@ -377,8 +370,6 @@ class IndexingOrchestrator:
         metadata_path = self._get_metadata_path()
 
         try:
-            import json
-
             # Ensure parent directory exists
             metadata_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -431,9 +422,7 @@ class IndexingOrchestrator:
         text: str | None = None
 
         if plugin_handler is not None:
-            handler_name = getattr(
-                plugin_handler, "name", plugin_handler.__class__.__name__
-            )
+            handler_name = getattr(plugin_handler, "name", plugin_handler.__class__.__name__)
             try:
                 text = plugin_handler.extract_text(file_meta.file_path)
 
@@ -491,13 +480,10 @@ class IndexingOrchestrator:
                     plugin_name=handler_name or plugin_handler.__class__.__name__,
                 )
                 file_type = file_meta.file_type or "text"
-                chunks = chunker.chunk(
-                    text, file_path=file_meta.file_path, file_type=file_type
-                )
+                chunks = chunker.chunk(text, file_path=file_meta.file_path, file_type=file_type)
             except Exception as e:
                 logger.warning(
-                    f"Plugin chunking failed for {file_meta.file_path}: {e}, "
-                    f"using default chunker"
+                    f"Plugin chunking failed for {file_meta.file_path}: {e}, using default chunker"
                 )
                 file_type = file_meta.file_type or "text"
                 chunks = self.chunker.chunk(
@@ -505,9 +491,7 @@ class IndexingOrchestrator:
                 )
         else:
             file_type = file_meta.file_type or "text"
-            chunks = self.chunker.chunk(
-                text, file_path=file_meta.file_path, file_type=file_type
-            )
+            chunks = self.chunker.chunk(text, file_path=file_meta.file_path, file_type=file_type)
 
         if not chunks:
             logger.info(f"Skipping file (no chunks created): {file_meta.file_path}")
@@ -523,9 +507,7 @@ class IndexingOrchestrator:
                     vector_name = resolved
 
         # 6. Generate embeddings
-        embeddings = self.embedding_orchestrator.embed_chunks(
-            chunks, vector_name=vector_name
-        )
+        embeddings = self.embedding_orchestrator.embed_chunks(chunks, vector_name=vector_name)
 
         # 7. Build payloads
         _active_chunker = chunker if chunker is not None else self.chunker
@@ -541,9 +523,7 @@ class IndexingOrchestrator:
                 "start_char": chunk.start_char,
                 "end_char": chunk.end_char,
                 "token_count": chunk.token_count,
-                "embedding_model": self.embedding_orchestrator._model_names.get(
-                    vector_name, ""
-                ),
+                "embedding_model": self.embedding_orchestrator._model_names.get(vector_name, ""),
             }
             if _has_chunk_meta:
                 try:
@@ -557,11 +537,13 @@ class IndexingOrchestrator:
                 if self.embedding_orchestrator.is_multi_model
                 else embedding
             )
-            vectors.append({
-                "id": chunk.chunk_id,
-                "vector": vec_value,
-                "payload": payload,
-            })
+            vectors.append(
+                {
+                    "id": chunk.chunk_id,
+                    "vector": vec_value,
+                    "payload": payload,
+                }
+            )
 
         return FileProcessingResult(
             vectors=vectors,
@@ -822,9 +804,7 @@ class IndexingOrchestrator:
                 try:
                     self.vector_store.delete_by_filter({"file_path": str(change.file_path)})
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to remove old vectors for {change.file_path}: {e}"
-                    )
+                    logger.warning(f"Failed to remove old vectors for {change.file_path}: {e}")
 
         # Stage 5: Process new/modified files
         all_vectors = []
