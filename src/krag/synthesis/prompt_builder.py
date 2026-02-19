@@ -130,7 +130,9 @@ class PromptBuilder:
                 f"Unknown preset: '{preset_name}'. Available: {sorted(PROMPT_PRESETS.keys())}"
             )
         self.max_context_length = max_context_length
+        self.path_aliases = path_aliases
         self.path_reducer = PathReducer(path_aliases)
+        self.preset_name = preset_name
         self.preset = PROMPT_PRESETS[preset_name]
         self.system_prompt_override = system_prompt_override
 

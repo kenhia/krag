@@ -62,6 +62,8 @@ def format_json(report: EvalReport) -> str:
                 "query": r.query,
                 "answer": r.answer,
                 "sources": r.sources,
+                "llm_used": r.llm_used,
+                "route_reason": r.route_reason,
                 "passed": r.passed,
                 "checks": [
                     {
@@ -97,6 +99,7 @@ def format_summary(report: EvalReport) -> str:
             if not r.passed:
                 failed_checks = [c for c in r.checks if not c.passed]
                 check_details = "; ".join(c.detail for c in failed_checks)
-                lines.append(f"    - {r.query}: {check_details}")
+                llm_info = f" [llm={r.llm_used}]" if r.llm_used else ""
+                lines.append(f"    - {r.query}{llm_info}: {check_details}")
 
     return "\n".join(lines)

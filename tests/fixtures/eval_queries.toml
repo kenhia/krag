@@ -1,7 +1,16 @@
-# Sample evaluation queries for testing the evaluation harness.
+# Evaluation queries for krag RAG pipeline.
 #
-# Each [[queries]] entry defines a test case with a query string
-# and one or more behavior checks.
+# Each [[queries]] entry defines a test case with:
+#   - query: the question to ask
+#   - checks: one or more assertions on the answer/sources
+#   - llm: (optional) "text" or "code" — forces a specific LLM
+#
+# Check types:
+#   substring     — case-insensitive substring match in the answer
+#   source_cited  — expected filename appears in any retrieved source path
+#   no_hallucination — answer admits insufficient context or has sources
+
+# ─── General knowledge (text LLM, default routing) ───────────────────
 
 [[queries]]
 query = "What is the default chunk size in krag?"
@@ -22,7 +31,88 @@ type = "substring"
 value = "bge-base-en-v1.5"
 
 [[queries]]
+query = "What is the default chunk overlap in krag?"
+
+[[queries.checks]]
+type = "substring"
+value = "64"
+
+[[queries.checks]]
+type = "source_cited"
+value = "defaults.py"
+
+[[queries]]
+query = "How many results does krag retrieve by default when querying?"
+
+[[queries.checks]]
+type = "substring"
+value = "5"
+
+# ─── Anti-hallucination ──────────────────────────────────────────────
+
+[[queries]]
 query = "What is quantum computing and how does it relate to krag?"
 
 [[queries.checks]]
 type = "no_hallucination"
+
+[[queries]]
+query = "What is the capital of France according to the krag documentation?"
+
+[[queries.checks]]
+type = "no_hallucination"
+
+# ─── Code-aware queries (auto-routed or explicit code LLM) ──────────
+
+[[queries]]
+query = "How does the Retriever class deduplicate search results?"
+llm = "code"
+
+[[queries.checks]]
+type = "source_cited"
+value = "retriever.py"
+
+[[queries]]
+query = "What does the IndexingOrchestrator._process_file method do?"
+llm = "code"
+
+[[queries.checks]]
+type = "source_cited"
+value = "indexer.py"
+
+# ─── Same query, different LLMs ─────────────────────────────────────
+# These pairs test whether the text and code LLMs produce different
+# (but both valid) answers for code-related questions.
+
+[[queries]]
+query = "How does krag handle LLM routing between text and code models?"
+llm = "text"
+
+[[queries.checks]]
+type = "no_hallucination"
+
+[[queries]]
+query = "How does krag handle LLM routing between text and code models?"
+llm = "code"
+
+[[queries.checks]]
+type = "no_hallucination"
+
+# ─── Architecture & config ───────────────────────────────────────────
+
+[[queries]]
+query = "What vector database does krag use?"
+
+[[queries.checks]]
+type = "substring"
+value = "qdrant"
+
+[[queries]]
+query = "What is the plugin architecture in krag?"
+
+[[queries.checks]]
+type = "no_hallucination"
+
+[[queries.checks]]
+type = "source_cited"
+value = "plugin"

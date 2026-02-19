@@ -26,6 +26,7 @@ class EvalQuery:
 
     query: str
     checks: list[EvalCheck] = field(default_factory=list)
+    llm: str | None = None  # "text" or "code" — per-query LLM override
 
 
 def load_eval_file(path: Path) -> list[EvalQuery]:
@@ -74,6 +75,12 @@ def load_eval_file(path: Path) -> list[EvalQuery]:
                 )
             )
 
-        queries.append(EvalQuery(query=entry["query"], checks=checks))
+        queries.append(
+            EvalQuery(
+                query=entry["query"],
+                checks=checks,
+                llm=entry.get("llm"),
+            )
+        )
 
     return queries

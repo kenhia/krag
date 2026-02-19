@@ -33,6 +33,12 @@ def eval_command(
         "-k",
         help="Number of results to retrieve",
     ),
+    llm: str | None = typer.Option(
+        None,
+        "--llm",
+        help="LLM to use: 'text' (general) or 'code' (code-specialized). "
+        "Per-query 'llm' field in the TOML file takes precedence.",
+    ),
 ) -> None:
     """Run evaluation queries and report results.
 
@@ -72,13 +78,41 @@ def eval_command(
             preset=preset,
         )
 
+        # If --llm is specified but no pool exists, try to create one
+        llm_pool = pipeline.llm_pool
+        if llm and not llm_pool:
+            from krag.synthesis.llm_pool import LLMPool
+
+            config = pipeline.config
+            code_path = Path(config.llm_code_model) if config.llm_code_model else None
+            llm_pool = LLMPool(
+                text_model_path=Path(str(config.llm_model)),
+                code_model_path=code_path,
+                load_multi_llm=config.load_multi_llm,
+                n_ctx=config.llm_context_size,
+                n_gpu_layers=config.llm_n_gpu_layers,
+                temperature=config.llm_temperature,
+                max_tokens=2000,
+                top_p=config.llm_top_p,
+                repeat_penalty=config.llm_repeat_penalty,
+                min_p=config.llm_min_p,
+            )
+
         # Run evaluation
         print(f"Running {len(queries)} evaluation queries...", file=sys.stderr)
-        runner = EvalRunner(query_engine=pipeline.query_engine)
+        runner = EvalRunner(
+            query_engine=pipeline.query_engine,
+            llm_pool=llm_pool,
+            llm_override=llm,
+        )
         results = runner.run(queries)
 
         # Generate report
         report = generate_report(results)
+
+        # Clean up LLM pool if we used one
+        if llm_pool is not None:
+            llm_pool.close()
 
         # JSON to stdout (machine-parseable)
         print(format_json(report))
