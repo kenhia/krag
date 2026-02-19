@@ -119,16 +119,41 @@ class TestSimultaneousRouting:
         ):
             pool = _make_pool(text_path, code_path, load_multi_llm=True)
 
-        # 1 code chunk, 3 text chunks → 25% code, below 40% threshold
+        # All text/markdown, no code → no markdown boost → 0% code
         chunks = [
-            _make_query_result(file_type=".py", file_path="/tmp/a.py"),
             _make_query_result(file_type=".md", file_path="/tmp/readme.md"),
             _make_query_result(file_type=".txt", file_path="/tmp/notes.txt"),
             _make_query_result(file_type=".md", file_path="/tmp/docs.md"),
+            _make_query_result(file_type=".txt", file_path="/tmp/other.txt"),
         ]
 
         route = pool.determine_route(chunks)
         assert route == "text"
+
+        pool.close()
+
+    def test_markdown_with_code_routes_to_code(
+        self, _mock_llama, tmp_model_files: tuple[Path, Path]
+    ) -> None:
+        """When sources mix code and markdown, markdown counts as code-aligned."""
+        text_path, code_path = tmp_model_files
+
+        with patch(
+            "krag.cli.gpu.get_free_vram",
+            return_value=32_000_000_000,
+        ):
+            pool = _make_pool(text_path, code_path, load_multi_llm=True)
+
+        # 1 code + 3 markdown → markdown boosted → 4/4 = 100% code-aligned
+        chunks = [
+            _make_query_result(file_type=".py", file_path="/tmp/a.py"),
+            _make_query_result(file_type=".md", file_path="/tmp/readme.md"),
+            _make_query_result(file_type=".md", file_path="/tmp/docs.md"),
+            _make_query_result(file_type=".md", file_path="/tmp/guide.md"),
+        ]
+
+        route = pool.determine_route(chunks)
+        assert route == "code"
 
         pool.close()
 
@@ -142,13 +167,13 @@ class TestSimultaneousRouting:
         ):
             pool = _make_pool(text_path, code_path, load_multi_llm=True)
 
-        # Exactly 40% code (2 of 5) — does NOT exceed threshold
+        # Exactly 40% code (2 of 5, no markdown) — does NOT exceed threshold
         chunks = [
             _make_query_result(file_type=".py", file_path="/tmp/a.py"),
             _make_query_result(file_type=".py", file_path="/tmp/b.py"),
-            _make_query_result(file_type=".md", file_path="/tmp/readme.md"),
             _make_query_result(file_type=".txt", file_path="/tmp/notes.txt"),
-            _make_query_result(file_type=".md", file_path="/tmp/docs.md"),
+            _make_query_result(file_type=".txt", file_path="/tmp/readme.txt"),
+            _make_query_result(file_type=".toml", file_path="/tmp/config.toml"),
         ]
 
         route = pool.determine_route(chunks)

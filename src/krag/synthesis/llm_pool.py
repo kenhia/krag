@@ -399,22 +399,50 @@ class LLMPool:
 # ------------------------------------------------------------------
 
 
+# File extensions considered markdown documentation.
+MARKDOWN_EXTENSIONS: frozenset[str] = frozenset({".md", ".mdx", ".markdown", ".rst"})
+
+
 def _analyze_chunk_composition(chunks: list[QueryResult]) -> str:
     """Determine if chunks are predominantly code or text.
 
     Checks ``file_type`` against ``"code"`` or the file extension
     (from ``file_path``) against known code extensions.
 
+    When the source mix contains both code and markdown files, the
+    markdown chunks are counted as code-aligned.  This prevents
+    documentation files (which often accompany code) from diluting the
+    code signal and incorrectly routing to the text LLM.
+
     Returns:
-        ``"code"`` if >40 % of chunks are code files, ``"text"`` otherwise.
+        ``"code"`` if >40 % of chunks are code-aligned, ``"text"`` otherwise.
     """
     if not chunks:
         return "text"
-    code_count = sum(
-        1
-        for c in chunks
-        if c.file_type == "code" or Path(c.file_path).suffix.lower() in CODE_EXTENSIONS
+
+    code_count = 0
+    markdown_count = 0
+    for c in chunks:
+        ext = Path(c.file_path).suffix.lower()
+        if c.file_type == "code" or ext in CODE_EXTENSIONS:
+            code_count += 1
+        elif ext in MARKDOWN_EXTENSIONS:
+            markdown_count += 1
+
+    # When sources mix code and markdown, treat markdown as code-aligned
+    # (documentation about code should still route to the code LLM).
+    if code_count > 0 and markdown_count > 0:
+        code_count += markdown_count
+
+    ratio = code_count / len(chunks) if chunks else 0
+    logger.debug(
+        "Chunk composition: code=%d, markdown=%d, total=%d (%.0f%% code-aligned)",
+        code_count - (markdown_count if code_count > markdown_count else 0),
+        markdown_count,
+        len(chunks),
+        ratio * 100,
     )
-    if code_count > len(chunks) * 0.4:
+
+    if ratio > 0.40:
         return "code"
     return "text"

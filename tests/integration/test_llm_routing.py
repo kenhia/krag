@@ -119,12 +119,12 @@ class TestLLMRoutingIntegration:
                 load_multi_llm=True,
             )
 
-        # Text-heavy retrieval results
+        # Text-heavy retrieval results (no code files → markdown not boosted)
         chunks = [
             _make_query_result(file_type=".md", file_path="/tmp/docs.md", content="# Docs"),
             _make_query_result(file_type=".txt", file_path="/tmp/notes.txt", content="Notes"),
             _make_query_result(file_type=".md", file_path="/tmp/FAQ.md", content="FAQ"),
-            _make_query_result(file_type=".py", file_path="/tmp/helper.py", content="# helper"),
+            _make_query_result(file_type=".txt", file_path="/tmp/other.txt", content="Other"),
         ]
 
         messages = [
