@@ -86,10 +86,10 @@
 
 ### Implementation for User Story 5
 
-- [ ] T018 [US5] Create `FileProcessingResult` dataclass in `src/krag/orchestration/indexer.py` with fields: `payloads: list[dict]`, `chunk_count: int`, `handler_name: str | None`, `error: str | None` and `success` property (contract: file-processor.md)
-- [ ] T019 [US5] Extract `_process_file(self, file_meta, plugin_handler) -> FileProcessingResult` method in `src/krag/orchestration/indexer.py`: consolidate per-file logic from `index_full` (~L450–620) — text extraction, chunking (with `chunker = None` reset), embedding, payload building, consistent plugin name resolution via `getattr(handler, "name", handler.__class__.__name__)` (FR-013, FR-004, FR-012, contract: file-processor.md)
-- [ ] T020 [US5] Refactor `index_full()` in `src/krag/orchestration/indexer.py` to call `_process_file()` instead of inlining per-file logic; keep orchestration (file discovery, progress, metadata save, upsert) in `index_full` (FR-013)
-- [ ] T021 [US5] Refactor `index_incremental()` in `src/krag/orchestration/indexer.py` to call `_process_file()` instead of inlining per-file logic; keep incremental-specific logic (change detection, delete-before-insert from T010, metadata diff) in `index_incremental` (FR-013, FR-002)
+- [x] T018 [US5] Create `FileProcessingResult` dataclass in `src/krag/orchestration/indexer.py` with fields: `payloads: list[dict]`, `chunk_count: int`, `handler_name: str | None`, `error: str | None` and `success` property (contract: file-processor.md)
+- [x] T019 [US5] Extract `_process_file(self, file_meta, plugin_handler) -> FileProcessingResult` method in `src/krag/orchestration/indexer.py`: consolidate per-file logic from `index_full` (~L450–620) — text extraction, chunking (with `chunker = None` reset), embedding, payload building, consistent plugin name resolution via `getattr(handler, "name", handler.__class__.__name__)` (FR-013, FR-004, FR-012, contract: file-processor.md)
+- [x] T020 [US5] Refactor `index_full()` in `src/krag/orchestration/indexer.py` to call `_process_file()` instead of inlining per-file logic; keep orchestration (file discovery, progress, metadata save, upsert) in `index_full` (FR-013)
+- [x] T021 [US5] Refactor `index_incremental()` in `src/krag/orchestration/indexer.py` to call `_process_file()` instead of inlining per-file logic; keep incremental-specific logic (change detection, delete-before-insert from T010, metadata diff) in `index_incremental` (FR-013, FR-002)
 
 **Checkpoint**: `index_full` and `index_incremental` share a single `_process_file()`. No duplicated per-file logic. Chunker state reset and plugin name resolution are consistent. All existing tests pass.
 
