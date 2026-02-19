@@ -444,6 +444,9 @@ class IndexingOrchestrator:
         all_vectors = []
         for i, file_metadata in enumerate(all_files):
             try:
+                # Reset per-file state to prevent leakage from previous iteration
+                chunker = None
+
                 # Report progress
                 if progress_callback:
                     progress_callback(i + 1, len(all_files), "Processing files")
@@ -794,10 +797,24 @@ class IndexingOrchestrator:
             job.end_time = datetime.now()
             return job
 
+        # Stage 4b: Remove old vectors for modified files before re-indexing
+        if modified_changes:
+            logger.info(f"Removing old vectors for {len(modified_changes)} modified files")
+            for change in modified_changes:
+                try:
+                    self.vector_store.delete_by_filter({"file_path": str(change.file_path)})
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to remove old vectors for {change.file_path}: {e}"
+                    )
+
         # Stage 5: Process new/modified files
         all_vectors = []
         for i, file_metadata in enumerate(files_to_process):
             try:
+                # Reset per-file state to prevent leakage from previous iteration
+                chunker = None
+
                 if progress_callback:
                     progress_callback(i + 1, len(files_to_process), "Processing files")
 

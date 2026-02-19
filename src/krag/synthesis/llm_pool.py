@@ -411,14 +411,19 @@ class LLMPool:
 def _analyze_chunk_composition(chunks: list[QueryResult]) -> str:
     """Determine if chunks are predominantly code or text.
 
-    Checks ``file_type`` against known code extensions.
+    Checks ``file_type`` against ``"code"`` or the file extension
+    (from ``file_path``) against known code extensions.
 
     Returns:
         ``"code"`` if >40 % of chunks are code files, ``"text"`` otherwise.
     """
     if not chunks:
         return "text"
-    code_count = sum(1 for c in chunks if c.file_type in CODE_EXTENSIONS)
+    code_count = sum(
+        1
+        for c in chunks
+        if c.file_type == "code" or Path(c.file_path).suffix.lower() in CODE_EXTENSIONS
+    )
     if code_count > len(chunks) * 0.4:
         return "code"
     return "text"

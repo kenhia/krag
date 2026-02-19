@@ -25,6 +25,27 @@ gpu_app = typer.Typer(
 console = Console()
 
 
+def get_free_vram(device: int = 0) -> int | None:
+    """Get free VRAM in bytes for the specified CUDA device.
+
+    Uses torch.cuda.mem_get_info() which accounts for fragmentation
+    and CUDA context overhead (unlike total_memory - memory_allocated).
+
+    Args:
+        device: CUDA device index (default: 0).
+
+    Returns:
+        Free VRAM in bytes, or None if CUDA is unavailable.
+    """
+    try:
+        import torch  # noqa: F811
+
+        free, _total = torch.cuda.mem_get_info(device)
+        return int(free)
+    except (ImportError, RuntimeError, ValueError):
+        return None
+
+
 def check_cuda_available() -> dict[str, Any]:
     """Check CUDA GPU availability and return device info.
 

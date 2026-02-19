@@ -13,7 +13,7 @@ class QueryResult(BaseModel):
     """
 
     chunk_id: str = Field(..., description="Reference to retrieved TextChunk")
-    score: float = Field(..., ge=0.0, le=1.0, description="Similarity score (0.0-1.0)")
+    score: float = Field(..., ge=0.0, description="Relevance score (higher is better)")
     rank: int = Field(..., gt=0, description="Rank in results (1-based, 1=most relevant)")
     chunk_content: str = Field(..., min_length=1, description="Text content of the chunk")
     file_path: Path = Field(..., description="Source file of the chunk")

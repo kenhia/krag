@@ -1,7 +1,7 @@
 # Contract: Indexer File Processor
 
-**Module**: `src/krag/orchestration/indexer.py`
-**Method**: `IndexingOrchestrator._process_file()`
+**Module**: `src/krag/orchestration/indexer.py`  
+**Method**: `IndexingOrchestrator._process_file()`  
 
 ## Signature
 

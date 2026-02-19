@@ -15,7 +15,7 @@
 
 **Purpose**: No project initialization needed — existing codebase. This phase handles the single foundational fix that unblocks all other work.
 
-- [ ] T001 Remove `le=1.0` upper-bound constraint from `score` field and update description to "Relevance score (higher is better)" in `src/krag/models/query_result.py` (FR-006)
+- [x] T001 Remove `le=1.0` upper-bound constraint from `score` field and update description to "Relevance score (higher is better)" in `src/krag/models/query_result.py` (FR-006)
 
 **Checkpoint**: Score validation no longer rejects RRF or dot-product scores. All existing tests still pass.
 
@@ -27,8 +27,8 @@
 
 **⚠️ CRITICAL**: US1 needs `get_free_vram` consolidated before LLM pool fix; US4 needs it for DRY.
 
-- [ ] T002 Add `get_free_vram(device: int = 0) -> int | None` function to `src/krag/cli/gpu.py` using `torch.cuda.mem_get_info()`, catching `(ImportError, RuntimeError, ValueError)` (FR-014, contract: gpu-vram.md)
-- [ ] T003 [P] Add `get_log_file_path() -> Path` helper to `src/krag/config/logging.py` that returns `get_krag_state_dir() / "logs" / "krag.log"`
+- [x] T002 Add `get_free_vram(device: int = 0) -> int | None` function to `src/krag/cli/gpu.py` using `torch.cuda.mem_get_info()`, catching `(ImportError, RuntimeError, ValueError)` (FR-014, contract: gpu-vram.md)
+- [x] T003 [P] Add `get_log_file_path() -> Path` helper to `src/krag/config/logging.py` that returns `get_krag_state_dir() / "logs" / "krag.log"`
 
 **Checkpoint**: Shared utilities ready. No behavior changes yet — old callsites still use inline implementations.
 
@@ -42,13 +42,13 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [P] [US1] Fix LLM routing in `src/krag/synthesis/llm_pool.py`: change `_analyze_chunk_composition()` to check `c.file_type == "code"` OR `Path(c.file_path).suffix in CODE_EXTENSIONS` instead of only `c.file_type in CODE_EXTENSIONS` (FR-001, research: R-04)
-- [ ] T005 [P] [US1] Fix empty `file_path` crash in `src/krag/retrieval/retriever.py`: wrap per-result `QueryResult` construction in try/except, skip and log warning for invalid payloads instead of crashing entire retrieval (FR-005, contract: retriever-boosts.md `_payload_to_query_result`)
-- [ ] T006 [P] [US1] Extract `_payload_to_query_result(point_id, score, rank, payload) -> QueryResult | None` helper in `src/krag/retrieval/retriever.py` to deduplicate result construction from `_results_to_query_results` and `_multi_model_retrieve` (FR-005, contract: retriever-boosts.md)
-- [ ] T007 [US1] Add score-range-aware boost weights in `src/krag/retrieval/retriever.py`: add `_KEYWORD_BOOST_WEIGHT_RRF = 0.002` and `_METADATA_BOOST_WEIGHT_RRF = 0.003` constants; modify `_keyword_boost` and `_metadata_boost` to accept `is_rrf` flag and use appropriate weights (FR-003, research: R-03, contract: retriever-boosts.md)
-- [ ] T008 [US1] Thread `is_rrf` flag through `src/krag/retrieval/retriever.py`: in `_multi_model_retrieve` pass `is_rrf=True` to boost functions; in single-model `search` pass `is_rrf=False` (FR-003)
-- [ ] T009 [P] [US1] Fix stale chunker variable in `src/krag/orchestration/indexer.py`: add `chunker = None` at the start of each per-file loop iteration in both `index_full` (~L500) and `index_incremental` (~L830) (FR-004)
-- [ ] T010 [US1] Fix stale vectors in incremental indexing in `src/krag/orchestration/indexer.py`: before re-indexing modified files, call `self.vector_store.delete_by_filter({"file_path": str(change.file_path)})` to remove old vectors (FR-002)
+- [x] T004 [P] [US1] Fix LLM routing in `src/krag/synthesis/llm_pool.py`: change `_analyze_chunk_composition()` to check `c.file_type == "code"` OR `Path(c.file_path).suffix in CODE_EXTENSIONS` instead of only `c.file_type in CODE_EXTENSIONS` (FR-001, research: R-04)
+- [x] T005 [P] [US1] Fix empty `file_path` crash in `src/krag/retrieval/retriever.py`: wrap per-result `QueryResult` construction in try/except, skip and log warning for invalid payloads instead of crashing entire retrieval (FR-005, contract: retriever-boosts.md `_payload_to_query_result`)
+- [x] T006 [P] [US1] Extract `_payload_to_query_result(point_id, score, rank, payload) -> QueryResult | None` helper in `src/krag/retrieval/retriever.py` to deduplicate result construction from `_results_to_query_results` and `_multi_model_retrieve` (FR-005, contract: retriever-boosts.md)
+- [x] T007 [US1] Add score-range-aware boost weights in `src/krag/retrieval/retriever.py`: add `_KEYWORD_BOOST_WEIGHT_RRF = 0.002` and `_METADATA_BOOST_WEIGHT_RRF = 0.003` constants; modify `_keyword_boost` and `_metadata_boost` to accept `is_rrf` flag and use appropriate weights (FR-003, research: R-03, contract: retriever-boosts.md)
+- [x] T008 [US1] Thread `is_rrf` flag through `src/krag/retrieval/retriever.py`: in `_multi_model_retrieve` pass `is_rrf=True` to boost functions; in single-model `search` pass `is_rrf=False` (FR-003)
+- [x] T009 [P] [US1] Fix stale chunker variable in `src/krag/orchestration/indexer.py`: add `chunker = None` at the start of each per-file loop iteration in both `index_full` (~L500) and `index_incremental` (~L830) (FR-004)
+- [x] T010 [US1] Fix stale vectors in incremental indexing in `src/krag/orchestration/indexer.py`: before re-indexing modified files, call `self.vector_store.delete_by_filter({"file_path": str(change.file_path)})` to remove old vectors (FR-002)
 
 **Checkpoint**: All 6 correctness bugs fixed. Eval should restore to 3/3. Existing tests pass. LLM routing fires for code-heavy results.
 

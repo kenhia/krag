@@ -141,8 +141,8 @@ class TestKeywordBoost:
             "Chunk with more keyword matches should rank first after boost"
         )
 
-    def test_boost_does_not_exceed_one(self):
-        """Boosted score should never exceed 1.0."""
+    def test_boost_adds_to_score(self):
+        """Boosted score should increase beyond the original score."""
         results = [
             _result("id-1", 0.99, "default chunk size default chunk size"),
         ]
@@ -151,7 +151,7 @@ class TestKeywordBoost:
             embedding_generator=_make_embedding(),
         )
         got = retriever.retrieve("default chunk size", top_k=5)
-        assert got[0].score <= 1.0
+        assert got[0].score > 0.99, "Keyword boost should increase score"
 
     def test_stop_words_excluded_from_boost(self):
         """Common stop words should not count as keyword matches."""

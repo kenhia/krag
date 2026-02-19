@@ -1,7 +1,7 @@
 # Contract: Log Management CLI
 
-**Module**: `src/krag/cli/log.py`
-**Parent**: `krag log` subcommand group in `cli/main.py`
+**Module**: `src/krag/cli/log.py`  
+**Parent**: `krag log` subcommand group in `cli/main.py`  
 
 ## Commands
 

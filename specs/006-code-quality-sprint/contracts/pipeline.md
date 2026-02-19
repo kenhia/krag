@@ -1,7 +1,7 @@
 # Contract: CLI Pipeline Factory
 
-**Module**: `src/krag/cli/pipeline.py`
-**Consumers**: `cli/query.py`, `cli/eval.py`
+**Module**: `src/krag/cli/pipeline.py`  
+**Consumers**: `cli/query.py`, `cli/eval.py`  
 
 ## Functions
 

@@ -13,6 +13,15 @@ if TYPE_CHECKING:
     from krag.models.configuration import Configuration
 
 
+def get_log_file_path() -> Path:
+    """Return the canonical log file path.
+
+    Returns:
+        The absolute path to krag's log file (may not exist yet).
+    """
+    return get_krag_state_dir() / "logs" / "krag.log"
+
+
 class SafeStreamHandler(logging.StreamHandler):
     """StreamHandler that ignores I/O errors during shutdown.
 
