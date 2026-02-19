@@ -214,6 +214,21 @@ class LLMPool:
             return "code"
         return None
 
+    @property
+    def text_llm_client(self) -> LLMClient:
+        """Return the text slot's ``LLMClient`` instance.
+
+        Useful for sharing the already-loaded text LLM with other
+        components (e.g. ``QueryEngine``) without loading the model
+        a second time.
+
+        Raises:
+            RuntimeError: If the text LLM is not loaded.
+        """
+        if self._text_slot.instance is None:
+            raise RuntimeError("Text LLM is not loaded")
+        return self._text_slot.instance
+
     def get_status(self) -> dict[str, Any]:
         """Return detailed status of all LLM slots."""
         from krag.cli.gpu import get_free_vram

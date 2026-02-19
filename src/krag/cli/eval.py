@@ -78,13 +78,16 @@ def eval_command(
             preset=preset,
         )
 
-        # If --llm is specified but no pool exists, try to create one
+        # If --llm is specified but no pool exists, try to create one.
+        # Close the pipeline's standalone LLM first to free VRAM before
+        # the pool loads its own copy of the text model.
         llm_pool = pipeline.llm_pool
         if llm and not llm_pool:
             from krag.synthesis.llm_pool import LLMPool
 
             config = pipeline.config
             code_path = Path(config.llm_code_model) if config.llm_code_model else None
+            pipeline.llm_client.close()
             llm_pool = LLMPool(
                 text_model_path=Path(str(config.llm_model)),
                 code_model_path=code_path,

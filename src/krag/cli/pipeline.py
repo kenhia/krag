@@ -147,21 +147,11 @@ def build_query_pipeline(
         _vs_kwargs["vectors_config"] = embedding_orchestrator.get_vector_config()
     vector_store = QdrantVectorStore(**_vs_kwargs)
 
-    # 7. LLM client
-    llm_client = LLMClient(
-        model=config.llm_model,
-        max_tokens=2000,
-        n_ctx=config.llm_context_size,
-        n_threads=config.llm_num_threads,
-        n_gpu_layers=config.llm_n_gpu_layers,
-        temperature=config.llm_temperature,
-        model_cache_path=config.model_cache_path,
-        top_p=config.llm_top_p,
-        repeat_penalty=config.llm_repeat_penalty,
-        min_p=config.llm_min_p,
-    )
-
-    # 8. LLM pool (if code model configured)
+    # 7. LLM client & pool
+    #    When a code model is configured, LLMPool loads the text model
+    #    internally.  Reuse that instance as the standalone llm_client
+    #    so we don't load the same model twice (which would exhaust VRAM
+    #    when n_gpu_layers != 0).
     llm_pool: LLMPool | None = None
     if config.llm_code_model:
         code_path = Path(config.llm_code_model)
@@ -173,6 +163,21 @@ def build_query_pipeline(
             n_gpu_layers=config.llm_n_gpu_layers,
             temperature=config.llm_temperature,
             max_tokens=2000,
+            top_p=config.llm_top_p,
+            repeat_penalty=config.llm_repeat_penalty,
+            min_p=config.llm_min_p,
+        )
+        # Reuse the pool's already-loaded text LLM
+        llm_client = llm_pool.text_llm_client
+    else:
+        llm_client = LLMClient(
+            model=config.llm_model,
+            max_tokens=2000,
+            n_ctx=config.llm_context_size,
+            n_threads=config.llm_num_threads,
+            n_gpu_layers=config.llm_n_gpu_layers,
+            temperature=config.llm_temperature,
+            model_cache_path=config.model_cache_path,
             top_p=config.llm_top_p,
             repeat_penalty=config.llm_repeat_penalty,
             min_p=config.llm_min_p,

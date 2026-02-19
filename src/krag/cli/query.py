@@ -92,11 +92,13 @@ def query_command(
         llm_pool = pipeline.llm_pool
         query_engine = pipeline.query_engine
 
-        # Override llm_pool if user explicitly requests --llm routing
+        # Override llm_pool if user explicitly requests --llm routing.
+        # Close the pipeline's standalone LLM first to free VRAM.
         if llm and not llm_pool:
             from krag.synthesis.llm_pool import LLMPool
 
             code_path = Path(config.llm_code_model) if config.llm_code_model else None
+            pipeline.llm_client.close()
             llm_pool = LLMPool(
                 text_model_path=Path(str(config.llm_model)),
                 code_model_path=code_path,
