@@ -33,6 +33,12 @@ def eval_command(
         "-k",
         help="Number of results to retrieve",
     ),
+    llm: str | None = typer.Option(
+        None,
+        "--llm",
+        help="LLM to use: 'text' (general) or 'code' (code-specialized). "
+        "Per-query 'llm' field in the TOML file takes precedence.",
+    ),
 ) -> None:
     """Run evaluation queries and report results.
 
@@ -49,7 +55,7 @@ def eval_command(
         krag eval eval.toml --preset strict --top-k 10
     """
     try:
-        from krag.config.settings import ConfigManager
+        from krag.cli.pipeline import build_query_pipeline
         from krag.evaluation.loader import EvalLoadError, load_eval_file
         from krag.evaluation.reporter import format_json, format_summary, generate_report
         from krag.evaluation.runner import EvalRunner
@@ -65,92 +71,51 @@ def eval_command(
             print("No queries found in eval file.", file=sys.stderr)
             exit_with_code(1)
 
-        # Load configuration
-        config_manager = ConfigManager()
-        if config_path:
-            config = config_manager.load(config_path)
-        else:
-            default_config_path = Path.home() / ".config" / "krag" / "config.toml"
-            if default_config_path.exists():
-                config = config_manager.load(default_config_path)
-            else:
-                print("No configuration found. Run 'krag init' first.", file=sys.stderr)
-                exit_with_code(1)
-
-        # Initialize pipeline components
-        from krag.embeddings.generator import EmbeddingGenerator
-        from krag.embeddings.orchestrator import EmbeddingOrchestrator
-        from krag.orchestration.query_engine import QueryEngine
-        from krag.storage.qdrant_impl import QdrantVectorStore
-        from krag.synthesis.llm_client import LLMClient
-
-        embedding_generator = EmbeddingGenerator(
-            model_name=config.embedding_model,
-            device=config.embedding_device,
+        # Build the full pipeline (config loading, embedding, vector store, LLM)
+        pipeline = build_query_pipeline(
+            config_path=config_path,
+            top_k=top_k,
+            preset=preset,
         )
 
-        # Build orchestrator with plugin embedding models (enables named-vector search)
-        embedding_orchestrator = EmbeddingOrchestrator(
-            default_model=config.embedding_model,
-            device=config.embedding_device,
-        )
-        if config.plugins is not None:
-            from krag.plugins.registry import PluginRegistry
+        # If --llm is specified but no pool exists, try to create one.
+        # Close the pipeline's standalone LLM first to free VRAM before
+        # the pool loads its own copy of the text model.
+        llm_pool = pipeline.llm_pool
+        if llm and not llm_pool:
+            from krag.synthesis.llm_pool import LLMPool
 
-            _registry = PluginRegistry(config.plugins)
-            _registry.discover_plugins()
-            for _meta in _registry.list_plugins(filter_status="enabled"):
-                _handler = _registry.load_plugin(_meta.name)
-                if _handler is not None:
-                    _em = getattr(_handler, "get_embedding_model", lambda: None)()
-                    if _em:
-                        embedding_orchestrator.register_model(_meta.name, _em)
-
-        # Initialize vector store — use named vectors config when multi-model
-        _vs_kwargs: dict = {
-            "storage_path": str(config.vector_store_path),
-            "collection_name": config.collection_name,
-            "vector_size": embedding_generator.get_dimension(),
-        }
-        if embedding_orchestrator.is_multi_model:
-            _vs_kwargs["vectors_config"] = embedding_orchestrator.get_vector_config()
-        vector_store = QdrantVectorStore(**_vs_kwargs)
-
-        llm_client = LLMClient(
-            model=config.llm_model,
-            max_tokens=2000,
-            n_ctx=config.llm_context_size,
-            n_threads=config.llm_num_threads,
-            n_gpu_layers=config.llm_n_gpu_layers,
-            temperature=config.llm_temperature,
-            model_cache_path=config.model_cache_path,
-            top_p=config.llm_top_p,
-            repeat_penalty=config.llm_repeat_penalty,
-            min_p=config.llm_min_p,
-        )
-
-        active_preset = preset if preset else config.prompt_preset
-        effective_top_k = top_k if top_k else config.top_k
-
-        query_engine = QueryEngine(
-            vector_store=vector_store,
-            embedding_generator=embedding_generator,
-            llm_client=llm_client,
-            top_k=effective_top_k,
-            path_aliases=config.path_aliases,
-            preset_name=active_preset,
-            system_prompt_override=config.prompt_system_override,
-            similarity_threshold=config.similarity_threshold,
-            embedding_orchestrator=embedding_orchestrator,
-        )
+            config = pipeline.config
+            code_path = Path(config.llm_code_model) if config.llm_code_model else None
+            pipeline.llm_client.close()
+            llm_pool = LLMPool(
+                text_model_path=Path(str(config.llm_model)),
+                code_model_path=code_path,
+                load_multi_llm=config.load_multi_llm,
+                n_ctx=config.llm_context_size,
+                n_gpu_layers=config.llm_n_gpu_layers,
+                temperature=config.llm_temperature,
+                max_tokens=2000,
+                top_p=config.llm_top_p,
+                repeat_penalty=config.llm_repeat_penalty,
+                min_p=config.llm_min_p,
+            )
 
         # Run evaluation
         print(f"Running {len(queries)} evaluation queries...", file=sys.stderr)
-        runner = EvalRunner(query_engine=query_engine)
+        runner = EvalRunner(
+            query_engine=pipeline.query_engine,
+            llm_pool=llm_pool,
+            llm_override=llm,
+        )
         results = runner.run(queries)
 
         # Generate report
         report = generate_report(results)
+
+        # Clean up LLM pool if we used one
+        if llm_pool is not None:
+            llm_pool.close()
 
         # JSON to stdout (machine-parseable)
         print(format_json(report))

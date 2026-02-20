@@ -20,23 +20,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _get_free_vram(device: int = 0) -> int | None:
-    """Return free VRAM in bytes, or None if no GPU.
-
-    Uses torch.cuda.mem_get_info() for accurate post-context-init
-    free VRAM reporting.
-    """
-    try:
-        import torch
-
-        if not torch.cuda.is_available():
-            return None
-        free, _total = torch.cuda.mem_get_info(device)
-        return free
-    except (ImportError, RuntimeError):
-        return None
-
-
 class EmbeddingOrchestrator:
     """Manages multiple embedding models for plugin-declared routing.
 
@@ -120,25 +103,14 @@ class EmbeddingOrchestrator:
             logger.info(f"Loading additional embedding model: {model_name} as '{vector_name}'")
             gen = EmbeddingGenerator(model_name=model_name, device=self._device)
 
-            # Verify dimension matches
-            default_dim = self._models["text"].get_dimension()
-            new_dim = gen.get_dimension()
-            if new_dim != default_dim:
-                raise ValueError(
-                    f"Dimension mismatch: default model has {default_dim}d, "
-                    f"but '{model_name}' has {new_dim}d. All models must "
-                    f"have the same vector dimension."
-                )
-
             self._models[vector_name] = gen
             self._model_names[vector_name] = model_name
+            new_dim = gen.get_dimension()
             logger.info(
                 f"Model '{model_name}' loaded as '{vector_name}' "
                 f"(dim={new_dim}, device={self._device})"
             )
 
-        except ValueError:
-            raise
         except Exception as e:
             logger.warning(
                 f"Failed to load model '{model_name}' for vector "
@@ -159,7 +131,9 @@ class EmbeddingOrchestrator:
         if self._device == "cpu":
             return True
 
-        free_vram = _get_free_vram()
+        from krag.cli.gpu import get_free_vram
+
+        free_vram = get_free_vram()
         if free_vram is None:
             # Can't determine VRAM — be optimistic
             logger.debug("Cannot determine VRAM availability, allowing model load")

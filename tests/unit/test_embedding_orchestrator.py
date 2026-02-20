@@ -204,7 +204,7 @@ class TestVRAMChecks:
 
         with _mock_sentence_transformer():
             # With enough VRAM, both models load
-            with patch("krag.embeddings.orchestrator._get_free_vram", return_value=4_000_000_000):
+            with patch("krag.cli.gpu.get_free_vram", return_value=4_000_000_000):
                 orch = EmbeddingOrchestrator(
                     default_model="text-model",
                     device="cuda",
@@ -220,7 +220,7 @@ class TestVRAMChecks:
 
         with _mock_sentence_transformer():
             # Very little VRAM — skip additional models
-            with patch("krag.embeddings.orchestrator._get_free_vram", return_value=100_000_000):
+            with patch("krag.cli.gpu.get_free_vram", return_value=100_000_000):
                 orch = EmbeddingOrchestrator(
                     default_model="text-model",
                     device="cuda",
@@ -256,7 +256,7 @@ class TestVRAMChecks:
         from krag.models.text_chunk import TextChunk
 
         with _mock_sentence_transformer():
-            with patch("krag.embeddings.orchestrator._get_free_vram", return_value=100_000_000):
+            with patch("krag.cli.gpu.get_free_vram", return_value=100_000_000):
                 orch = EmbeddingOrchestrator(
                     default_model="text-model",
                     device="cuda",

@@ -1,8 +1,10 @@
 """Indexing orchestration - coordinates the complete indexing pipeline."""
 
+import json
 import logging
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -22,6 +24,23 @@ from krag.plugins.registry import PluginRegistry
 from krag.storage.qdrant_impl import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FileProcessingResult:
+    """Result of processing a single file through the indexing pipeline."""
+
+    vectors: list[dict[str, Any]] = field(default_factory=list)
+    chunk_count: int = 0
+    embeddings_created: int = 0
+    handler_name: str | None = None
+    error: str | None = None
+    skipped: bool = False
+
+    @property
+    def success(self) -> bool:
+        """True if processing completed without error."""
+        return self.error is None
 
 
 class IndexingOrchestrator:
@@ -277,10 +296,6 @@ class IndexingOrchestrator:
         """Context manager exit - closes resources."""
         self.close()
 
-    def __del__(self) -> None:
-        """Cleanup on deletion."""
-        self.close()
-
     def _get_metadata_path(self) -> Path:
         """Get path to metadata persistence file.
 
@@ -303,14 +318,10 @@ class IndexingOrchestrator:
             return
 
         try:
-            import json
-
             with open(metadata_path) as f:
                 data = json.load(f)
 
             # Deserialize FileMetadata objects
-            from datetime import datetime
-
             loaded_count = 0
             for item in data:
                 # Convert datetime strings back to datetime objects
@@ -359,8 +370,6 @@ class IndexingOrchestrator:
         metadata_path = self._get_metadata_path()
 
         try:
-            import json
-
             # Ensure parent directory exists
             metadata_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -387,6 +396,161 @@ class IndexingOrchestrator:
 
         except Exception as e:
             logger.error(f"Failed to save metadata to {metadata_path}: {e}")
+
+    def _process_file(
+        self,
+        file_meta: FileMetadata,
+        plugin_handler: Any | None,
+    ) -> FileProcessingResult:
+        """Process a single file through extraction → chunking → embedding → payload.
+
+        Shared per-file logic used by both index_full() and index_incremental().
+        Ensures consistent behaviour across indexing modes.
+
+        Args:
+            file_meta: Metadata for the file to process.
+            plugin_handler: Plugin handler for this file type, or None.
+
+        Returns:
+            FileProcessingResult with vectors ready for upsert, or error info.
+        """
+        # 1. Reset chunker state to prevent leakage from previous files
+        chunker = None
+        handler_name: str | None = None
+
+        # 2. Try plugin extraction
+        text: str | None = None
+
+        if plugin_handler is not None:
+            handler_name = getattr(plugin_handler, "name", plugin_handler.__class__.__name__)
+            try:
+                text = plugin_handler.extract_text(file_meta.file_path)
+
+                # Attempt metadata extraction (non-critical)
+                try:
+                    plugin_handler.extract_metadata(file_meta.file_path)
+                except Exception as e:
+                    logger.warning(
+                        f"Plugin metadata extraction failed for {file_meta.file_path}: {e}"
+                    )
+
+            except Exception as e:
+                logger.error(f"Plugin extraction failed for {file_meta.file_path}: {e}")
+
+                if self.failure_collector is not None:
+                    self.failure_collector.record_failure(
+                        file_path=file_meta.file_path,
+                        plugin_name=plugin_handler.__class__.__name__,
+                        reason=str(e),
+                        exception_type="extraction",
+                    )
+
+                # Disable plugin on error
+                handler_plugin_name = getattr(
+                    plugin_handler, "name", plugin_handler.__class__.__name__.lower()
+                )
+                if self.plugin_registry is not None:
+                    self.plugin_registry.unload_plugin(handler_plugin_name)
+                    logger.warning(
+                        f"Disabled plugin '{handler_plugin_name}' due to extraction error"
+                    )
+
+                plugin_handler = None
+                handler_name = None
+                text = None
+
+        # 3. Default extraction fallback
+        if text is None:
+            try:
+                text = self.extractor.extract(file_meta.file_path)
+            except Exception as e:
+                logger.warning(f"Failed to extract {file_meta.file_path}: {e}")
+                return FileProcessingResult(error=str(e), handler_name=handler_name)
+
+        if not text or not text.strip():
+            logger.info(f"Skipping empty file: {file_meta.file_path}")
+            return FileProcessingResult(skipped=True, handler_name=handler_name)
+
+        # 4. Chunking (plugin strategy or default)
+        if plugin_handler is not None and self.chunking_resolver is not None:
+            try:
+                chunking_strategy = plugin_handler.get_chunking_strategy()
+                chunker = self.chunking_resolver.resolve(
+                    chunking_strategy,
+                    plugin_name=handler_name or plugin_handler.__class__.__name__,
+                )
+                file_type = file_meta.file_type or "text"
+                chunks = chunker.chunk(text, file_path=file_meta.file_path, file_type=file_type)
+            except Exception as e:
+                logger.warning(
+                    f"Plugin chunking failed for {file_meta.file_path}: {e}, using default chunker"
+                )
+                file_type = file_meta.file_type or "text"
+                chunks = self.chunker.chunk(
+                    text, file_path=file_meta.file_path, file_type=file_type
+                )
+        else:
+            file_type = file_meta.file_type or "text"
+            chunks = self.chunker.chunk(text, file_path=file_meta.file_path, file_type=file_type)
+
+        if not chunks:
+            logger.info(f"Skipping file (no chunks created): {file_meta.file_path}")
+            return FileProcessingResult(skipped=True, handler_name=handler_name)
+
+        # 5. Determine vector_name based on plugin's embedding model
+        vector_name = "text"
+        if plugin_handler is not None:
+            emb_model = plugin_handler.get_embedding_model()
+            if emb_model is not None:
+                resolved = self.embedding_orchestrator.get_vector_name_for_model(emb_model)
+                if resolved is not None:
+                    vector_name = resolved
+
+        # 6. Generate embeddings
+        embeddings = self.embedding_orchestrator.embed_chunks(chunks, vector_name=vector_name)
+
+        # 7. Build payloads
+        _active_chunker = chunker if chunker is not None else self.chunker
+        _has_chunk_meta = hasattr(_active_chunker, "get_chunk_metadata")
+
+        vectors: list[dict[str, Any]] = []
+        for chunk, embedding in zip(chunks, embeddings, strict=True):
+            payload = {
+                "content": chunk.content,
+                "file_path": str(chunk.file_path),
+                "file_type": file_meta.file_type,
+                "chunk_index": chunk.chunk_index,
+                "start_char": chunk.start_char,
+                "end_char": chunk.end_char,
+                "token_count": chunk.token_count,
+                "embedding_model": self.embedding_orchestrator._model_names.get(vector_name, ""),
+            }
+            if _has_chunk_meta:
+                try:
+                    code_meta = _active_chunker.get_chunk_metadata(chunk)
+                    if code_meta:
+                        payload.update(code_meta)
+                except Exception:
+                    pass
+            vec_value: Any = (
+                {vector_name: embedding}
+                if self.embedding_orchestrator.is_multi_model
+                else embedding
+            )
+            vectors.append(
+                {
+                    "id": chunk.chunk_id,
+                    "vector": vec_value,
+                    "payload": payload,
+                }
+            )
+
+        return FileProcessingResult(
+            vectors=vectors,
+            chunk_count=len(chunks),
+            embeddings_created=len(embeddings),
+            handler_name=handler_name,
+        )
 
     def index_full(
         self, progress_callback: Callable[[int, int, str], None] | None = None
@@ -444,202 +608,41 @@ class IndexingOrchestrator:
         all_vectors = []
         for i, file_metadata in enumerate(all_files):
             try:
-                # Report progress
                 if progress_callback:
                     progress_callback(i + 1, len(all_files), "Processing files")
 
-                # T047: Check for plugin handler
+                # Resolve plugin handler
                 plugin_handler = None
                 if self.plugin_registry is not None:
                     plugin_handler = self.plugin_registry.get_handler_for_file(
                         file_metadata.file_path, context=self.plugin_context
                     )
 
-                # Extract text (T048: plugin-based extraction with error handling)
-                text = None
-                plugin_metadata = {}
+                result = self._process_file(file_metadata, plugin_handler)
 
-                if plugin_handler is not None:
-                    # Use plugin for extraction
-                    try:
-                        logger.debug(
-                            f"Using plugin {plugin_handler.__class__.__name__} "
-                            f"for {file_metadata.file_path}"
+                if not result.success:
+                    job.files_errored += 1
+                    from krag.models.indexing_job import FileError
+
+                    job.error_summary.append(
+                        FileError(
+                            file_path=file_metadata.file_path,
+                            error_type="extraction",
+                            error_message=result.error or "Unknown error",
                         )
+                    )
+                    continue
 
-                        # T048: Plugin text extraction with try-catch
-                        text = plugin_handler.extract_text(file_metadata.file_path)
-
-                        # T049: Plugin metadata extraction with try-catch
-                        try:
-                            plugin_metadata = plugin_handler.extract_metadata(
-                                file_metadata.file_path
-                            )
-                            logger.debug(
-                                f"Extracted metadata from plugin: {list(plugin_metadata.keys())}"
-                            )
-                        except Exception as e:
-                            logger.warning(
-                                f"Plugin metadata extraction failed for "
-                                f"{file_metadata.file_path}: {e}"
-                            )
-                            plugin_metadata = {}
-                            # Continue processing - metadata is not essential
-
-                    except Exception as e:
-                        # T051: Plugin error handling and graceful degradation
-                        logger.error(f"Plugin extraction failed for {file_metadata.file_path}: {e}")
-
-                        # Record failure if failure collector is available
-                        if self.failure_collector is not None:
-                            self.failure_collector.record_failure(
-                                file_path=file_metadata.file_path,
-                                plugin_name=plugin_handler.__class__.__name__,
-                                reason=str(e),
-                                exception_type="extraction",
-                            )
-
-                        # Disable plugin on error - use handler.name for registry key
-                        handler_plugin_name = getattr(
-                            plugin_handler, "name", plugin_handler.__class__.__name__.lower()
-                        )
-                        if self.plugin_registry is not None:
-                            self.plugin_registry.unload_plugin(handler_plugin_name)
-                            logger.warning(
-                                f"Disabled plugin '{handler_plugin_name}' due to extraction error"
-                            )
-
-                        # Fall back to default extraction
-                        plugin_handler = None
-                        text = None
-
-                # If plugin extraction failed or no plugin, use default extractor
-                if text is None:
-                    try:
-                        text = self.extractor.extract(file_metadata.file_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to extract {file_metadata.file_path}: {e}")
-                        job.files_errored += 1
-                        from krag.models.indexing_job import FileError
-
-                        job.error_summary.append(
-                            FileError(
-                                file_path=file_metadata.file_path,
-                                error_type="extraction",
-                                error_message=str(e),
-                            )
-                        )
-                        continue
-
-                if not text or not text.strip():
-                    logger.info(f"Skipping empty file: {file_metadata.file_path}")
+                if result.skipped or not result.vectors:
                     job.files_skipped += 1
                     continue
 
-                # T050: Integrate plugin chunking strategy selection
-                if plugin_handler is not None and self.chunking_resolver is not None:
-                    try:
-                        # Get chunking strategy from plugin
-                        chunking_strategy = plugin_handler.get_chunking_strategy()
-
-                        # Use handler.name for config override lookup
-                        handler_name = getattr(
-                            plugin_handler, "name", plugin_handler.__class__.__name__
-                        )
-
-                        # Resolve to actual chunker
-                        chunker = self.chunking_resolver.resolve(
-                            chunking_strategy,
-                            plugin_name=handler_name,
-                        )
-
-                        # Use resolved chunker
-                        file_type = file_metadata.file_type or "text"
-                        chunks = chunker.chunk(
-                            text, file_path=file_metadata.file_path, file_type=file_type
-                        )
-                        logger.debug(f"Used plugin chunking strategy for {file_metadata.file_path}")
-                    except Exception as e:
-                        # T051: Graceful degradation on chunking error
-                        logger.warning(
-                            f"Plugin chunking failed for {file_metadata.file_path}: {e}, "
-                            f"using default chunker"
-                        )
-                        # Fall back to default chunker
-                        file_type = file_metadata.file_type or "text"
-                        chunks = self.chunker.chunk(
-                            text, file_path=file_metadata.file_path, file_type=file_type
-                        )
-                else:
-                    # No plugin or no chunking resolver - use default chunker
-                    file_type = file_metadata.file_type or "text"
-                    chunks = self.chunker.chunk(
-                        text, file_path=file_metadata.file_path, file_type=file_type
-                    )
-
-                if not chunks:
-                    logger.info(f"Skipping file (no chunks created): {file_metadata.file_path}")
-                    job.files_skipped += 1
-                    continue
-
-                job.chunks_generated += len(chunks)
-
-                # Determine vector_name based on plugin's embedding model (T050)
-                vector_name = "text"  # default
-                if plugin_handler is not None:
-                    emb_model = plugin_handler.get_embedding_model()
-                    if emb_model is not None:
-                        resolved = self.embedding_orchestrator.get_vector_name_for_model(emb_model)
-                        if resolved is not None:
-                            vector_name = resolved
-
-                # Generate embeddings using the orchestrator
-                embeddings = self.embedding_orchestrator.embed_chunks(
-                    chunks, vector_name=vector_name
-                )
-                job.embeddings_created += len(embeddings)
-
-                # Prepare vectors for storage
-                # Check if the active chunker provides code-aware metadata
-                _active_chunker = chunker if "chunker" in locals() else self.chunker
-                _has_chunk_meta = hasattr(_active_chunker, "get_chunk_metadata")
-
-                for chunk, embedding in zip(chunks, embeddings, strict=True):
-                    payload = {
-                        "content": chunk.content,
-                        "file_path": str(chunk.file_path),
-                        "file_type": file_metadata.file_type,
-                        "chunk_index": chunk.chunk_index,
-                        "start_char": chunk.start_char,
-                        "end_char": chunk.end_char,
-                        "token_count": chunk.token_count,
-                        "embedding_model": self.embedding_orchestrator._model_names.get(
-                            vector_name, ""
-                        ),
-                    }
-                    # Inject code-aware metadata if available
-                    if _has_chunk_meta:
-                        try:
-                            code_meta = _active_chunker.get_chunk_metadata(chunk)
-                            if code_meta:
-                                payload.update(code_meta)
-                        except Exception:
-                            pass  # Don't fail indexing for metadata errors
-                    # Use named vector format when multi-model, flat otherwise
-                    vec_value: Any = (
-                        {vector_name: embedding}
-                        if self.embedding_orchestrator.is_multi_model
-                        else embedding
-                    )
-                    vector = {
-                        "id": chunk.chunk_id,
-                        "vector": vec_value,
-                        "payload": payload,
-                    }
-                    all_vectors.append(vector)
+                all_vectors.extend(result.vectors)
+                job.chunks_generated += result.chunk_count
+                job.embeddings_created += result.embeddings_created
 
                 # Update file metadata with indexing details
-                file_metadata.chunk_count = len(chunks)
+                file_metadata.chunk_count = result.chunk_count
                 file_metadata.last_indexed_at = datetime.now()
 
                 job.files_processed += 1
@@ -794,6 +797,15 @@ class IndexingOrchestrator:
             job.end_time = datetime.now()
             return job
 
+        # Stage 4b: Remove old vectors for modified files before re-indexing
+        if modified_changes:
+            logger.info(f"Removing old vectors for {len(modified_changes)} modified files")
+            for change in modified_changes:
+                try:
+                    self.vector_store.delete_by_filter({"file_path": str(change.file_path)})
+                except Exception as e:
+                    logger.warning(f"Failed to remove old vectors for {change.file_path}: {e}")
+
         # Stage 5: Process new/modified files
         all_vectors = []
         for i, file_metadata in enumerate(files_to_process):
@@ -801,147 +813,41 @@ class IndexingOrchestrator:
                 if progress_callback:
                     progress_callback(i + 1, len(files_to_process), "Processing files")
 
-                # Check for plugin handler
+                # Resolve plugin handler
                 plugin_handler = None
                 if self.plugin_registry is not None:
                     plugin_handler = self.plugin_registry.get_handler_for_file(
                         file_metadata.file_path, context=self.plugin_context
                     )
 
-                # Extract text using plugin or default extractor
-                text = None
+                result = self._process_file(file_metadata, plugin_handler)
 
-                if plugin_handler is not None:
-                    try:
-                        text = plugin_handler.extract_text(file_metadata.file_path)
+                if not result.success:
+                    job.files_errored += 1
+                    from krag.models.indexing_job import FileError
 
-                        try:
-                            # Extract metadata (not yet stored, but validates plugin works)
-                            plugin_handler.extract_metadata(file_metadata.file_path)
-                        except Exception as e:
-                            logger.warning(
-                                f"Plugin metadata extraction failed for "
-                                f"{file_metadata.file_path}: {e}"
-                            )
-
-                    except Exception as e:
-                        logger.error(f"Plugin extraction failed for {file_metadata.file_path}: {e}")
-
-                        if self.failure_collector is not None:
-                            self.failure_collector.record_failure(
-                                file_path=file_metadata.file_path,
-                                plugin_name=plugin_handler.__class__.__name__,
-                                reason=str(e),
-                                exception_type="extraction",
-                            )
-
-                        handler_plugin_name = getattr(
-                            plugin_handler, "name", plugin_handler.__class__.__name__.lower()
+                    job.error_summary.append(
+                        FileError(
+                            file_path=file_metadata.file_path,
+                            error_type="extraction",
+                            error_message=result.error or "Unknown error",
                         )
-                        if self.plugin_registry is not None:
-                            self.plugin_registry.unload_plugin(handler_plugin_name)
+                    )
+                    continue
 
-                        plugin_handler = None
-                        text = None
-
-                if text is None:
-                    text = self.extractor.extract(file_metadata.file_path)
-
-                if not text or not text.strip():
-                    logger.info(f"Skipping empty file: {file_metadata.file_path}")
+                if result.skipped or not result.vectors:
                     job.files_skipped += 1
                     continue
 
-                # Use plugin chunking strategy if available
-                if plugin_handler is not None and self.chunking_resolver is not None:
-                    try:
-                        chunking_strategy = plugin_handler.get_chunking_strategy()
-                        chunker = self.chunking_resolver.resolve(
-                            chunking_strategy,
-                            plugin_name=plugin_handler.__class__.__name__,
-                        )
-                        file_type = file_metadata.file_type or "text"
-                        chunks = chunker.chunk(
-                            text, file_path=file_metadata.file_path, file_type=file_type
-                        )
-                    except Exception as e:
-                        logger.warning(f"Plugin chunking failed for {file_metadata.file_path}: {e}")
-                        file_type = file_metadata.file_type or "text"
-                        chunks = self.chunker.chunk(
-                            text, file_path=file_metadata.file_path, file_type=file_type
-                        )
-                else:
-                    file_type = file_metadata.file_type or "text"
-                    chunks = self.chunker.chunk(
-                        text, file_path=file_metadata.file_path, file_type=file_type
-                    )
-
-                if not chunks:
-                    logger.info(f"Skipping file (no chunks created): {file_metadata.file_path}")
-                    job.files_skipped += 1
-                    continue
-
-                job.chunks_generated += len(chunks)
-
-                # Determine vector_name based on plugin's embedding model (T050)
-                vector_name = "text"  # default
-                if plugin_handler is not None:
-                    emb_model = plugin_handler.get_embedding_model()
-                    if emb_model is not None:
-                        resolved = self.embedding_orchestrator.get_vector_name_for_model(emb_model)
-                        if resolved is not None:
-                            vector_name = resolved
-
-                # Generate embeddings using the orchestrator
-                embeddings = self.embedding_orchestrator.embed_chunks(
-                    chunks, vector_name=vector_name
-                )
-                job.embeddings_created += len(embeddings)
-
-                # Check if the active chunker provides code-aware metadata
-                _active_chunker = chunker if "chunker" in locals() else self.chunker
-                _has_chunk_meta = hasattr(_active_chunker, "get_chunk_metadata")
-
-                for chunk, embedding in zip(chunks, embeddings, strict=True):
-                    payload = {
-                        "content": chunk.content,
-                        "file_path": str(chunk.file_path),
-                        "file_type": file_metadata.file_type,
-                        "chunk_index": chunk.chunk_index,
-                        "start_char": chunk.start_char,
-                        "end_char": chunk.end_char,
-                        "token_count": chunk.token_count,
-                        "embedding_model": self.embedding_orchestrator._model_names.get(
-                            vector_name, ""
-                        ),
-                    }
-                    # Inject code-aware metadata if available
-                    if _has_chunk_meta:
-                        try:
-                            code_meta = _active_chunker.get_chunk_metadata(chunk)
-                            if code_meta:
-                                payload.update(code_meta)
-                        except Exception:
-                            pass  # Don't fail indexing for metadata errors
-                    # Use named vector format when multi-model, flat otherwise
-                    vec_value: Any = (
-                        {vector_name: embedding}
-                        if self.embedding_orchestrator.is_multi_model
-                        else embedding
-                    )
-                    vector = {
-                        "id": chunk.chunk_id,
-                        "vector": vec_value,
-                        "payload": payload,
-                    }
-                    all_vectors.append(vector)
+                all_vectors.extend(result.vectors)
+                job.chunks_generated += result.chunk_count
+                job.embeddings_created += result.embeddings_created
 
                 # Update file metadata with indexing details
-                file_metadata.chunk_count = len(chunks)
+                file_metadata.chunk_count = result.chunk_count
                 file_metadata.last_indexed_at = datetime.now()
 
                 job.files_processed += 1
-                # Store file metadata for incremental updates
                 self.indexed_files[str(file_metadata.file_path)] = file_metadata
 
             except Exception as e:

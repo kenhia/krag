@@ -176,7 +176,9 @@ class QdrantVectorStore(VectorStore):
                             distance=self.distance,
                         ),
                     )
-                    logger.info(f"Recreated collection in single-vector mode (dim={self.vector_size})")
+                    logger.info(
+                        f"Recreated collection in single-vector mode (dim={self.vector_size})"
+                    )
                 else:
                     logger.debug(
                         f"Collection uses named vectors {list(existing_keys)}; "
@@ -244,7 +246,7 @@ class QdrantVectorStore(VectorStore):
             warnings.simplefilter("ignore", UserWarning)
             self.client.upsert(collection_name=self.collection_name, points=points)
 
-        logger.info(f"Upserted {len(points)} vectors to {self.collection_name}")
+        logger.debug(f"Upserted {len(points)} vectors to {self.collection_name}")
 
     def search(self, query_vector: list[float], limit: int = 10) -> list[dict[str, Any]]:
         """Search for similar vectors.
@@ -259,6 +261,13 @@ class QdrantVectorStore(VectorStore):
         # When the collection uses named vectors we must specify which space to
         # search.  Fall back to the "text" space so single-model queries still
         # work against a multi-model (named-vector) collection.
+        #
+        # Invariant: the primary embedding model is always stored under the
+        # "text" vector space name.  This convention is established in
+        # EmbeddingOrchestrator.__init__ and relied upon by Retriever,
+        # reciprocal_rank_fusion, and this fallback.  Any additional models
+        # (e.g. code-specific) use their own named space but "text" is always
+        # present as the default.
         kwargs: dict[str, Any] = {
             "collection_name": self.collection_name,
             "query": query_vector,

@@ -133,5 +133,6 @@ def _make_scored_points(
     if payloads is None:
         payloads = [{}] * len(ids)
     return [
-        _MockScoredPoint(id=id_, score=s, payload=p) for id_, s, p in zip(ids, scores, payloads, strict=True)
+        _MockScoredPoint(id=id_, score=s, payload=p)
+        for id_, s, p in zip(ids, scores, payloads, strict=True)
     ]

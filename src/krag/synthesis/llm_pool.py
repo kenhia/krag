@@ -73,19 +73,6 @@ class LLMSlot:
     llm_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
-def _get_free_vram() -> int | None:
-    """Return free VRAM in bytes, or *None* if no CUDA GPU is available."""
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            free, _total = torch.cuda.mem_get_info()
-            return int(free)
-    except Exception:  # noqa: BLE001
-        pass
-    return None
-
-
 class LLMPool:
     """Multi-LLM lifecycle manager with routing and hot-swap.
 
@@ -227,9 +214,26 @@ class LLMPool:
             return "code"
         return None
 
+    @property
+    def text_llm_client(self) -> LLMClient:
+        """Return the text slot's ``LLMClient`` instance.
+
+        Useful for sharing the already-loaded text LLM with other
+        components (e.g. ``QueryEngine``) without loading the model
+        a second time.
+
+        Raises:
+            RuntimeError: If the text LLM is not loaded.
+        """
+        if self._text_slot.instance is None:
+            raise RuntimeError("Text LLM is not loaded")
+        return self._text_slot.instance
+
     def get_status(self) -> dict[str, Any]:
         """Return detailed status of all LLM slots."""
-        free_vram = _get_free_vram()
+        from krag.cli.gpu import get_free_vram
+
+        free_vram = get_free_vram()
         return {
             "mode": self._mode,
             "text": self._slot_status(self._text_slot),
@@ -283,7 +287,9 @@ class LLMPool:
 
         where ``kv_cache = n_ctx × 2 MB``.
         """
-        free = _get_free_vram()
+        from krag.cli.gpu import get_free_vram
+
+        free = get_free_vram()
         if free is None:
             logger.warning("No GPU detected – cannot load both LLMs simultaneously.")
             return False
@@ -408,17 +414,50 @@ class LLMPool:
 # ------------------------------------------------------------------
 
 
+# File extensions considered markdown documentation.
+MARKDOWN_EXTENSIONS: frozenset[str] = frozenset({".md", ".mdx", ".markdown", ".rst"})
+
+
 def _analyze_chunk_composition(chunks: list[QueryResult]) -> str:
     """Determine if chunks are predominantly code or text.
 
-    Checks ``file_type`` against known code extensions.
+    Checks ``file_type`` against ``"code"`` or the file extension
+    (from ``file_path``) against known code extensions.
+
+    When the source mix contains both code and markdown files, the
+    markdown chunks are counted as code-aligned.  This prevents
+    documentation files (which often accompany code) from diluting the
+    code signal and incorrectly routing to the text LLM.
 
     Returns:
-        ``"code"`` if >40 % of chunks are code files, ``"text"`` otherwise.
+        ``"code"`` if >40 % of chunks are code-aligned, ``"text"`` otherwise.
     """
     if not chunks:
         return "text"
-    code_count = sum(1 for c in chunks if c.file_type in CODE_EXTENSIONS)
-    if code_count > len(chunks) * 0.4:
+
+    code_count = 0
+    markdown_count = 0
+    for c in chunks:
+        ext = Path(c.file_path).suffix.lower()
+        if c.file_type == "code" or ext in CODE_EXTENSIONS:
+            code_count += 1
+        elif ext in MARKDOWN_EXTENSIONS:
+            markdown_count += 1
+
+    # When sources mix code and markdown, treat markdown as code-aligned
+    # (documentation about code should still route to the code LLM).
+    if code_count > 0 and markdown_count > 0:
+        code_count += markdown_count
+
+    ratio = code_count / len(chunks) if chunks else 0
+    logger.debug(
+        "Chunk composition: code=%d, markdown=%d, total=%d (%.0f%% code-aligned)",
+        code_count - (markdown_count if code_count > markdown_count else 0),
+        markdown_count,
+        len(chunks),
+        ratio * 100,
+    )
+
+    if ratio > 0.40:
         return "code"
     return "text"

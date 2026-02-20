@@ -1,15 +1,87 @@
 """Retriever for similarity search in vector store."""
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from krag.models.query_result import QueryResult
 from krag.retrieval.rrf import reciprocal_rank_fusion
 
+if TYPE_CHECKING:
+    from krag.embeddings.generator import EmbeddingGenerator
+    from krag.embeddings.orchestrator import EmbeddingOrchestrator
+    from krag.storage.vector_store import VectorStore
+
 logger = logging.getLogger(__name__)
+
+# Common stop words filtered from boost keyword extraction
+_STOP_WORDS: frozenset[str] = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "are",
+        "was",
+        "were",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "need",
+        "use",
+        "used",
+        "using",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "this",
+        "that",
+        "these",
+        "those",
+        "how",
+        "when",
+        "where",
+        "why",
+        "not",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "than",
+        "too",
+        "very",
+        "just",
+        "about",
+        "into",
+        "from",
+        "with",
+    }
+)
+
+# Minimum keyword length for boost extraction (shared by both boost methods)
+_MIN_KEYWORD_LENGTH = 3
 
 
 class Retriever:
@@ -28,11 +100,15 @@ class Retriever:
     # Weight given to metadata symbol match bonus
     _METADATA_BOOST_WEIGHT = 0.08
 
+    # RRF scores are much smaller (~0.01–0.03), so boosts must be proportional
+    _KEYWORD_BOOST_WEIGHT_RRF = 0.002
+    _METADATA_BOOST_WEIGHT_RRF = 0.003
+
     def __init__(
         self,
-        vector_store: Any,  # VectorStore protocol/interface
-        embedding_generator: Any,  # EmbeddingGenerator protocol/interface
-        embedding_orchestrator: Any | None = None,  # EmbeddingOrchestrator (optional)
+        vector_store: VectorStore,
+        embedding_generator: EmbeddingGenerator,
+        embedding_orchestrator: EmbeddingOrchestrator | None = None,
     ):
         """Initialize retriever.
 
@@ -100,10 +176,10 @@ class Retriever:
         query_results = self._deduplicate(query_results)
 
         # Step 4a: Metadata boost (function_name / class_name matches)
-        query_results = self._metadata_boost(query, query_results)
+        query_results = self._metadata_boost(query, query_results, is_rrf=using_rrf)
 
         # Step 4b: Keyword boost
-        query_results = self._keyword_boost(query, query_results)
+        query_results = self._keyword_boost(query, query_results, is_rrf=using_rrf)
 
         # Step 5: Apply similarity threshold filtering
         # Skip threshold for RRF results: RRF scores are rank-fusion values
@@ -134,6 +210,51 @@ class Retriever:
         return query_results
 
     @staticmethod
+    def _payload_to_query_result(
+        point_id: str | int,
+        score: float,
+        rank: int,
+        payload: dict[str, Any],
+    ) -> QueryResult | None:
+        """Convert a point payload to a QueryResult.
+
+        Returns None if the payload is invalid (missing/empty file_path),
+        logging a warning instead of crashing.
+        """
+        file_path_raw = payload.get("file_path", "")
+        if not file_path_raw:
+            logger.warning(
+                "Skipping result %s (rank %d): empty or missing file_path in payload",
+                point_id,
+                rank,
+            )
+            return None
+
+        try:
+            return QueryResult(
+                chunk_id=str(point_id) if not isinstance(point_id, str) else point_id,
+                score=score,
+                rank=rank,
+                chunk_content=payload.get("content", ""),
+                file_path=Path(file_path_raw),
+                chunk_index=payload.get("chunk_index", 0),
+                file_type=payload.get("file_type", "unknown"),
+                language=payload.get("language"),
+                function_name=payload.get("function_name"),
+                class_name=payload.get("class_name"),
+                start_line=payload.get("start_line"),
+                end_line=payload.get("end_line"),
+            )
+        except Exception:
+            logger.warning(
+                "Skipping result %s (rank %d): failed to construct QueryResult",
+                point_id,
+                rank,
+                exc_info=True,
+            )
+            return None
+
+    @staticmethod
     def _results_to_query_results(results: list[dict[str, Any]]) -> list[QueryResult]:
         """Convert raw vector store results to QueryResult objects.
 
@@ -148,27 +269,15 @@ class Retriever:
             payload = result.get("payload", {})
             score = float(result["score"])
 
-            query_result = QueryResult(
-                chunk_id=result["id"],
-                score=score,
-                rank=rank,
-                chunk_content=payload.get("content", ""),
-                file_path=Path(payload.get("file_path", "")),
-                chunk_index=payload.get("chunk_index", 0),
-                file_type=payload.get("file_type", "unknown"),
-                language=payload.get("language"),
-                function_name=payload.get("function_name"),
-                class_name=payload.get("class_name"),
-                start_line=payload.get("start_line"),
-                end_line=payload.get("end_line"),
-            )
-            query_results.append(query_result)
-            logger.debug(
-                "  [%d] score=%.4f file=%s",
-                rank,
-                score,
-                payload.get("file_path", ""),
-            )
+            qr = Retriever._payload_to_query_result(result["id"], score, rank, payload)
+            if qr is not None:
+                query_results.append(qr)
+                logger.debug(
+                    "  [%d] score=%.4f file=%s",
+                    rank,
+                    score,
+                    payload.get("file_path", ""),
+                )
         return query_results
 
     def _multi_model_retrieve(self, query: str, fetch_limit: int) -> list[QueryResult]:
@@ -211,22 +320,9 @@ class Retriever:
         # Convert RRFScoredPoint objects to QueryResult
         query_results: list[QueryResult] = []
         for rank, point in enumerate(merged, start=1):
-            payload = point.payload
-            query_result = QueryResult(
-                chunk_id=str(point.id),
-                score=point.score,
-                rank=rank,
-                chunk_content=payload.get("content", ""),
-                file_path=Path(payload.get("file_path", "")),
-                chunk_index=payload.get("chunk_index", 0),
-                file_type=payload.get("file_type", "unknown"),
-                language=payload.get("language"),
-                function_name=payload.get("function_name"),
-                class_name=payload.get("class_name"),
-                start_line=payload.get("start_line"),
-                end_line=payload.get("end_line"),
-            )
-            query_results.append(query_result)
+            qr = self._payload_to_query_result(str(point.id), point.score, rank, point.payload)
+            if qr is not None:
+                query_results.append(qr)
 
         return query_results
 
@@ -268,22 +364,27 @@ class Retriever:
             )
         return unique
 
-    def _metadata_boost(self, query: str, results: list[QueryResult]) -> list[QueryResult]:
+    def _metadata_boost(
+        self, query: str, results: list[QueryResult], *, is_rrf: bool = False
+    ) -> list[QueryResult]:
         """Boost scores for results whose function/class name matches query terms.
 
-        Extracts meaningful words from the query and checks whether they
-        appear in each result's ``function_name`` or ``class_name``.  A
-        small bonus is added per match, and results are re-sorted.
+        Extracts meaningful words (3+ chars, no stop words) from the query
+        and checks whether they appear in each result's ``function_name``
+        or ``class_name``.  A small bonus is added per match, and results
+        are re-sorted.
 
         Args:
             query: Original user query
             results: Deduplicated results
+            is_rrf: True if scores are RRF-fused (use smaller weights)
 
         Returns:
             Results re-sorted by boosted score (descending)
         """
+        boost_weight = self._METADATA_BOOST_WEIGHT_RRF if is_rrf else self._METADATA_BOOST_WEIGHT
         words = re.findall(r"[a-zA-Z0-9_]+", query.lower())
-        keywords = [w for w in words if len(w) >= 2]
+        keywords = [w for w in words if len(w) >= _MIN_KEYWORD_LENGTH and w not in _STOP_WORDS]
 
         if not keywords:
             return results
@@ -302,8 +403,8 @@ class Retriever:
                 if kw in cn_tokens or kw in cn:
                     matches += 1
 
-            bonus = matches * self._METADATA_BOOST_WEIGHT
-            boosted_score = min(r.score + bonus, 1.0)
+            bonus = matches * boost_weight
+            boosted_score = r.score + bonus
 
             if bonus > 0:
                 logger.debug(
@@ -319,82 +420,27 @@ class Retriever:
         boosted.sort(key=lambda x: x[0], reverse=True)
         return [r for _, r in boosted]
 
-    def _keyword_boost(self, query: str, results: list[QueryResult]) -> list[QueryResult]:
+    def _keyword_boost(
+        self, query: str, results: list[QueryResult], *, is_rrf: bool = False
+    ) -> list[QueryResult]:
         """Boost scores for results containing query keywords.
 
-        Extracts meaningful words (3+ chars) from the query and adds a
-        small bonus for each keyword found (case-insensitive) in the chunk
-        content. Results are re-sorted by boosted score.
+        Extracts meaningful words (3+ chars, no stop words) from the query
+        and adds a small bonus for each keyword found (case-insensitive) in
+        the chunk content. Results are re-sorted by boosted score.
 
         Args:
             query: Original user query
             results: Deduplicated results
+            is_rrf: True if scores are RRF-fused (use smaller weights)
 
         Returns:
             Results re-sorted by boosted score (descending)
         """
-        # Extract keywords: words with 3+ chars, lowercased, no stop words
-        stop_words = {
-            "the",
-            "and",
-            "for",
-            "are",
-            "was",
-            "were",
-            "been",
-            "being",
-            "have",
-            "has",
-            "had",
-            "does",
-            "did",
-            "will",
-            "would",
-            "could",
-            "should",
-            "may",
-            "might",
-            "shall",
-            "can",
-            "need",
-            "use",
-            "used",
-            "using",
-            "what",
-            "which",
-            "who",
-            "whom",
-            "this",
-            "that",
-            "these",
-            "those",
-            "how",
-            "when",
-            "where",
-            "why",
-            "not",
-            "all",
-            "each",
-            "every",
-            "both",
-            "few",
-            "more",
-            "most",
-            "other",
-            "some",
-            "such",
-            "than",
-            "too",
-            "very",
-            "just",
-            "about",
-            "into",
-            "from",
-            "with",
-        }
-
+        boost_weight = self._KEYWORD_BOOST_WEIGHT_RRF if is_rrf else self._KEYWORD_BOOST_WEIGHT
+        # Extract keywords using shared stop-word list and min-length
         words = re.findall(r"[a-zA-Z0-9_]+", query.lower())
-        keywords = [w for w in words if len(w) >= 3 and w not in stop_words]
+        keywords = [w for w in words if len(w) >= _MIN_KEYWORD_LENGTH and w not in _STOP_WORDS]
 
         if not keywords:
             return results
@@ -405,8 +451,8 @@ class Retriever:
         for r in results:
             content_lower = r.chunk_content.lower()
             matches = sum(1 for kw in keywords if kw in content_lower)
-            bonus = matches * self._KEYWORD_BOOST_WEIGHT
-            boosted_score = min(r.score + bonus, 1.0)  # cap at 1.0
+            bonus = matches * boost_weight
+            boosted_score = r.score + bonus
 
             if bonus > 0:
                 logger.debug(

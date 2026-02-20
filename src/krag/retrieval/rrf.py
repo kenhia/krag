@@ -35,7 +35,7 @@ class RRFScoredPoint:
 
 
 def reciprocal_rank_fusion(
-    result_lists: list[list[Any]],
+    result_lists: list[list[ScoredPointLike]],
     k: int = 60,
     limit: int = 10,
 ) -> list[RRFScoredPoint]:

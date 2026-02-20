@@ -71,7 +71,7 @@ class TestLLMRoutingIntegration:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool = LLMPool(
@@ -110,7 +110,7 @@ class TestLLMRoutingIntegration:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool = LLMPool(
@@ -119,12 +119,12 @@ class TestLLMRoutingIntegration:
                 load_multi_llm=True,
             )
 
-        # Text-heavy retrieval results
+        # Text-heavy retrieval results (no code files → markdown not boosted)
         chunks = [
             _make_query_result(file_type=".md", file_path="/tmp/docs.md", content="# Docs"),
             _make_query_result(file_type=".txt", file_path="/tmp/notes.txt", content="Notes"),
             _make_query_result(file_type=".md", file_path="/tmp/FAQ.md", content="FAQ"),
-            _make_query_result(file_type=".py", file_path="/tmp/helper.py", content="# helper"),
+            _make_query_result(file_type=".txt", file_path="/tmp/other.txt", content="Other"),
         ]
 
         messages = [
@@ -147,7 +147,7 @@ class TestLLMRoutingIntegration:
         text_path, code_path = tmp_model_files
 
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool = LLMPool(
@@ -181,7 +181,7 @@ class TestLLMRoutingIntegration:
 
         # Force hot-swap mode by setting low VRAM
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=1_000_000_000,
         ):
             pool = LLMPool(
@@ -215,7 +215,7 @@ class TestLLMRoutingIntegration:
 
         # Simultaneous mode
         with patch(
-            "krag.synthesis.llm_pool._get_free_vram",
+            "krag.cli.gpu.get_free_vram",
             return_value=32_000_000_000,
         ):
             pool_sim = LLMPool(
