@@ -23,6 +23,9 @@ dependencies = [
     "tree-sitter>=0.23.0",
     "tree-sitter-python>=0.23.0",
     "tree-sitter-rust>=0.23.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "httpx>=0.28.0",
 ]
 
 [dependency-groups]
@@ -30,10 +33,12 @@ dev = [
     "mypy>=1.19.1",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "pytest-httpx>=0.34.0",
     "ruff>=0.15.0",
     "krag-plugin-code @ file://${PROJECT_ROOT}/examples/krag-plugin-code",
     "krag-plugin-logs @ file://${PROJECT_ROOT}/examples/krag-plugin-logs",
     "krag-plugin-markdown @ file://${PROJECT_ROOT}/examples/krag-plugin-markdown",
+    "pytest-asyncio>=1.3.0",
 ]
 
 [project.optional-dependencies]
@@ -45,7 +50,9 @@ dev = [
 ]
 
 [project.scripts]
-krag = "krag.cli.main:app"
+krag = "krag_cli.main:app"
+kragd = "kragd.__main__:app"
+krag-direct = "krag.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -80,7 +87,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=src/krag --cov-report=html --cov-report=term"
+addopts = "-v --cov=src/krag --cov=src/kragd --cov=src/krag_cli --cov-report=html --cov-report=term"
 
 [tool.mypy]
 python_version = "3.11"

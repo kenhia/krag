@@ -132,6 +132,46 @@ class PluginConfiguration(BaseModel):
         return v
 
 
+class ServiceConfiguration(BaseModel):
+    """Configuration for the kragd service daemon.
+
+    Controls how the HTTP service binds, which LLM slot to pre-load,
+    and operational settings like idle timeout and request logging.
+    """
+
+    host: str = Field(
+        default="0.0.0.0",
+        description="Network interface to bind (0.0.0.0 for LAN access)",
+    )
+    port: int = Field(
+        default=8742,
+        ge=1,
+        le=65535,
+        description="TCP port for kragd (8742 = KRAG on phone keypad)",
+    )
+    primary_llm: str | None = Field(
+        default="text",
+        description="LLM slot to pre-load on startup: 'text', 'code', or None",
+    )
+    idle_timeout: int = Field(
+        default=300,
+        ge=0,
+        description="Seconds of inactivity before unloading LLM (0 = never unload)",
+    )
+    log_requests: bool = Field(
+        default=True,
+        description="Log each HTTP request for debugging",
+    )
+
+    @field_validator("primary_llm")
+    @classmethod
+    def validate_primary_llm(cls, v: str | None) -> str | None:
+        """Ensure primary_llm is a valid slot name or None."""
+        if v is not None and v not in {"text", "code"}:
+            raise ValueError(f"primary_llm must be 'text', 'code', or None, got: {v!r}")
+        return v
+
+
 class Configuration(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="KRAG_", env_file=".env", env_file_encoding="utf-8"
@@ -301,6 +341,12 @@ class Configuration(BaseSettings):
     plugins: PluginConfiguration = Field(
         default_factory=PluginConfiguration,
         description="Plugin system configuration",
+    )
+
+    # Service Daemon
+    service: ServiceConfiguration = Field(
+        default_factory=ServiceConfiguration,
+        description="kragd service daemon configuration",
     )
 
     @field_validator("directory_paths")

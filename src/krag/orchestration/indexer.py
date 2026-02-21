@@ -61,6 +61,7 @@ class IndexingOrchestrator:
         embedding_model: str = "BAAI/bge-base-en-v1.5",
         device: str = "cpu",
         config: Configuration | None = None,
+        vector_store: "QdrantVectorStore | None" = None,
     ):
         """Initialize indexing orchestrator.
 
@@ -193,28 +194,35 @@ class IndexingOrchestrator:
             logger.debug("Plugin system disabled (no configuration provided)")
 
         # Initialize vector store with correct vector config
-        embedding_dim = self.embedding_orchestrator.dimension
-        if self.embedding_orchestrator.is_multi_model:
-            vectors_config = self.embedding_orchestrator.get_vector_config()
-            logger.info(
-                f"Initializing vector store with named vectors: "
-                f"{list(vectors_config.keys())} (dim={embedding_dim})"
-            )
-            self.vector_store = QdrantVectorStore(
-                collection_name=collection_name,
-                vector_size=embedding_dim,
-                storage_path=self.vector_store_path,
-                vectors_config=vectors_config,
-                allow_recreate=True,
-            )
+        if vector_store is not None:
+            # Use injected vector store (e.g. from kragd service)
+            self.vector_store = vector_store
+            self._owns_vector_store = False
+            logger.info("Using injected vector store (shared client)")
         else:
-            logger.info(f"Initializing vector store (dim={embedding_dim})")
-            self.vector_store = QdrantVectorStore(
-                collection_name=collection_name,
-                vector_size=embedding_dim,
-                storage_path=self.vector_store_path,
-                allow_recreate=True,
-            )
+            self._owns_vector_store = True
+            embedding_dim = self.embedding_orchestrator.dimension
+            if self.embedding_orchestrator.is_multi_model:
+                vectors_config = self.embedding_orchestrator.get_vector_config()
+                logger.info(
+                    f"Initializing vector store with named vectors: "
+                    f"{list(vectors_config.keys())} (dim={embedding_dim})"
+                )
+                self.vector_store = QdrantVectorStore(
+                    collection_name=collection_name,
+                    vector_size=embedding_dim,
+                    storage_path=self.vector_store_path,
+                    vectors_config=vectors_config,
+                    allow_recreate=True,
+                )
+            else:
+                logger.info(f"Initializing vector store (dim={embedding_dim})")
+                self.vector_store = QdrantVectorStore(
+                    collection_name=collection_name,
+                    vector_size=embedding_dim,
+                    storage_path=self.vector_store_path,
+                    allow_recreate=True,
+                )
 
         # Update plugin context with the real vector store
         if self.plugin_context is not None:
@@ -228,6 +236,9 @@ class IndexingOrchestrator:
 
     def close(self) -> None:
         """Close resources and release locks."""
+        if hasattr(self, "_owns_vector_store") and not self._owns_vector_store:
+            logger.debug("Skipping vector store close (injected, not owned)")
+            return
         if hasattr(self, "vector_store") and self.vector_store:
             logger.info("Closing vector store...")
             self.vector_store.close()

@@ -184,6 +184,9 @@ class QdrantVectorStore(VectorStore):
                         f"Collection uses named vectors {list(existing_keys)}; "
                         f"query will use existing vector spaces."
                     )
+                    # Adopt existing named-vectors config so is_named_vectors
+                    # returns True and search() passes `using="text"`.
+                    self._vectors_config = vectors_cfg
             elif want_named and existing_named:
                 # Both named — check if new vector names need to be added
                 want_keys = set(self._vectors_config.keys())

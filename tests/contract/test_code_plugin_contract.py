@@ -89,8 +89,8 @@ class TestCodeFileHandlerContract:
 
         handler = CodeFileHandler()
         model = handler.get_embedding_model()
-        # Without config, returns None (uses default model)
-        assert model is None
+        # Without config, returns the default code embedding model
+        assert model == "jinaai/jina-embeddings-v2-base-code"
         # With config, returns configured model
         handler.initialize({"embedding_model": "code-bert"})
         model = handler.get_embedding_model()
