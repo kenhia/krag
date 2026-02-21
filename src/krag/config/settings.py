@@ -9,7 +9,7 @@ from typing import Any
 import tomli_w  # For writing TOML
 import yaml
 
-from krag.models.configuration import Configuration, PluginConfiguration
+from krag.models.configuration import Configuration, PluginConfiguration, ServiceConfiguration
 
 
 class ConfigManager:
@@ -193,6 +193,22 @@ class ConfigManager:
 
             # Create PluginConfiguration and validate (T029: validation happens here)
             config_dict["plugins"] = PluginConfiguration(**plugin_config_dict)
+
+        # [service] section (kragd daemon configuration)
+        if "service" in toml_data:
+            svc_section = toml_data["service"]
+            svc_dict: dict[str, Any] = {}
+            if "host" in svc_section:
+                svc_dict["host"] = svc_section["host"]
+            if "port" in svc_section:
+                svc_dict["port"] = svc_section["port"]
+            if "primary_llm" in svc_section:
+                svc_dict["primary_llm"] = svc_section["primary_llm"]
+            if "idle_timeout" in svc_section:
+                svc_dict["idle_timeout"] = svc_section["idle_timeout"]
+            if "log_requests" in svc_section:
+                svc_dict["log_requests"] = svc_section["log_requests"]
+            config_dict["service"] = ServiceConfiguration(**svc_dict)
 
         return Configuration(**config_dict)
 

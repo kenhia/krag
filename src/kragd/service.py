@@ -1,0 +1,748 @@
+"""Central service object for kragd.
+
+Manages lifecycle of all heavyweight components (embeddings, vector store,
+LLM pool, query engine) and provides the unified interface that API route
+handlers delegate to.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
+
+from kragd.schemas import (
+    DebugMetadata,
+    DebugQueryRequest,
+    DebugQueryResponse,
+    HealthResponse,
+    IndexRequest,
+    IndexResponse,
+    QdrantSearchRequest,
+    QdrantSearchResponse,
+    QdrantSearchResult,
+    QueryRequest,
+    QueryResponse,
+    RetrieveRequest,
+    ServiceStatus,
+    SourceChunk,
+)
+
+if TYPE_CHECKING:
+    from krag.models.configuration import Configuration
+
+
+class KragService:
+    """Central service managing heavyweight component lifecycle.
+
+    Must call ``await start()`` before any query/retrieve/status methods.
+    Call ``await shutdown()`` for clean teardown.
+    """
+
+    def __init__(self, config: Configuration) -> None:
+        self.config = config
+        self.service_config = config.service
+
+        # Component references — populated by start()
+        self.embedding_generator = None
+        self.embedding_orchestrator = None
+        self.vector_store = None
+        self.llm_pool = None
+        self.query_engine = None
+        self.lifecycle_manager = None
+        self._last_index_job: IndexResponse | None = None
+
+        # Lifecycle state
+        self._started: bool = False
+        self._start_time: float | None = None
+
+    # ── guards ──────────────────────────────────
+
+    def _require_started(self) -> None:
+        """Raise RuntimeError if service is not started."""
+        if not self._started:
+            raise RuntimeError("Service not started — call start() first")
+
+    # ── lifecycle ───────────────────────────────
+
+    async def start(self) -> None:
+        """Initialize all heavyweight components and write PID file."""
+        self._init_embeddings()
+        self._init_vector_store()
+        self._init_llm_pool()
+        self._init_lifecycle_manager()
+        self._init_query_engine()
+        self._started = True
+        self._start_time = time.monotonic()
+
+        # Write PID file
+        from kragd.pid import get_pid_path, write_pid
+
+        self._pid_path = get_pid_path()
+        write_pid(self._pid_path)
+
+    async def shutdown(self) -> None:
+        """Release all resources and remove PID file. Safe to call multiple times."""
+        if not self._started:
+            return
+        # Cancel idle timer before closing pool
+        if self.lifecycle_manager is not None:
+            self.lifecycle_manager._cancel_timer()
+        if self.llm_pool is not None:
+            self.llm_pool.close()
+        if self.vector_store is not None:
+            self.vector_store.close()
+        self._started = False
+
+        # Remove PID file
+        from kragd.pid import remove_pid
+
+        if hasattr(self, "_pid_path") and self._pid_path is not None:
+            remove_pid(self._pid_path)
+
+    # ── component init (patchable in tests) ─────
+
+    def _init_embeddings(self) -> None:
+        """Load embedding models (including plugin-declared models)."""
+        from krag.embeddings.generator import EmbeddingGenerator
+        from krag.embeddings.orchestrator import EmbeddingOrchestrator
+
+        self.embedding_generator = EmbeddingGenerator(
+            model_name=self.config.embedding_model,
+            device=self.config.embedding_device,
+        )
+        self.embedding_orchestrator = EmbeddingOrchestrator(
+            default_model=self.config.embedding_model,
+            device=self.config.embedding_device,
+        )
+
+        # Register plugin-declared embedding models (e.g. code plugin)
+        if self.config.plugins is not None:
+            from krag.plugins.registry import PluginRegistry
+
+            registry = PluginRegistry(self.config.plugins)
+            registry.discover_plugins()
+            for meta in registry.list_plugins(filter_status="enabled"):
+                handler = registry.load_plugin(meta.name)
+                if handler is not None:
+                    em = getattr(handler, "get_embedding_model", lambda: None)()
+                    if em:
+                        self.embedding_orchestrator.register_model(meta.name, em)
+
+    def _init_vector_store(self) -> None:
+        """Open Qdrant vector store."""
+        from krag.storage.qdrant_impl import QdrantVectorStore
+
+        self.vector_store = QdrantVectorStore(
+            collection_name=self.config.collection_name,
+            vector_size=self.embedding_generator.get_dimension(),
+            storage_path=str(self.config.vector_store_path),
+            distance=self.config.distance_metric,
+        )
+
+    def _init_llm_pool(self) -> None:
+        """Load LLM pool (may be None if no model configured)."""
+        from pathlib import Path
+
+        from krag.synthesis.llm_pool import LLMPool
+
+        model = self.config.llm_model
+        if not model:
+            self.llm_pool = None
+            return
+
+        self.llm_pool = LLMPool(
+            text_model_path=Path(model),
+            code_model_path=Path(self.config.llm_code_model)
+            if self.config.llm_code_model
+            else None,
+            load_multi_llm=self.config.load_multi_llm,
+            n_ctx=self.config.llm_context_size,
+            n_gpu_layers=self.config.llm_n_gpu_layers,
+        )
+
+    def _init_query_engine(self) -> None:
+        """Wire up the query engine."""
+        from krag.orchestration.query_engine import QueryEngine
+
+        if self.llm_pool is None:
+            return
+
+        self.query_engine = QueryEngine(
+            vector_store=self.vector_store,
+            embedding_generator=self.embedding_generator,
+            llm_client=self.llm_pool.text_llm_client,
+            top_k=self.config.top_k,
+            path_aliases=self.config.path_aliases or None,
+            preset_name=self.config.prompt_preset,
+            system_prompt_override=self.config.prompt_system_override,
+            similarity_threshold=self.config.similarity_threshold,
+            embedding_orchestrator=self.embedding_orchestrator,
+        )
+
+    def _init_lifecycle_manager(self) -> None:
+        """Wire up LLM lifecycle manager if pool is available."""
+        if self.llm_pool is None:
+            return
+
+        from kragd.lifecycle import LLMLifecycleManager
+
+        self.lifecycle_manager = LLMLifecycleManager(
+            pool=self.llm_pool,
+            idle_timeout=getattr(self.service_config, "idle_timeout", 300),
+            primary_llm=getattr(self.service_config, "primary_llm", "text"),
+        )
+
+        # Try to set the event loop (available during lifespan startup)
+        import asyncio
+
+        try:
+            self.lifecycle_manager._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+
+    # ── public API ──────────────────────────────
+
+    def query(self, request: QueryRequest) -> QueryResponse:
+        """Execute a full RAG query with LLM synthesis."""
+        self._require_started()
+
+        if self.query_engine is None:
+            raise RuntimeError("No LLM model configured — cannot synthesize answers")
+
+        # When debug metadata is requested, delegate to the debug path
+        if request.include_debug:
+            debug_req = DebugQueryRequest(
+                query=request.query,
+                top_k=request.top_k,
+                preset=request.preset,
+                llm=request.llm,
+            )
+            debug_resp = self.debug_query(debug_req)
+            return QueryResponse(
+                answer=debug_resp.answer,
+                sources=debug_resp.sources,
+                debug=debug_resp.debug,
+            )
+
+        # Determine which LLM slot will be used for lifecycle tracking
+        slot = request.llm or "text"
+        if self.lifecycle_manager is not None:
+            self.lifecycle_manager.ensure_loaded(slot)
+            self.lifecycle_manager.on_request_start(slot)
+
+        try:
+            # Swap query engine's LLM client to the requested slot
+            if self.llm_pool is not None:
+                target_slot = self.llm_pool._slot_for(slot)
+                if not target_slot.is_loaded:
+                    self.llm_pool.swap_to(slot)
+                if target_slot.instance is not None:
+                    self.query_engine.llm_client = target_slot.instance
+
+            top_k = request.top_k or self.config.top_k
+            result = self.query_engine.query(request.query, top_k=top_k)
+
+            sources = [
+                SourceChunk(
+                    chunk_id=str(getattr(s, "chunk_id", "")),
+                    file_path=str(s.file_path),
+                    score=s.score,
+                    rank=i + 1,
+                    chunk_content=s.chunk_content,
+                    file_type=getattr(s, "file_type", ""),
+                    language=getattr(s, "language", None),
+                    function_name=getattr(s, "function_name", None),
+                    class_name=getattr(s, "class_name", None),
+                    start_line=getattr(s, "start_line", None),
+                    end_line=getattr(s, "end_line", None),
+                )
+                for i, s in enumerate(result.sources)
+            ]
+
+            return QueryResponse(answer=result.answer, sources=sources, debug=None)
+        finally:
+            if self.lifecycle_manager is not None:
+                self.lifecycle_manager.on_request_end(slot)
+
+    def retrieve(self, request: RetrieveRequest) -> list[SourceChunk]:
+        """Retrieve chunks without LLM synthesis."""
+        self._require_started()
+
+        from krag.retrieval.retriever import Retriever
+
+        retriever = Retriever(
+            vector_store=self.vector_store,
+            embedding_generator=self.embedding_generator,
+            embedding_orchestrator=self.embedding_orchestrator,
+        )
+        top_k = request.top_k or self.config.top_k
+        results = retriever.retrieve(
+            query=request.query,
+            top_k=top_k,
+            similarity_threshold=self.config.similarity_threshold,
+        )
+        return [
+            SourceChunk(
+                chunk_id=str(getattr(r, "chunk_id", "")),
+                file_path=str(r.file_path),
+                score=r.score,
+                rank=i + 1,
+                chunk_content=r.chunk_content,
+                file_type=getattr(r, "file_type", ""),
+            )
+            for i, r in enumerate(results)
+        ]
+
+    def debug_query(self, request: DebugQueryRequest) -> DebugQueryResponse:
+        """Execute a query with full debug metadata.
+
+        Wraps query with timing instrumentation, collects routing decision,
+        embedding models, vector spaces, candidate counts.
+        """
+        self._require_started()
+
+        if self.query_engine is None:
+            raise RuntimeError("No LLM model configured — cannot synthesize answers")
+
+        slot = request.llm or "text"
+        if self.lifecycle_manager is not None:
+            self.lifecycle_manager.ensure_loaded(slot)
+            self.lifecycle_manager.on_request_start(slot)
+
+        try:
+            from krag.retrieval.retriever import Retriever
+
+            top_k = request.top_k or self.config.top_k
+
+            # Phase 1: Retrieval with timing
+            t0 = time.monotonic()
+            retriever = Retriever(
+                vector_store=self.vector_store,
+                embedding_generator=self.embedding_generator,
+                embedding_orchestrator=self.embedding_orchestrator,
+            )
+            results = retriever.retrieve(
+                query=request.query,
+                top_k=top_k,
+                similarity_threshold=self.config.similarity_threshold,
+            )
+            retrieval_ms = (time.monotonic() - t0) * 1000
+
+            # Collect retrieval statistics
+            total_before = getattr(retriever, "_last_total_before_dedup", len(results))
+            total_after = len(results)
+
+            # Phase 2: LLM generation with timing
+            t1 = time.monotonic()
+            response_text, route_name = self.llm_pool.route_and_generate(
+                messages=self.query_engine.prompt_builder.build(request.query, results),
+                retrieved_chunks=results,
+                llm_override=request.llm,
+            )
+            generation_ms = (time.monotonic() - t1) * 1000
+
+            # Determine routing info
+            auto_routed = request.llm is None
+            route_slot = self.llm_pool._slot_for(route_name)
+
+            sources = [
+                SourceChunk(
+                    chunk_id=str(getattr(s, "chunk_id", "")),
+                    file_path=str(s.file_path),
+                    score=s.score,
+                    rank=i + 1,
+                    chunk_content=s.chunk_content,
+                    file_type=getattr(s, "file_type", ""),
+                    language=getattr(s, "language", None),
+                    function_name=getattr(s, "function_name", None),
+                    class_name=getattr(s, "class_name", None),
+                    start_line=getattr(s, "start_line", None),
+                    end_line=getattr(s, "end_line", None),
+                )
+                for i, s in enumerate(results)
+            ]
+
+            # Collect vector space info
+            vector_spaces = []
+            per_space_counts: dict[str, int] = {}
+            if self.vector_store is not None:
+                try:
+                    import warnings
+
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        qdrant_info = self.vector_store.client.get_collection(
+                            self.vector_store.collection_name
+                        )
+                    vectors_cfg = qdrant_info.config.params.vectors
+                    if isinstance(vectors_cfg, dict):
+                        vector_spaces = list(vectors_cfg.keys())
+                except Exception:
+                    pass
+            if not vector_spaces:
+                vector_spaces = ["default"]
+            for space in vector_spaces:
+                per_space_counts[space] = total_after
+
+            debug = DebugMetadata(
+                llm_used=route_name,
+                llm_model=str(route_slot.model_path) if route_slot.model_path else "unknown",
+                route=route_name,
+                auto_routed=auto_routed,
+                route_reason=None if not auto_routed else "Auto-routed based on chunk composition",
+                preset=request.preset or self.config.prompt_preset or "default",
+                retrieval_time_ms=round(retrieval_ms, 2),
+                generation_time_ms=round(generation_ms, 2),
+                embedding_models_used=list(self.embedding_orchestrator._model_names.values())
+                if self.embedding_orchestrator is not None
+                else [self.config.embedding_model],
+                vector_spaces_searched=vector_spaces,
+                total_candidates_before_dedup=total_before,
+                total_candidates_after_dedup=total_after,
+                similarity_threshold=self.config.similarity_threshold,
+                per_space_result_counts=per_space_counts,
+            )
+
+            return DebugQueryResponse(
+                answer=response_text,
+                sources=sources,
+                debug=debug,
+            )
+        finally:
+            if self.lifecycle_manager is not None:
+                self.lifecycle_manager.on_request_end(slot)
+
+    def debug_qdrant(self, request: QdrantSearchRequest) -> QdrantSearchResponse:
+        """Raw vector store search bypassing Retriever (R-09).
+
+        No dedup, boost, or RRF. Returns raw similarity scores.
+        """
+        self._require_started()
+
+        if self.vector_store is None:
+            raise RuntimeError("Vector store not initialized")
+        if self.embedding_generator is None:
+            raise RuntimeError("Embedding generator not initialized")
+
+        # Generate query embedding using the appropriate model for the space
+        if request.vector_space and self.embedding_orchestrator is not None:
+            embeddings = self.embedding_orchestrator.embed_query(request.query)
+            if request.vector_space in embeddings:
+                query_vector = embeddings[request.vector_space]
+            else:
+                query_vector = self.embedding_generator.generate_single(request.query)
+        else:
+            query_vector = self.embedding_generator.generate_single(request.query)
+
+        # Build Qdrant filter if specified
+        qdrant_filter = None
+        if request.filters:
+            from qdrant_client.models import FieldCondition, Filter, MatchText, MatchValue
+
+            must_conditions: list = []
+            must_not_conditions: list = []
+            if request.filters.file_type:
+                must_conditions.append(
+                    FieldCondition(
+                        key="file_type",
+                        match=MatchValue(value=request.filters.file_type),
+                    )
+                )
+            if request.filters.file_path_contains:
+                must_conditions.append(
+                    FieldCondition(
+                        key="file_path",
+                        match=MatchText(text=request.filters.file_path_contains),
+                    )
+                )
+            if request.filters.file_path_excludes:
+                for pattern in request.filters.file_path_excludes:
+                    must_not_conditions.append(
+                        FieldCondition(
+                            key="file_path",
+                            match=MatchText(text=pattern),
+                        )
+                    )
+            if must_conditions or must_not_conditions:
+                qdrant_filter = Filter(
+                    must=must_conditions or None,
+                    must_not=must_not_conditions or None,
+                )
+
+        # Direct Qdrant search (bypass Retriever)
+
+        search_kwargs: dict = {
+            "collection_name": self.config.collection_name,
+            "query": query_vector,
+            "limit": request.top_k,
+            "with_payload": request.with_payload,
+            "score_threshold": request.score_threshold,
+        }
+
+        if request.vector_space:
+            search_kwargs["using"] = request.vector_space
+        elif self.vector_store.is_named_vectors:
+            search_kwargs["using"] = "text"
+
+        if qdrant_filter:
+            search_kwargs["query_filter"] = qdrant_filter
+
+        raw_results = self.vector_store.client.query_points(**search_kwargs)
+
+        results = []
+        for point in raw_results.points:
+            payload = point.payload or {}
+            results.append(
+                QdrantSearchResult(
+                    chunk_id=str(point.id),
+                    score=point.score,
+                    file_path=payload.get("file_path", ""),
+                    file_type=payload.get("file_type", ""),
+                    chunk_content=payload.get("chunk_content", "") if request.with_payload else "",
+                    chunk_index=payload.get("chunk_index", 0),
+                    start_line=payload.get("start_line"),
+                    end_line=payload.get("end_line"),
+                )
+            )
+
+        return QdrantSearchResponse(
+            results=results,
+            total_results=len(results),
+            vector_space=request.vector_space,
+        )
+
+    def index(self, request: IndexRequest) -> IndexResponse:
+        """Run indexing using already-loaded embedding models.
+
+        Delegates to IndexingOrchestrator with full or incremental mode.
+        Temporarily unloads the LLM to free VRAM for embedding models
+        (e.g. code embedding), then reloads it after indexing completes.
+        """
+        self._require_started()
+
+        from kragd.schemas import IndexError as IndexErr
+
+        t0 = time.monotonic()
+
+        from krag.orchestration.indexer import IndexingOrchestrator
+
+        # Temporarily unload the LLM to free VRAM for embedding models.
+        # The code embedding model may have been skipped at startup due to
+        # insufficient VRAM while the LLM was loaded.
+        llm_was_loaded = None  # track which LLM(s) to restore
+        if self.llm_pool is not None:
+            llm_was_loaded = self.llm_pool.get_active_llm()
+            if llm_was_loaded:
+                logger.info("Unloading LLM to free VRAM for indexing embeddings")
+                self.llm_pool.close()
+
+        # Apply request overrides (directories, file_types, exclusions) to a
+        # copy of the config so the service's base config stays unchanged.
+        index_config = self.config
+        overrides: dict = {}
+        if request.directories:
+            from pathlib import Path
+
+            overrides["directory_paths"] = [Path(d) for d in request.directories]
+        if request.file_types:
+            overrides["supported_file_types"] = request.file_types
+        if request.exclude_patterns:
+            overrides["exclusion_patterns"] = (
+                list(self.config.exclusion_patterns) + request.exclude_patterns
+            )
+        if overrides:
+            index_config = self.config.model_copy(update=overrides)
+
+        # Build orchestrator with service's pre-loaded components,
+        # sharing the existing vector store to avoid Qdrant local-mode lock conflicts
+        orchestrator = IndexingOrchestrator(config=index_config, vector_store=self.vector_store)
+
+        try:
+            is_full = request.mode == "full"
+            if is_full:
+                job = orchestrator.index_full()
+            else:
+                job = orchestrator.index_incremental()
+
+            duration = time.monotonic() - t0
+
+            errors = [
+                IndexErr(
+                    file_path=str(e.file_path),
+                    error_type=e.error_type,
+                    error_message=e.error_message,
+                )
+                for e in (job.error_summary or [])
+            ]
+
+            response = IndexResponse(
+                job_id=str(job.job_id),
+                status=job.status.value if hasattr(job.status, "value") else str(job.status),
+                mode=request.mode,
+                files_scanned=job.files_discovered,
+                files_processed=job.files_processed,
+                files_skipped=job.files_skipped,
+                files_errored=job.files_errored,
+                chunks_created=job.chunks_generated,
+                vectors_stored=job.embeddings_created,
+                duration_seconds=round(duration, 2),
+                dry_run=request.dry_run,
+                errors=errors,
+            )
+
+            self._last_index_job = response
+            return response
+        finally:
+            orchestrator.close()
+
+            # Reload the LLM now that indexing is done and embedding VRAM
+            # can be reclaimed.
+            if llm_was_loaded and self.llm_pool is not None:
+                logger.info("Reloading LLM after indexing")
+                try:
+                    self._init_llm_pool()
+                    # Re-wire query engine with fresh LLM client
+                    if self.query_engine is not None and self.llm_pool is not None:
+                        self.query_engine.llm_client = self.llm_pool.text_llm_client
+                except Exception:
+                    logger.warning(
+                        "Failed to reload LLM after indexing — queries will be unavailable "
+                        "until service restart",
+                        exc_info=True,
+                    )
+
+    def get_index_status(self) -> IndexResponse:
+        """Return last indexing job status."""
+        self._require_started()
+
+        if self._last_index_job is None:
+            # No indexing has been run yet — return empty response
+            return IndexResponse(
+                job_id="none",
+                status="completed",
+                mode="incremental",
+                files_scanned=0,
+                files_processed=0,
+                files_skipped=0,
+                files_errored=0,
+                chunks_created=0,
+                vectors_stored=0,
+                duration_seconds=0.0,
+                dry_run=False,
+                errors=[],
+            )
+
+        return self._last_index_job
+
+    def get_status(self) -> ServiceStatus:
+        """Return service status including model info and uptime."""
+        self._require_started()
+
+        from kragd.schemas import LLMSlotStatus, VectorStoreStatus, VRAMStatus
+
+        uptime = time.monotonic() - (self._start_time or time.monotonic())
+
+        # Build LLM slot status
+        llm_status: dict[str, LLMSlotStatus] = {}
+        if self.llm_pool is not None:
+            primary_llm = getattr(self.service_config, "primary_llm", "text") or "text"
+            text_model = getattr(self.config, "llm_model", None)
+            code_model = getattr(self.config, "llm_code_model", None)
+            idle_timeout = getattr(self.service_config, "idle_timeout", None)
+
+            # Use lifecycle manager for primary/timeout if available
+            if self.lifecycle_manager is not None:
+                lifecycle_status = self.lifecycle_manager.get_status()
+                primary_llm = lifecycle_status.get("primary_llm") or primary_llm
+                idle_timeout = lifecycle_status.get("idle_timeout_s", idle_timeout)
+
+            if text_model:
+                llm_status["text"] = LLMSlotStatus(
+                    loaded=self.llm_pool._text_slot.is_loaded,
+                    model=str(text_model),
+                    primary=(primary_llm == "text"),
+                    idle_timeout_s=None if primary_llm == "text" else idle_timeout,
+                )
+            if code_model:
+                llm_status["code"] = LLMSlotStatus(
+                    loaded=self.llm_pool._code_slot.is_loaded,
+                    model=str(code_model),
+                    primary=(primary_llm == "code"),
+                    idle_timeout_s=None if primary_llm == "code" else idle_timeout,
+                )
+
+        # Vector store stats
+        total_vectors = 0
+        named_spaces: list[str] = []
+        if self.vector_store is not None:
+            try:
+                info = self.vector_store.get_stats()
+                # get_stats() returns a dict with 'count'/'vectors_count'
+                total_vectors = info.get("vectors_count", 0) or info.get("count", 0) or 0
+            except Exception:
+                pass
+
+            # Extract named vector spaces from the raw Qdrant collection config
+            try:
+                import warnings
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", UserWarning)
+                    qdrant_info = self.vector_store.client.get_collection(
+                        self.vector_store.collection_name
+                    )
+                vectors_cfg = qdrant_info.config.params.vectors
+                if isinstance(vectors_cfg, dict):
+                    named_spaces = list(vectors_cfg.keys())
+            except Exception:
+                pass
+
+        # VRAM info
+        vram = None
+        try:
+            from krag.cli.gpu import check_cuda_available
+
+            gpu_info = check_cuda_available()
+            if gpu_info.get("available"):
+                vram_total = gpu_info.get("vram_total", 0)
+                vram_free = gpu_info.get("vram_free", 0)
+                vram = VRAMStatus(
+                    total_mb=int(vram_total / 1024 / 1024) if vram_total else 0,
+                    used_mb=int((vram_total - vram_free) / 1024 / 1024)
+                    if vram_total and vram_free
+                    else 0,
+                    free_mb=int(vram_free / 1024 / 1024) if vram_free else 0,
+                )
+        except Exception:
+            pass
+
+        return ServiceStatus(
+            version=_get_version(),
+            uptime_seconds=uptime,
+            llm=llm_status,
+            embedding_models=[self.config.embedding_model],
+            vector_store=VectorStoreStatus(
+                collection=self.config.collection_name,
+                total_vectors=total_vectors,
+                named_spaces=named_spaces,
+            ),
+            vram=vram,
+        )
+
+    def get_health(self) -> HealthResponse:
+        """Simple health check."""
+        self._require_started()
+        return HealthResponse(status="healthy", version=_get_version())
+
+
+def _get_version() -> str:
+    """Get krag package version."""
+    try:
+        from importlib.metadata import version
+
+        return version("krag")
+    except Exception:
+        return "0.0.0-dev"

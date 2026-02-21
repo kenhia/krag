@@ -1,0 +1,843 @@
+openapi: "3.1.0"
+info:
+  title: kragd — krag Service API
+  version: "0.1.0"
+  description: |
+    REST API for the krag RAG service daemon (kragd).
+    Provides query, retrieval, indexing, debug, and system management endpoints.
+    All LLM inference endpoints use synchronous handlers (dispatched to thread pool).
+
+servers:
+  - url: http://0.0.0.0:8742
+    description: Default local kragd instance
+
+tags:
+  - name: Query
+    description: Full query with LLM synthesis and retrieval-only endpoints
+  - name: Index
+    description: Indexing operations (full/incremental)
+  - name: Debug
+    description: Debug and introspection endpoints
+  - name: System
+    description: Health, status, and lifecycle management
+
+paths:
+  # ─── Query ───────────────────────────────────────────────────────
+
+  /query:
+    post:
+      tags: [Query]
+      summary: Full query with LLM synthesis
+      description: |
+        Retrieves relevant chunks from the vector store and generates a
+        synthesized answer using the configured LLM. Replaces `krag query`.
+      operationId: query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryRequest"
+            example:
+              query: "How does the plugin system work?"
+              top_k: 5
+              preset: "balanced"
+              llm: null
+              include_debug: false
+      responses:
+        "200":
+          description: Successful query response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResponse"
+              example:
+                answer: "The plugin system works by..."
+                sources:
+                  - chunk_id: "abc-123"
+                    file_path: "/home/ken/docs/plugins.md"
+                    score: 0.42
+                    rank: 1
+                    chunk_content: "..."
+                    file_type: "markdown"
+                    language: null
+                    function_name: null
+                    class_name: null
+                    start_line: 10
+                    end_line: 45
+                debug: null
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "503":
+          description: Service not ready (LLM not loaded)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /retrieve:
+    post:
+      tags: [Query]
+      summary: Retrieval only (no LLM synthesis)
+      description: |
+        Retrieves and ranks relevant chunks without LLM synthesis.
+        Replaces `krag query --no-synthesis`.
+      operationId: retrieve
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetrieveRequest"
+            example:
+              query: "plugin architecture"
+              top_k: 10
+      responses:
+        "200":
+          description: Retrieval results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetrieveResponse"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  # ─── Debug ───────────────────────────────────────────────────────
+
+  /debug/query:
+    post:
+      tags: [Debug]
+      summary: Query with full debug metadata
+      description: |
+        Performs a full query and returns extensive debug metadata including
+        routing decisions, timings, candidate counts, and per-space results.
+        Replaces `krag debug query`.
+      operationId: debugQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DebugQueryRequest"
+            example:
+              query: "How does the plugin system work?"
+              top_k: 5
+              preset: "balanced"
+              llm: null
+      responses:
+        "200":
+          description: Query response with debug metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DebugQueryResponse"
+              example:
+                answer: "The plugin system works by..."
+                sources:
+                  - chunk_id: "abc-123"
+                    file_path: "/home/ken/docs/plugins.md"
+                    score: 0.42
+                    rank: 1
+                    chunk_content: "..."
+                    file_type: "markdown"
+                debug:
+                  llm_used: "text"
+                  llm_model: "qwen2.5-7b-instruct-q4_k_m.gguf"
+                  route: "text"
+                  auto_routed: true
+                  route_reason: "67% non-code chunks"
+                  preset: "balanced"
+                  retrieval_time_ms: 142.3
+                  generation_time_ms: 3200.5
+                  embedding_models_used: ["all-MiniLM-L6-v2"]
+                  vector_spaces_searched: ["text"]
+                  total_candidates_before_dedup: 15
+                  total_candidates_after_dedup: 8
+                  similarity_threshold: 0.2
+                  per_space_result_counts:
+                    text: 12
+                    code: 3
+        "503":
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /debug/qdrant:
+    post:
+      tags: [Debug]
+      summary: Raw Qdrant vector search
+      description: |
+        Direct vector search bypassing krag's retrieval pipeline (no dedup,
+        boost, or RRF). Useful for debugging retrieval quality.
+        Replaces `krag debug qdrant`.
+      operationId: debugQdrant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QdrantSearchRequest"
+            example:
+              query: "plugin architecture"
+              vector_space: "text"
+              top_k: 20
+              score_threshold: null
+              with_payload: true
+              filters:
+                file_type: "code"
+                file_path_contains: "plugins"
+      responses:
+        "200":
+          description: Raw vector search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QdrantSearchResponse"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  # ─── Index ───────────────────────────────────────────────────────
+
+  /index:
+    post:
+      tags: [Index]
+      summary: Start indexing job
+      description: |
+        Performs full or incremental indexing. Synchronous — blocks until
+        indexing completes. Response schema is forward-compatible with future
+        async job support.
+      operationId: index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IndexRequest"
+            example:
+              mode: "incremental"
+              directories: null
+              file_types: null
+              exclude_patterns: null
+              vector_store_path: null
+              dry_run: false
+      responses:
+        "200":
+          description: Indexing completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IndexResponse"
+              example:
+                job_id: "idx-20260219-143022"
+                status: "completed"
+                mode: "incremental"
+                files_scanned: 260
+                files_processed: 12
+                files_skipped: 248
+                files_errored: 0
+                chunks_created: 184
+                vectors_stored: 184
+                duration_seconds: 45.2
+                dry_run: false
+                errors: []
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  /index/status:
+    get:
+      tags: [Index]
+      summary: Get last indexing job status
+      description: Returns the status and results of the most recently completed indexing job.
+      operationId: indexStatus
+      responses:
+        "200":
+          description: Last indexing job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IndexResponse"
+        "404":
+          description: No indexing job has been run since service start
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── System ─────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      description: |
+        Simple health check. Returns immediately (async handler).
+        Response time must be <500ms even while secondary LLM is loading (SC-005).
+      operationId: health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "healthy"
+                version: "0.1.0"
+
+  /status:
+    get:
+      tags: [System]
+      summary: Detailed service status
+      description: |
+        Returns detailed service status including loaded models, VRAM usage,
+        uptime, vector store statistics, and embedding model information.
+      operationId: status
+      responses:
+        "200":
+          description: Service status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceStatus"
+              example:
+                version: "0.1.0"
+                uptime_seconds: 3600
+                llm:
+                  text:
+                    loaded: true
+                    model: "qwen2.5-7b-instruct-q4_k_m.gguf"
+                    primary: true
+                    idle_timeout_s: null
+                  code:
+                    loaded: false
+                    model: "qwen2.5-coder-7b-q4_k_m.gguf"
+                    primary: false
+                    idle_timeout_s: 300
+                embedding_models: ["all-MiniLM-L6-v2"]
+                vector_store:
+                  collection: "krag_embeddings"
+                  total_vectors: 6838
+                  named_spaces: ["text"]
+                vram:
+                  total_mb: 8192
+                  used_mb: 5400
+                  free_mb: 2792
+
+  /shutdown:
+    post:
+      tags: [System]
+      summary: Graceful shutdown
+      description: |
+        Initiates graceful shutdown. Unloads LLMs, closes connections,
+        removes PID file. Sends SIGTERM to self to trigger uvicorn's
+        graceful shutdown flow.
+      operationId: shutdown
+      responses:
+        "200":
+          description: Shutdown initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShutdownResponse"
+              example:
+                message: "Shutdown initiated"
+
+# ─── Components ─────────────────────────────────────────────────
+
+components:
+  schemas:
+
+    # ─── Request Schemas ─────────────────────────────────────────
+
+    QueryRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: Query text
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 100
+          nullable: true
+          description: Number of results (null = use config default)
+        preset:
+          type: string
+          nullable: true
+          description: Prompt preset name (null = use config default)
+        llm:
+          type: string
+          enum: ["text", "code"]
+          nullable: true
+          description: Force specific LLM (null = auto-route)
+        include_debug:
+          type: boolean
+          default: false
+          description: Include debug metadata in response
+
+    RetrieveRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: Query text
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 100
+          nullable: true
+          description: Number of results (null = use config default)
+
+    DebugQueryRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: Query text
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 100
+          nullable: true
+        preset:
+          type: string
+          nullable: true
+        llm:
+          type: string
+          enum: ["text", "code"]
+          nullable: true
+
+    QdrantSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: Query text
+        vector_space:
+          type: string
+          nullable: true
+          description: Restrict to a specific named vector space
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 10
+        score_threshold:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          nullable: true
+          description: Minimum similarity score
+        with_payload:
+          type: boolean
+          default: true
+          description: Include chunk payloads in results
+        filters:
+          $ref: "#/components/schemas/QdrantFilters"
+          nullable: true
+
+    QdrantFilters:
+      type: object
+      properties:
+        file_type:
+          type: string
+          nullable: true
+          description: Filter by file_type payload field
+        file_path_contains:
+          type: string
+          nullable: true
+          description: Filter by substring in file_path payload
+
+    IndexRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: ["full", "incremental"]
+          default: "incremental"
+          description: Indexing mode
+        directories:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Override directories to index
+        file_types:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Filter to specific file extensions
+        exclude_patterns:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Additional glob patterns to exclude
+        vector_store_path:
+          type: string
+          nullable: true
+          description: Override vector store location
+        dry_run:
+          type: boolean
+          default: false
+          description: Show what would be indexed without modifying vector store
+
+    # ─── Response Schemas ────────────────────────────────────────
+
+    QueryResponse:
+      type: object
+      required: [answer, sources]
+      properties:
+        answer:
+          type: string
+          description: Synthesized answer text
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceChunk"
+        debug:
+          $ref: "#/components/schemas/DebugMetadata"
+          nullable: true
+          description: Debug metadata (only if include_debug=true)
+
+    RetrieveResponse:
+      type: object
+      required: [sources]
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceChunk"
+
+    DebugQueryResponse:
+      type: object
+      required: [answer, sources, debug]
+      properties:
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceChunk"
+        debug:
+          $ref: "#/components/schemas/DebugMetadata"
+          description: Always present (not nullable)
+
+    SourceChunk:
+      type: object
+      required: [chunk_id, file_path, score, rank, chunk_content, file_type]
+      properties:
+        chunk_id:
+          type: string
+        file_path:
+          type: string
+          description: Absolute path to source file
+        score:
+          type: number
+          format: float
+        rank:
+          type: integer
+          minimum: 1
+        chunk_content:
+          type: string
+        file_type:
+          type: string
+        language:
+          type: string
+          nullable: true
+        function_name:
+          type: string
+          nullable: true
+        class_name:
+          type: string
+          nullable: true
+        start_line:
+          type: integer
+          nullable: true
+        end_line:
+          type: integer
+          nullable: true
+
+    DebugMetadata:
+      type: object
+      required:
+        - llm_used
+        - llm_model
+        - route
+        - auto_routed
+        - preset
+        - retrieval_time_ms
+        - generation_time_ms
+        - embedding_models_used
+        - vector_spaces_searched
+        - total_candidates_before_dedup
+        - total_candidates_after_dedup
+        - similarity_threshold
+        - per_space_result_counts
+      properties:
+        llm_used:
+          type: string
+          description: Which LLM generated the answer ("text" or "code")
+        llm_model:
+          type: string
+          description: Full model filename
+        route:
+          type: string
+          description: Route decision ("text" or "code")
+        auto_routed:
+          type: boolean
+          description: Whether routing was automatic
+        route_reason:
+          type: string
+          nullable: true
+          description: Why auto-routing chose this LLM
+        preset:
+          type: string
+          description: Active prompt preset name
+        retrieval_time_ms:
+          type: number
+          format: float
+          description: Milliseconds for retrieval phase
+        generation_time_ms:
+          type: number
+          format: float
+          description: Milliseconds for LLM synthesis
+        embedding_models_used:
+          type: array
+          items:
+            type: string
+        vector_spaces_searched:
+          type: array
+          items:
+            type: string
+        total_candidates_before_dedup:
+          type: integer
+        total_candidates_after_dedup:
+          type: integer
+        similarity_threshold:
+          type: number
+          format: float
+        per_space_result_counts:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Results count per vector space
+
+    QdrantSearchResponse:
+      type: object
+      required: [results, total_results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/QdrantSearchResult"
+        total_results:
+          type: integer
+        vector_space:
+          type: string
+          nullable: true
+
+    QdrantSearchResult:
+      type: object
+      required: [chunk_id, score, file_path, file_type, chunk_index]
+      properties:
+        chunk_id:
+          type: string
+        score:
+          type: number
+          format: float
+          description: Raw similarity score (not RRF-fused)
+        file_path:
+          type: string
+        file_type:
+          type: string
+        chunk_content:
+          type: string
+          description: Present only if with_payload=true
+        chunk_index:
+          type: integer
+        start_line:
+          type: integer
+          nullable: true
+        end_line:
+          type: integer
+          nullable: true
+
+    IndexResponse:
+      type: object
+      required: [job_id, status, mode, files_scanned, files_processed, files_skipped, files_errored, chunks_created, vectors_stored, duration_seconds, dry_run, errors]
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: ["completed", "failed", "running"]
+        mode:
+          type: string
+          enum: ["full", "incremental"]
+        files_scanned:
+          type: integer
+        files_processed:
+          type: integer
+        files_skipped:
+          type: integer
+        files_errored:
+          type: integer
+        chunks_created:
+          type: integer
+        vectors_stored:
+          type: integer
+        duration_seconds:
+          type: number
+          format: float
+        dry_run:
+          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndexError"
+
+    IndexError:
+      type: object
+      required: [file_path, error_type, error_message]
+      properties:
+        file_path:
+          type: string
+        error_type:
+          type: string
+        error_message:
+          type: string
+
+    ServiceStatus:
+      type: object
+      required: [version, uptime_seconds, llm, embedding_models, vector_store]
+      properties:
+        version:
+          type: string
+        uptime_seconds:
+          type: number
+          format: float
+        llm:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/LLMSlotStatus"
+        embedding_models:
+          type: array
+          items:
+            type: string
+        vector_store:
+          $ref: "#/components/schemas/VectorStoreStatus"
+        vram:
+          $ref: "#/components/schemas/VRAMStatus"
+          nullable: true
+
+    LLMSlotStatus:
+      type: object
+      required: [loaded, primary]
+      properties:
+        loaded:
+          type: boolean
+        model:
+          type: string
+          nullable: true
+        primary:
+          type: boolean
+        idle_timeout_s:
+          type: integer
+          nullable: true
+
+    VectorStoreStatus:
+      type: object
+      required: [collection, total_vectors, named_spaces]
+      properties:
+        collection:
+          type: string
+        total_vectors:
+          type: integer
+        named_spaces:
+          type: array
+          items:
+            type: string
+
+    VRAMStatus:
+      type: object
+      required: [total_mb, used_mb, free_mb]
+      properties:
+        total_mb:
+          type: integer
+        used_mb:
+          type: integer
+        free_mb:
+          type: integer
+
+    HealthResponse:
+      type: object
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          enum: ["healthy", "degraded"]
+        version:
+          type: string
+
+    ShutdownResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+
+    ValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  oneOf:
+                    - type: string
+                    - type: integer
+              msg:
+                type: string
+              type:
+                type: string

@@ -31,6 +31,27 @@ def get_xdg_state_home() -> Path:
     return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
 
 
+def get_xdg_runtime_dir() -> Path:
+    """Get XDG runtime directory for ephemeral files (PID, sockets).
+
+    Falls back to /tmp per XDG Base Directory Specification when
+    XDG_RUNTIME_DIR is not set.
+
+    Returns:
+        Path to runtime directory ($XDG_RUNTIME_DIR or /tmp)
+    """
+    return Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))
+
+
+def get_krag_runtime_dir() -> Path:
+    """Get krag runtime directory for PID files and Unix sockets.
+
+    Returns:
+        Path to krag runtime directory ($XDG_RUNTIME_DIR/krag or /tmp/krag)
+    """
+    return get_xdg_runtime_dir() / "krag"
+
+
 def get_krag_config_dir(legacy: bool = False) -> Path:
     """Get krag configuration directory.
 

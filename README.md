@@ -97,6 +97,79 @@ krag query "How do I configure logging?" --show-sources
 krag query "List all Python dependencies" --format json
 ```
 
+## Service Mode (Recommended)
+
+krag operates as a client-server system for instant query response after initial model loading:
+
+### Start the Service
+
+```bash
+# Start kragd (foreground)
+kragd
+
+# Start in background (daemon mode)
+kragd --daemon
+
+# With custom host/port
+kragd --host 0.0.0.0 --port 8742
+```
+
+### Query via CLI Client
+
+```bash
+# Query (routes through kragd — no cold-start after first load)
+krag query "What are the main features of my project?"
+
+# Retrieve without LLM synthesis
+krag retrieve "logging configuration" --top-k 10
+
+# Debug query with metadata (timings, routing, candidates)
+krag debug query "How does the plugin system work?"
+
+# Raw Qdrant search (bypasses retriever pipeline)
+krag debug qdrant "authentication" --space text --top-k 20
+```
+
+### Service Management
+
+```bash
+# Check service status (loaded models, VRAM, uptime)
+krag status
+
+# Health check
+krag health
+
+# Index files via the service (reuses loaded embedding models)
+krag index
+krag index --full
+
+# Stop the service
+krag stop
+```
+
+### Direct Mode (No Service)
+
+For one-off queries without running kragd:
+
+```bash
+# Uses in-process mode — loads models each time
+krag-direct query "What is this project about?"
+krag-direct index
+```
+
+### Service Configuration
+
+Add a `[service]` section to `config.toml`:
+
+```toml
+[service]
+host = "0.0.0.0"       # Bind address (default: 0.0.0.0 for LAN access)
+port = 8742             # Port (default: 8742)
+primary_llm = "text"    # Primary LLM slot — stays loaded permanently
+idle_timeout = 300      # Seconds before secondary LLM unloads (default: 300)
+log_requests = true     # Log incoming requests
+```
+
 ## Development
 
 ### Setup Development Environment

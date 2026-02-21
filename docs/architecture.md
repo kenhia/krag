@@ -129,7 +129,124 @@ graph TB
 
 ---
 
+## Service Architecture (Sprint 007)
+
+krag operates in two modes: **service mode** (client-server via `krag`/`kragd`) and **direct mode** (in-process via `krag-direct`).
+
+### Three-Package Layout
+
+| Package | Entry Point | Purpose |
+|---------|-------------|---------|
+| `kragd` | `kragd` | FastAPI service daemon — loads models once, serves queries |
+| `krag_cli` | `krag` | Thin CLI client — sends HTTP requests to kragd |
+| `krag.cli` | `krag-direct` | Original in-process CLI — no kragd needed |
+
+### Service Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph CLIENT["krag CLI (krag_cli)"]
+        CLI_MAIN[main.py<br/>Typer app]
+        CLI_QUERY[commands/query.py]
+        CLI_DEBUG[commands/debug.py]
+        CLI_INDEX[commands/index.py]
+        CLI_STATUS[commands/status.py]
+        CLI_SERVICE[commands/service.py]
+        CLIENT_HTTP[client.py<br/>KragClient]
+    end
+
+    subgraph KRAGD["kragd Service (kragd)"]
+        APP[app.py<br/>FastAPI factory]
+        SERVICE[service.py<br/>KragService]
+        LIFECYCLE[lifecycle.py<br/>LLMLifecycleManager]
+        PID[pid.py<br/>PID file mgmt]
+
+        subgraph ROUTERS["API Routers"]
+            R_SYSTEM[system.py<br/>GET /health · /status<br/>POST /shutdown]
+            R_QUERY[query.py<br/>POST /query · /retrieve]
+            R_DEBUG[debug.py<br/>POST /debug/query · /debug/qdrant]
+            R_INDEX[index.py<br/>POST /index<br/>GET /index/status]
+        end
+    end
+
+    subgraph KRAG["krag Core"]
+        CONFIG[config/]
+        EMBEDDINGS[embeddings/]
+        STORAGE[storage/]
+        SYNTHESIS[synthesis/<br/>LLMPool]
+        RETRIEVAL[retrieval/]
+        ORCHESTRATION[orchestration/]
+    end
+
+    CLI_MAIN --> CLI_QUERY & CLI_DEBUG & CLI_INDEX & CLI_STATUS & CLI_SERVICE
+    CLI_QUERY & CLI_DEBUG & CLI_INDEX & CLI_STATUS & CLI_SERVICE --> CLIENT_HTTP
+    CLIENT_HTTP -->|HTTP| APP
+
+    APP --> ROUTERS
+    ROUTERS --> SERVICE
+    SERVICE --> LIFECYCLE
+    SERVICE --> CONFIG & EMBEDDINGS & STORAGE & SYNTHESIS & RETRIEVAL & ORCHESTRATION
+    LIFECYCLE --> SYNTHESIS
+```
+
+### Key Design Decisions
+
+1. **Sync route handlers** (R-02): All endpoints use `def` (not `async def`) because LLM inference and embedding are blocking. Only `GET /health` is async for lightweight responsiveness.
+2. **LLM Lifecycle** (R-04/R-06): `LLMLifecycleManager` wraps `LLMPool` without modifying it. Primary LLM stays loaded permanently; secondary unloads after configurable idle timeout via asyncio timer.
+3. **PID file management** (R-07): Uvicorn handles SIGTERM natively; `POST /shutdown` sends SIGTERM to self; `krag stop` reads PID file.
+4. **Raw Qdrant bypass** (R-09): `POST /debug/qdrant` calls `QdrantVectorStore` directly, bypassing Retriever (no dedup, boost, RRF).
+5. **Direct mode preserved**: `krag-direct` entry point is unchanged — runs entirely in-process, does not import `kragd`.
+
+---
+
 ## Directory Structure
+
+(updated for service architecture)
+
+```
+src/krag/                    # Core RAG library (unchanged)
+├── cli/                     # Direct-mode CLI (krag-direct entry point)
+│   └── main.py              # Original in-process CLI
+├── config/                  # Configuration management
+├── embeddings/              # Embedding generation
+├── models/                  # Data models (includes ServiceConfiguration)
+├── orchestration/           # Indexing orchestrator
+├── retrieval/               # Vector retrieval + RRF
+├── storage/                 # Qdrant vector store
+└── synthesis/               # LLMPool, LLMClient, PromptBuilder
+
+src/kragd/                   # Service daemon package
+├── __init__.py
+├── __main__.py              # Entry point: kragd (uvicorn launcher)
+├── app.py                   # FastAPI app factory with lifespan
+├── lifecycle.py             # LLMLifecycleManager (idle timeout)
+├── pid.py                   # PID file utilities
+├── schemas.py               # Pydantic request/response models
+├── service.py               # KragService (central orchestrator)
+└── routers/
+    ├── system.py            # /health, /status, /shutdown
+    ├── query.py             # /query, /retrieve
+    ├── debug.py             # /debug/query, /debug/qdrant
+    └── index.py             # /index, /index/status
+
+src/krag_cli/                # CLI client package
+├── __init__.py
+├── __main__.py              # Entry point: krag
+├── main.py                  # Typer app with subcommands
+├── client.py                # KragClient (HTTP wrapper)
+├── config.py                # CLI-local config reader
+├── display.py               # Rich formatting for query results
+└── commands/
+    ├── query.py             # krag query, krag retrieve
+    ├── debug.py             # krag debug query, krag debug qdrant
+    ├── index.py             # krag index, krag index-status
+    ├── status.py            # krag status, krag health
+    └── service.py           # krag start, krag stop
+```
+
+### Original Directory Structure
+
+The original krag core directory structure remains unchanged:
 
 ```
 src/krag/
