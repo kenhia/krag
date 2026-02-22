@@ -10,7 +10,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from kragd.routers import debug, index, query, system
 from kragd.service import KragService
@@ -56,6 +57,19 @@ def create_app(config: Configuration) -> FastAPI:
     app.include_router(query.router)
     app.include_router(debug.router)
     app.include_router(index.router)
+
+    # Translate service-level RuntimeErrors into appropriate HTTP responses
+    @app.exception_handler(RuntimeError)
+    async def runtime_error_handler(request: Request, exc: RuntimeError) -> JSONResponse:
+        msg = str(exc).lower()
+        if "indexing is in progress" in msg:
+            return JSONResponse(status_code=409, content={"detail": str(exc)})
+        if "already in progress" in msg:
+            return JSONResponse(status_code=409, content={"detail": str(exc)})
+        if "not started" in msg:
+            return JSONResponse(status_code=503, content={"detail": str(exc)})
+        # Re-raise unknown RuntimeErrors as 500
+        return JSONResponse(status_code=500, content={"detail": str(exc)})
 
     return app
 

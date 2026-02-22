@@ -304,6 +304,7 @@ class Retriever:
 
         # Search each named vector space
         all_result_lists: list[list[Any]] = []
+        self._last_per_space_counts: dict[str, int] = {}
         for vector_name, embedding in query_embeddings.items():
             results = self.vector_store.search_named(
                 query_vector=embedding,
@@ -311,6 +312,7 @@ class Retriever:
                 limit=fetch_limit,
             )
             logger.debug(f"  Vector space '{vector_name}': {len(results)} results")
+            self._last_per_space_counts[vector_name] = len(results)
             all_result_lists.append(results)
 
         # Merge via RRF
@@ -345,6 +347,7 @@ class Retriever:
         Returns:
             Deduplicated list, preserving score ordering
         """
+        self._last_total_before_dedup = len(results)
         seen_hashes: dict[str, int] = {}  # hash → index of first occurrence
         unique: list[QueryResult] = []
 

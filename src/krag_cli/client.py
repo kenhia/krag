@@ -119,6 +119,12 @@ class KragClient:
             raise ConnectionError(
                 f"Cannot connect to kragd at {self._base_url} — is the service running?"
             ) from exc
+        except httpx.TimeoutException as exc:
+            raise ConnectionError(
+                f"Request to kragd timed out after {self._timeout}s — "
+                f"the operation may still be running on the server. "
+                f"Check with 'krag index-status' or see logs for details."
+            ) from exc
 
         self._check_response(resp)
         return resp.json()
@@ -131,12 +137,19 @@ class KragClient:
             raise ConnectionError(
                 f"Cannot connect to kragd at {self._base_url} — is the service running?"
             ) from exc
+        except httpx.TimeoutException as exc:
+            raise ConnectionError(
+                f"Request to kragd timed out after {self._timeout}s — see logs for details."
+            ) from exc
 
         self._check_response(resp)
         return resp.json()
 
     def _check_response(self, resp: httpx.Response) -> None:
         """Translate HTTP error codes to Python exceptions."""
+        if resp.status_code == 409:
+            detail = resp.json().get("detail", "Conflict")
+            raise RuntimeError(detail)
         if resp.status_code == 503:
             raise RuntimeError("Service not ready — kragd is still initializing")
         if resp.status_code == 422:

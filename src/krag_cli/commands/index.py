@@ -24,22 +24,24 @@ def index_command(
     file_type: list[str] | None = typer.Option(None, "--type", "-t", help="Filter file extensions"),
     exclude: list[str] | None = typer.Option(None, "--exclude", "-e", help="Exclusion patterns"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without indexing"),
+    wait: bool = typer.Option(False, "--wait", "-w", help="Wait for indexing to complete"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
     host: str | None = typer.Option(None, "--host", help="kragd host"),
     port: int | None = typer.Option(None, "--port", help="kragd port"),
 ) -> None:
     """Trigger indexing on kragd.
 
-    Uses already-loaded embedding models for efficient re-indexing.
+    Returns immediately by default. Use --wait to poll until complete.
     """
     import json
+    import time
 
     from krag_cli.main import _get_client
 
     if full:
         mode = "full"
 
-    client = _get_client(host, port, timeout=600.0)
+    client = _get_client(host, port)
     try:
         payload: dict[str, Any] = {"mode": mode, "dry_run": dry_run}
         if directory:
@@ -51,14 +53,68 @@ def index_command(
 
         result = client.post("/index", json=payload)
 
-        if output_json:
+        if output_json and not wait:
             console.print(json.dumps(result, indent=2))
             return
 
-        _display_index_result(result)
+        status = result.get("status", "unknown")
+        job_id = result.get("job_id", "")
 
-    except ConnectionError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
+        if status == "running":
+            console.print(
+                f"[yellow]Indexing started[/yellow] ({mode} mode)"
+            )
+            if job_id:
+                console.print(f"[dim]Job {job_id}[/dim]")
+
+            if not wait:
+                console.print(
+                    "[dim]Use 'krag index-status' to check progress, "
+                    "or 'krag index --wait' to wait for completion.[/dim]"
+                )
+                return
+
+            # Poll for completion
+            console.print("[dim]Waiting for indexing to complete...[/dim]")
+            poll_interval = 5.0
+            while True:
+                time.sleep(poll_interval)
+                try:
+                    status_result = client._get("/index/status")
+                    # Handle list response (multiple results)
+                    if isinstance(status_result, list):
+                        status_result = status_result[-1]
+                    current_status = status_result.get("status", "unknown")
+                    if current_status in ("completed", "failed"):
+                        if output_json:
+                            console.print(json.dumps(status_result, indent=2))
+                        else:
+                            _display_index_result(status_result)
+                        return
+                    # Still running — show progress dot
+                    scanned = status_result.get("files_scanned", 0)
+                    processed = status_result.get("files_processed", 0)
+                    if scanned > 0:
+                        console.print(
+                            f"[dim]  ...indexing in progress "
+                            f"({processed}/{scanned} files processed)[/dim]"
+                        )
+                    else:
+                        console.print("[dim]  ...indexing in progress[/dim]")
+                except Exception:
+                    console.print("[dim]  ...waiting (server busy)[/dim]")
+        else:
+            # Completed synchronously (shouldn't happen with new design, but handle it)
+            if output_json:
+                console.print(json.dumps(result, indent=2))
+            else:
+                _display_index_result(result)
+
+    except (ConnectionError, RuntimeError) as exc:
+        import logging
+
+        logging.getLogger(__name__).debug("Index request failed", exc_info=True)
+        console.print(f"[red]Fatal:[/red] {exc}")
         raise typer.Exit(1) from exc
     finally:
         client.close()
@@ -69,7 +125,7 @@ def index_status_command(
     host: str | None = typer.Option(None, "--host", help="kragd host"),
     port: int | None = typer.Option(None, "--port", help="kragd port"),
 ) -> None:
-    """Show the status of the last indexing job."""
+    """Show the status of indexing jobs."""
     import json
 
     from krag_cli.main import _get_client
@@ -82,7 +138,14 @@ def index_status_command(
             console.print(json.dumps(result, indent=2))
             return
 
-        _display_index_result(result)
+        # Handle single result (dict) or multiple results (list)
+        if isinstance(result, list):
+            for i, job in enumerate(result):
+                if i > 0:
+                    console.print()  # blank line between jobs
+                _display_index_result(job)
+        else:
+            _display_index_result(result)
 
     except ConnectionError as exc:
         console.print(f"[red]Error:[/red] {exc}")
@@ -102,14 +165,24 @@ def _display_index_result(result: dict[str, Any]) -> None:
 
     console.print(f"\n[{status_color}]{title}[/{status_color}] ({mode} mode)")
 
+    job_id = result.get("job_id", "")
+    if job_id and job_id != "none":
+        console.print(f"[dim]Job {job_id}[/dim]")
+
     table = Table()
     table.add_column("Metric", style="cyan")
     table.add_column("Value", justify="right")
 
-    table.add_row("Job ID", result.get("job_id", ""))
     table.add_row("Files Scanned", str(result.get("files_scanned", 0)))
     table.add_row("Files Processed", str(result.get("files_processed", 0)))
-    table.add_row("Files Skipped", str(result.get("files_skipped", 0)))
+    skipped_unchanged = result.get("files_skipped_unchanged", 0)
+    skipped_other = result.get("files_skipped_other", 0)
+    skipped_total = result.get("files_skipped", skipped_unchanged + skipped_other)
+    if skipped_unchanged or skipped_other:
+        table.add_row("Skipped (no change)", str(skipped_unchanged))
+        table.add_row("Skipped (other)", str(skipped_other))
+    else:
+        table.add_row("Files Skipped", str(skipped_total))
     table.add_row("Files Errored", str(result.get("files_errored", 0)))
     table.add_row("Chunks Created", str(result.get("chunks_created", 0)))
     table.add_row("Vectors Stored", str(result.get("vectors_stored", 0)))
