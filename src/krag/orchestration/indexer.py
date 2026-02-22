@@ -583,7 +583,8 @@ class IndexingOrchestrator:
             end_time=None,
             files_discovered=0,
             files_processed=0,
-            files_skipped=0,
+            files_skipped_unchanged=0,
+            files_skipped_other=0,
             files_errored=0,
             chunks_generated=0,
             embeddings_created=0,
@@ -645,7 +646,7 @@ class IndexingOrchestrator:
                     continue
 
                 if result.skipped or not result.vectors:
-                    job.files_skipped += 1
+                    job.files_skipped_other += 1
                     continue
 
                 all_vectors.extend(result.vectors)
@@ -710,7 +711,7 @@ class IndexingOrchestrator:
         logger.info(
             f"Indexing complete: {job.files_processed}/{job.files_discovered} files, "
             f"{job.chunks_generated} chunks, {job.embeddings_created} embeddings, "
-            f"{job.files_skipped} skipped, {job.files_errored} errors"
+            f"{job.files_skipped_other} skipped (other), {job.files_errored} errors"
         )
 
         # T053: Output failure summary if there were plugin failures
@@ -763,11 +764,11 @@ class IndexingOrchestrator:
         job.files_added = len(new_changes)
         job.files_modified = len(modified_changes)
         job.files_deleted = len(deleted_changes)
-        job.files_skipped = len(unchanged_changes)
+        job.files_skipped_unchanged = len(unchanged_changes)
 
         logger.info(
             f"Change detection: {job.files_added} new, {job.files_modified} modified, "
-            f"{job.files_deleted} deleted, {job.files_skipped} unchanged"
+            f"{job.files_deleted} deleted, {job.files_skipped_unchanged} unchanged"
         )
 
         # Stage 3: Handle deletions - remove from vector store
@@ -847,7 +848,7 @@ class IndexingOrchestrator:
                     continue
 
                 if result.skipped or not result.vectors:
-                    job.files_skipped += 1
+                    job.files_skipped_other += 1
                     continue
 
                 all_vectors.extend(result.vectors)
@@ -911,7 +912,8 @@ class IndexingOrchestrator:
         logger.info(
             f"Incremental indexing complete: {job.files_processed} processed, "
             f"{job.files_added} new, {job.files_modified} modified, "
-            f"{job.files_deleted} deleted, {job.files_skipped} skipped, "
+            f"{job.files_deleted} deleted, {job.files_skipped_unchanged} unchanged, "
+            f"{job.files_skipped_other} skipped (other), "
             f"{job.chunks_generated} chunks, {job.embeddings_created} embeddings"
         )
 

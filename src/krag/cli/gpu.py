@@ -83,10 +83,11 @@ def check_cuda_available() -> dict[str, Any]:
             "cuda_version": torch.version.cuda or "unknown",
         }
 
-        # Try to get VRAM info
+        # Try to get VRAM info — use mem_get_info which queries the CUDA
+        # driver and reflects memory used by *all* processes, not just this one.
+        # (memory_allocated() only tracks the current PyTorch process.)
         try:
-            vram_total = torch.cuda.get_device_properties(0).total_memory
-            vram_free = vram_total - torch.cuda.memory_allocated(0)
+            vram_free, vram_total = torch.cuda.mem_get_info(0)
             result["vram_total"] = vram_total
             result["vram_free"] = vram_free
         except Exception:

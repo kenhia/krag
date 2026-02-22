@@ -8,8 +8,10 @@ handlers delegate to.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,12 @@ class KragService:
         self.query_engine = None
         self.lifecycle_manager = None
         self._last_index_job: IndexResponse | None = None
+        self._index_job_cache: list[IndexResponse] = []
+        self._max_index_cache: int = 10
+
+        # Indexing state — protected by _indexing_lock
+        self._indexing: bool = False
+        self._indexing_lock = threading.Lock()
 
         # Lifecycle state
         self._started: bool = False
@@ -64,6 +72,14 @@ class KragService:
         """Raise RuntimeError if service is not started."""
         if not self._started:
             raise RuntimeError("Service not started — call start() first")
+
+    def _require_not_indexing(self) -> None:
+        """Raise RuntimeError if indexing is currently in progress."""
+        if self._indexing:
+            raise RuntimeError(
+                "Indexing is in progress — queries are unavailable until indexing completes. "
+                "Use 'krag index-status' to check progress."
+            )
 
     # ── lifecycle ───────────────────────────────
 
@@ -208,6 +224,7 @@ class KragService:
     def query(self, request: QueryRequest) -> QueryResponse:
         """Execute a full RAG query with LLM synthesis."""
         self._require_started()
+        self._require_not_indexing()
 
         if self.query_engine is None:
             raise RuntimeError("No LLM model configured — cannot synthesize answers")
@@ -270,6 +287,7 @@ class KragService:
     def retrieve(self, request: RetrieveRequest) -> list[SourceChunk]:
         """Retrieve chunks without LLM synthesis."""
         self._require_started()
+        self._require_not_indexing()
 
         from krag.retrieval.retriever import Retriever
 
@@ -303,6 +321,7 @@ class KragService:
         embedding models, vector spaces, candidate counts.
         """
         self._require_started()
+        self._require_not_indexing()
 
         if self.query_engine is None:
             raise RuntimeError("No LLM model configured — cannot synthesize answers")
@@ -368,24 +387,32 @@ class KragService:
             # Collect vector space info
             vector_spaces = []
             per_space_counts: dict[str, int] = {}
-            if self.vector_store is not None:
-                try:
-                    import warnings
 
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", UserWarning)
-                        qdrant_info = self.vector_store.client.get_collection(
-                            self.vector_store.collection_name
-                        )
-                    vectors_cfg = qdrant_info.config.params.vectors
-                    if isinstance(vectors_cfg, dict):
-                        vector_spaces = list(vectors_cfg.keys())
-                except Exception:
-                    pass
-            if not vector_spaces:
-                vector_spaces = ["default"]
-            for space in vector_spaces:
-                per_space_counts[space] = total_after
+            # Prefer actual per-space counts from the retriever (set during multi-model search)
+            retriever_per_space = getattr(retriever, "_last_per_space_counts", None)
+            if retriever_per_space:
+                vector_spaces = list(retriever_per_space.keys())
+                per_space_counts = dict(retriever_per_space)
+            else:
+                # Single-model fallback — discover space names from Qdrant
+                if self.vector_store is not None:
+                    try:
+                        import warnings
+
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", UserWarning)
+                            qdrant_info = self.vector_store.client.get_collection(
+                                self.vector_store.collection_name
+                            )
+                        vectors_cfg = qdrant_info.config.params.vectors
+                        if isinstance(vectors_cfg, dict):
+                            vector_spaces = list(vectors_cfg.keys())
+                    except Exception:
+                        pass
+                if not vector_spaces:
+                    vector_spaces = ["default"]
+                for space in vector_spaces:
+                    per_space_counts[space] = total_before
 
             debug = DebugMetadata(
                 llm_used=route_name,
@@ -515,13 +542,58 @@ class KragService:
         )
 
     def index(self, request: IndexRequest) -> IndexResponse:
-        """Run indexing using already-loaded embedding models.
+        """Validate and start indexing in background.
 
-        Delegates to IndexingOrchestrator with full or incremental mode.
-        Temporarily unloads the LLM to free VRAM for embedding models
-        (e.g. code embedding), then reloads it after indexing completes.
+        Returns immediately with a 'running' status response.
+        The actual indexing runs in a background thread. Use
+        GET /index/status to poll for completion.
         """
         self._require_started()
+
+        with self._indexing_lock:
+            if self._indexing:
+                raise RuntimeError(
+                    "Indexing is already in progress — use 'krag index-status' to check progress"
+                )
+            self._indexing = True
+
+        # Create an immediate "running" response
+        job_id = str(uuid4())
+        running_response = IndexResponse(
+            job_id=job_id,
+            status="running",
+            mode=request.mode,
+            files_scanned=0,
+            files_processed=0,
+            files_skipped=0,
+            files_skipped_unchanged=0,
+            files_skipped_other=0,
+            files_errored=0,
+            chunks_created=0,
+            vectors_stored=0,
+            duration_seconds=0.0,
+            dry_run=request.dry_run,
+            errors=[],
+        )
+        self._last_index_job = running_response
+
+        # Start background thread
+        thread = threading.Thread(
+            target=self._run_indexing,
+            args=(request, job_id),
+            name="kragd-indexing",
+            daemon=True,
+        )
+        thread.start()
+
+        return running_response
+
+    def _run_indexing(self, request: IndexRequest, job_id: str) -> None:
+        """Execute indexing in background thread.
+
+        Updates _last_index_job and _index_job_cache on completion.
+        Clears _indexing flag when done (success or failure).
+        """
 
         from kragd.schemas import IndexError as IndexErr
 
@@ -579,12 +651,14 @@ class KragService:
             ]
 
             response = IndexResponse(
-                job_id=str(job.job_id),
+                job_id=job_id,
                 status=job.status.value if hasattr(job.status, "value") else str(job.status),
                 mode=request.mode,
                 files_scanned=job.files_discovered,
                 files_processed=job.files_processed,
                 files_skipped=job.files_skipped,
+                files_skipped_unchanged=job.files_skipped_unchanged,
+                files_skipped_other=job.files_skipped_other,
                 files_errored=job.files_errored,
                 chunks_created=job.chunks_generated,
                 vectors_stored=job.embeddings_created,
@@ -594,7 +668,33 @@ class KragService:
             )
 
             self._last_index_job = response
-            return response
+            # Add to cache — drop oldest delivered entries if over limit
+            self._index_job_cache.append(response)
+            if len(self._index_job_cache) > self._max_index_cache:
+                self._index_job_cache = self._index_job_cache[-self._max_index_cache :]
+        except Exception as exc:
+            logger.error("Indexing failed: %s", exc, exc_info=True)
+            self._last_index_job = IndexResponse(
+                job_id=job_id,
+                status="failed",
+                mode=request.mode,
+                files_scanned=0,
+                files_processed=0,
+                files_skipped=0,
+                files_skipped_unchanged=0,
+                files_skipped_other=0,
+                files_errored=1,
+                chunks_created=0,
+                vectors_stored=0,
+                duration_seconds=round(time.monotonic() - t0, 2),
+                dry_run=request.dry_run,
+                errors=[IndexErr(
+                    file_path="<system>",
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                )],
+            )
+            self._index_job_cache.append(self._last_index_job)
         finally:
             orchestrator.close()
 
@@ -607,6 +707,10 @@ class KragService:
                     # Re-wire query engine with fresh LLM client
                     if self.query_engine is not None and self.llm_pool is not None:
                         self.query_engine.llm_client = self.llm_pool.text_llm_client
+                    # Re-wire lifecycle manager with new pool so hot-swap
+                    # targets the correct LLM instances (not the old closed pool)
+                    if self.lifecycle_manager is not None and self.llm_pool is not None:
+                        self.lifecycle_manager._pool = self.llm_pool
                 except Exception:
                     logger.warning(
                         "Failed to reload LLM after indexing — queries will be unavailable "
@@ -614,11 +718,20 @@ class KragService:
                         exc_info=True,
                     )
 
-    def get_index_status(self) -> IndexResponse:
-        """Return last indexing job status."""
+            # Always clear the indexing flag
+            with self._indexing_lock:
+                self._indexing = False
+
+    def get_index_status(self) -> IndexResponse | list[IndexResponse]:
+        """Return cached indexing job results.
+
+        Returns all undelivered results plus the most recent job.
+        After retrieval, marks results as delivered so they can be
+        evicted when new jobs arrive.
+        """
         self._require_started()
 
-        if self._last_index_job is None:
+        if not self._index_job_cache:
             # No indexing has been run yet — return empty response
             return IndexResponse(
                 job_id="none",
@@ -627,6 +740,8 @@ class KragService:
                 files_scanned=0,
                 files_processed=0,
                 files_skipped=0,
+                files_skipped_unchanged=0,
+                files_skipped_other=0,
                 files_errored=0,
                 chunks_created=0,
                 vectors_stored=0,
@@ -635,7 +750,13 @@ class KragService:
                 errors=[],
             )
 
-        return self._last_index_job
+        # Return all cached results, then clear all but the most recent
+        results = list(self._index_job_cache)
+        # Keep only the most recent in cache
+        self._index_job_cache = self._index_job_cache[-1:]
+        if len(results) == 1:
+            return results[0]
+        return results
 
     def get_status(self) -> ServiceStatus:
         """Return service status including model info and uptime."""

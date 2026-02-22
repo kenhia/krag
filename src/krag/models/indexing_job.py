@@ -81,8 +81,18 @@ class IndexingJob(BaseModel):
     end_time: datetime | None = Field(default=None, description="When job completed")
     files_discovered: int = Field(default=0, ge=0, description="Total files found")
     files_processed: int = Field(default=0, ge=0, description="Files successfully indexed")
-    files_skipped: int = Field(default=0, ge=0, description="Files skipped (incremental only)")
+    files_skipped_unchanged: int = Field(
+        default=0, ge=0, description="Files skipped because content was unchanged"
+    )
+    files_skipped_other: int = Field(
+        default=0, ge=0, description="Files skipped for other reasons (empty, no chunks)"
+    )
     files_errored: int = Field(default=0, ge=0, description="Files with errors")
+
+    @property
+    def files_skipped(self) -> int:
+        """Total files skipped (unchanged + other). Backward compatibility."""
+        return self.files_skipped_unchanged + self.files_skipped_other
     files_added: int = Field(default=0, ge=0, description="New files added (incremental only)")
     files_modified: int = Field(
         default=0, ge=0, description="Modified files re-indexed (incremental only)"
@@ -116,6 +126,8 @@ class IndexingJob(BaseModel):
             "files_discovered": self.files_discovered,
             "files_processed": self.files_processed,
             "files_skipped": self.files_skipped,
+            "files_skipped_unchanged": self.files_skipped_unchanged,
+            "files_skipped_other": self.files_skipped_other,
             "files_errored": self.files_errored,
             "chunks_generated": self.chunks_generated,
             "embeddings_created": self.embeddings_created,

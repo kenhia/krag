@@ -140,6 +140,11 @@ def config_show(
         "-c",
         help="Configuration file path (default: auto-detect in XDG config dir)",
     ),
+    pretty: bool = typer.Option(
+        False,
+        "--pretty",
+        help="Show configuration in Rich table format",
+    ),
     paths_only: bool = typer.Option(
         False,
         "--paths-only",
@@ -153,12 +158,19 @@ def config_show(
 ) -> None:
     """Display current configuration.
 
-    Shows all configuration settings in a formatted table.
+    Shows all configuration settings in dotted key=value format (grep-friendly).
+    Use --pretty for Rich table display.
 
     Examples:
 
-        # Show default config
+        # Show config (dotted format, pipe-friendly)
         krag config show
+
+        # Show config in Rich tables
+        krag config show --pretty
+
+        # Filter with grep
+        krag config show | grep llm
 
         # Show only storage paths
         krag config show --paths-only
@@ -191,15 +203,22 @@ def config_show(
     try:
         config = config_manager.load(config_path)
 
-        console.print(f"\n[cyan]Configuration:[/cyan] {config_path}\n")
-
+        # --paths-only and --gpu-only always use pretty tables
         if paths_only:
+            console.print(f"\n[cyan]Configuration:[/cyan] {config_path}\n")
             _show_storage_paths(config)
             return
 
         if gpu_only:
+            console.print(f"\n[cyan]Configuration:[/cyan] {config_path}\n")
             _show_gpu_config(config)
             return
+
+        if not pretty:
+            _show_dotted(config_path)
+            return
+
+        console.print(f"\n[cyan]Configuration:[/cyan] {config_path}\n")
 
         # Directories
         table = Table(title="Directories", show_header=True)
@@ -255,6 +274,34 @@ def config_show(
     except Exception as e:
         console.print(f"[red]Error reading configuration: {e}[/red]")
         exit_with_code(1)
+
+
+def _flatten_toml(prefix: str, obj: dict, out: list[tuple[str, str]]) -> None:
+    """Recursively flatten a TOML dict into dotted key-value pairs."""
+    for key, value in obj.items():
+        full = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            _flatten_toml(full, value, out)
+        else:
+            out.append((full, str(value)))
+
+
+def _show_dotted(config_path: Path) -> None:
+    """Display configuration in flat dotted format (grep-friendly).
+
+    Reads the raw TOML file and flattens it so the output matches
+    the on-disk structure rather than the resolved Configuration model.
+    """
+    import tomllib
+
+    with open(config_path, "rb") as f:
+        data = tomllib.load(f)
+
+    pairs: list[tuple[str, str]] = []
+    _flatten_toml("", data, pairs)
+
+    for key, value in pairs:
+        print(f'{key} = "{value}"')
 
 
 def _show_storage_paths(config: "Configuration") -> None:
