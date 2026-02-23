@@ -1,0 +1,21 @@
+[mode]
+name = "code"
+description = "Optimized for source code queries"
+
+[collections]
+code = 0.7
+tests = 0.3
+
+[llm]
+slot = "code"
+
+[prompt]
+preset = "code"
+
+[retrieval]
+top_k = 10
+similarity_threshold = 0.15
+
+[critic]
+enabled = false
+threshold = 3

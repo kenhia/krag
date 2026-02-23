@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "krag Domain Lexicon",
+  "description": "Project-specific terminology glossary. Each key is a term, each value is its definition. Terms are matched case-insensitively against query text using word-boundary regex.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "string",
+    "minLength": 1,
+    "description": "Definition of the term"
+  },
+  "minProperties": 0,
+  "examples": [
+    {
+      "kragd": "The krag service daemon — a FastAPI server that loads models once and serves queries over HTTP on port 8742",
+      "krag-direct": "The in-process CLI entry point that runs without the kragd service, loading models per-command",
+      "RRF": "Reciprocal Rank Fusion — a score merging algorithm that combines ranked results from multiple retrieval sources",
+      "LLM pool": "The component managing text and code LLMs with hot-swap or simultaneous loading depending on VRAM",
+      "named vector space": "A Qdrant feature allowing multiple embedding vectors per point, each from a different model",
+      "prompt preset": "A named configuration (strict, balanced, verbose, code) that bundles system prompts with generation parameters",
+      "VRAM": "Video RAM on the GPU, shared between embedding models and LLMs — managed via hot-swap to avoid exhaustion"
+    }
+  ]
+}

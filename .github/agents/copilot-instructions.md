@@ -13,6 +13,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-03
 - Qdrant vector store (local file-based), JSON metadata files (006-code-quality-sprint)
 - Python 3.11+ (`requires-python = ">=3.11,<3.14"`) (007-service-architecture)
 - Qdrant (embedded mode via filesystem path — no network Qdrant server) (007-service-architecture)
+- Python 3.11–3.13 (requires-python = ">=3.11,<3.14") + FastAPI >=0.115.0, Typer >=0.9.0, qdrant-client >=1.8.0, sentence-transformers >=2.3.0, llama-cpp-python >=0.2.90, pydantic >=2.6.0, pydantic-settings >=2.2.0, httpx >=0.28.0, rich >=13.0.0, tomli-w >=1.0.0 (009-retrieval-modes)
+- Qdrant (embedded file-based via qdrant-client, stored at `~/.cache/krag/storage`) (009-retrieval-modes)
 
 - Python 3.11+ (001-text-rag-indexing)
 
@@ -32,9 +34,9 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+: Follow standard conventions
 
 ## Recent Changes
+- 009-retrieval-modes: Added Python 3.11–3.13 (requires-python = ">=3.11,<3.14") + FastAPI >=0.115.0, Typer >=0.9.0, qdrant-client >=1.8.0, sentence-transformers >=2.3.0, llama-cpp-python >=0.2.90, pydantic >=2.6.0, pydantic-settings >=2.2.0, httpx >=0.28.0, rich >=13.0.0, tomli-w >=1.0.0
 - 007-service-architecture: Added Python 3.11+ (`requires-python = ">=3.11,<3.14"`)
 - 006-code-quality-sprint: Added Python >=3.11, <3.14 (tested on 3.13) + typer, sentence-transformers, qdrant-client, llama-cpp-python, pydantic, rich
-- 005-code-aware-indexing: Added Python 3.11+ (pyproject.toml: `>=3.11,<3.14`)
 
 
 <!-- MANUAL ADDITIONS START -->

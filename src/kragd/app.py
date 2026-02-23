@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from kragd.routers import debug, index, query, system
+from kragd.routers import debug, index, lexicon, modes, query, system
 from kragd.service import KragService
 
 if TYPE_CHECKING:
@@ -57,6 +57,8 @@ def create_app(config: Configuration) -> FastAPI:
     app.include_router(query.router)
     app.include_router(debug.router)
     app.include_router(index.router)
+    app.include_router(modes.router)
+    app.include_router(lexicon.router)
 
     # Translate service-level RuntimeErrors into appropriate HTTP responses
     @app.exception_handler(RuntimeError)

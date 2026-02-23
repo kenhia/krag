@@ -38,6 +38,7 @@ def shutdown(request: Request) -> ShutdownResponse:
     Sends SIGTERM to the current process, which triggers uvicorn's
     graceful shutdown flow and the lifespan teardown (R-07).
     """
+
     # Schedule SIGTERM after response is sent
     def _send_sigterm() -> None:
         import time

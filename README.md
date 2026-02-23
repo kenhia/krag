@@ -17,6 +17,9 @@ A local-first system for indexing personal files (PC and NAS storage) and queryi
 - ⚙️ **Flexible Configuration**: Customize directories, file types, chunking, models
 - 🧠 **Code-Aware Indexing**: AST-based chunking via tree-sitter, code-specialized embeddings, multi-LLM routing with hot-swap
 - 🔌 **Plugin System**: Extend with custom file type handlers for PDF, DOCX, logs, and more
+- 🎛️ **Retrieval Modes**: Named configurations bundling collection targeting, LLM selection, prompt presets, and retrieval parameters
+- 📖 **Domain Lexicon**: Project-specific glossary injected into LLM prompts for terminology-aware answers
+- 🔬 **Context Relevance Critic**: Optional LLM-based scoring to filter low-relevance chunks before synthesis
 
 ## Prerequisites
 
@@ -90,6 +93,10 @@ krag index --incremental
 # Ask a question
 krag query "What are the main features of my project?"
 
+# Query with a specific retrieval mode
+krag query --mode code "what does the _deduplicate method do?"
+krag query --mode docs "how do I configure logging?"
+
 # Show source information
 krag query "How do I configure logging?" --show-sources
 
@@ -120,6 +127,9 @@ kragd --host 0.0.0.0 --port 8742
 # Query (routes through kragd — no cold-start after first load)
 krag query "What are the main features of my project?"
 
+# Query with a retrieval mode
+krag query --mode code "explain the Retriever class"
+
 # Retrieve without LLM synthesis
 krag retrieve "logging configuration" --top-k 10
 
@@ -138,6 +148,15 @@ krag status
 
 # Health check
 krag health
+
+# List available retrieval modes
+krag modes list
+
+# Show full details for a mode
+krag modes show code
+
+# Reload the domain lexicon after editing
+krag lexicon refresh
 
 # Index files via the service (reuses loaded embedding models)
 krag index
@@ -227,6 +246,9 @@ Key settings:
 - `embedding_model`: Embedding model name (default: BAAI/bge-base-en-v1.5)
 - `llm_model`: HuggingFace model name or local GGUF path
 - `path_aliases`: Display path reductions (e.g., `/home/ken:~`)
+- `default_mode`: Default retrieval mode (default: `default`)
+- `modes_dir`: Directory for custom mode TOML files (default: `~/.config/krag/modes`)
+- `lexicon_path`: Path to domain lexicon JSON file (optional)
 
 **Custom Storage Paths** (optional):
 
@@ -371,7 +393,7 @@ cd examples/krag-plugin-code && uv pip install -e .
 # Index and query
 krag index
 krag query --preset code "what does the _deduplicate method do?"
-krag query --llm code "explain the Retriever class"
+krag query --mode code "explain the Retriever class"
 ```
 
 See [docs/plugin-user-guide.md](docs/plugin-user-guide.md) for detailed setup.

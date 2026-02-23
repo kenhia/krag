@@ -9,7 +9,11 @@ from typing import Any
 import tomli_w  # For writing TOML
 import yaml
 
-from krag.models.configuration import Configuration, PluginConfiguration, ServiceConfiguration
+from krag.models.configuration import (
+    Configuration,
+    PluginConfiguration,
+    ServiceConfiguration,
+)
 
 
 class ConfigManager:
@@ -209,6 +213,32 @@ class ConfigManager:
             if "log_requests" in svc_section:
                 svc_dict["log_requests"] = svc_section["log_requests"]
             config_dict["service"] = ServiceConfiguration(**svc_dict)
+
+        # [modes] section (retrieval mode system)
+        if "modes" in toml_data:
+            modes_section = toml_data["modes"]
+            if "dir" in modes_section:
+                config_dict["modes_dir"] = Path(modes_section["dir"])
+            if "default" in modes_section:
+                config_dict["default_mode"] = modes_section["default"]
+
+        # [lexicon] section (domain terminology)
+        if "lexicon" in toml_data:
+            lex_section = toml_data["lexicon"]
+            if "path" in lex_section:
+                config_dict["lexicon_path"] = Path(lex_section["path"])
+            if "max_entries" in lex_section:
+                config_dict["lexicon_max_entries"] = lex_section["max_entries"]
+            if "max_chars" in lex_section:
+                config_dict["lexicon_max_chars"] = lex_section["max_chars"]
+
+        # [critic] section (context relevance scoring)
+        if "critic" in toml_data:
+            critic_section = toml_data["critic"]
+            if "enabled" in critic_section:
+                config_dict["critic_enabled"] = critic_section["enabled"]
+            if "threshold" in critic_section:
+                config_dict["critic_threshold"] = critic_section["threshold"]
 
         return Configuration(**config_dict)
 

@@ -6,6 +6,15 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Valid collection names for mode configuration
+VALID_COLLECTIONS: frozenset[str] = frozenset({"code", "tests", "docs", "text"})
+
+# Valid prompt presets
+VALID_PRESETS: frozenset[str] = frozenset({"strict", "balanced", "verbose", "code"})
+
+# Valid LLM slots
+VALID_LLM_SLOTS: frozenset[str] = frozenset({"text", "code"})
+
 
 def _get_default_vector_store_path() -> Path:
     """Get default vector store path using XDG cache directory.
@@ -53,6 +62,117 @@ def _get_default_llm_model() -> str:
     Uses Phi-3 Mini, a capable 3.8B parameter model suitable for CPU inference.
     """
     return "microsoft/Phi-3-mini-4k-instruct-gguf"
+
+
+class ModeConfiguration(BaseModel):
+    """A named retrieval configuration loaded from a TOML file.
+
+    Bundles collection targeting, LLM selection, prompt preset, retrieval
+    parameters, and critic settings into a single named configuration.
+    """
+
+    name: str = Field(..., description="Mode identifier (case-insensitive)")
+    description: str = Field(default="", description="Human-readable description")
+    collections: dict[str, float] = Field(
+        default_factory=lambda: {"code": 1.0, "tests": 1.0, "docs": 1.0, "text": 1.0},
+        description="Target collections with weights (0.0, 1.0]",
+    )
+    llm_slot: str = Field(default="text", description="LLM to use: 'text' or 'code'")
+    preset: str = Field(default="balanced", description="Prompt preset name")
+    top_k: int = Field(default=5, ge=1, description="Number of results to retrieve")
+    similarity_threshold: float = Field(
+        default=0.2, ge=0.0, le=1.0, description="Minimum similarity score"
+    )
+    critic_enabled: bool = Field(default=False, description="Whether context critic is active")
+    critic_threshold: int = Field(default=3, ge=0, le=5, description="Minimum critic score (0–5)")
+
+    @field_validator("name")
+    @classmethod
+    def name_is_valid(cls, v: str) -> str:
+        """Name must be non-empty, lowercase alphanumeric + hyphens."""
+        if not v:
+            raise ValueError("Mode name must be non-empty")
+        lowered = v.lower()
+        if not all(c.isalnum() or c == "-" for c in lowered):
+            raise ValueError(f"Mode name must be lowercase alphanumeric + hyphens, got: {v!r}")
+        return lowered
+
+    @field_validator("collections")
+    @classmethod
+    def collections_valid(cls, v: dict[str, float]) -> dict[str, float]:
+        """Collection keys must be valid names, weights in (0.0, 1.0]."""
+        invalid_keys = set(v.keys()) - VALID_COLLECTIONS
+        if invalid_keys:
+            raise ValueError(
+                f"Invalid collection names: {invalid_keys}. "
+                f"Must be subset of {sorted(VALID_COLLECTIONS)}"
+            )
+        for key, weight in v.items():
+            if weight <= 0.0 or weight > 1.0:
+                raise ValueError(
+                    f"Collection weight for '{key}' must be in (0.0, 1.0], got: {weight}"
+                )
+        return v
+
+    @field_validator("llm_slot")
+    @classmethod
+    def llm_slot_valid(cls, v: str) -> str:
+        """LLM slot must be 'text' or 'code'."""
+        if v not in VALID_LLM_SLOTS:
+            raise ValueError(f"llm_slot must be 'text' or 'code', got: {v!r}")
+        return v
+
+    @field_validator("preset")
+    @classmethod
+    def preset_valid(cls, v: str) -> str:
+        """Preset must be a known built-in name."""
+        if v not in VALID_PRESETS:
+            raise ValueError(f"preset must be one of {sorted(VALID_PRESETS)}, got: {v!r}")
+        return v
+
+
+class LexiconConfiguration(BaseModel):
+    """Configuration for the domain lexicon system.
+
+    Controls lexicon file location and injection limits for prompt enrichment.
+    """
+
+    path: Path | None = Field(
+        default=None,
+        description="Path to lexicon JSON file (None = disabled)",
+    )
+    max_entries: int = Field(
+        default=10, ge=1, description="Maximum glossary entries injected per query"
+    )
+    max_chars: int = Field(
+        default=1500, ge=100, description="Maximum characters of glossary text per query"
+    )
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def expand_path(cls, v: Any) -> Any:
+        """Expand ~ in lexicon path."""
+        if isinstance(v, str):
+            return Path(v).expanduser()
+        if isinstance(v, Path):
+            return v.expanduser()
+        return v
+
+
+class CriticConfiguration(BaseModel):
+    """Configuration for the context relevance critic.
+
+    Controls whether the critic is active and the minimum score threshold
+    for chunk inclusion.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether context critic is active (disabled by default)",
+    )
+    threshold: int = Field(
+        default=3, ge=0, le=5, description="Minimum relevance score (0–5) for inclusion"
+    )
 
 
 class PluginMetadata(BaseModel):
@@ -337,6 +457,37 @@ class Configuration(BaseSettings):
         description="Custom system prompt override (replaces preset's system prompt when set)",
     )
 
+    # Mode System
+    modes_dir: Path | None = Field(
+        default=None,
+        description="Directory for user-defined mode TOML files (default: ~/.config/krag/modes)",
+    )
+    default_mode: str = Field(
+        default="default",
+        description="Default retrieval mode name when --mode is not specified",
+    )
+
+    # Lexicon
+    lexicon_path: Path | None = Field(
+        default=None,
+        description="Path to domain lexicon JSON file (None = disabled)",
+    )
+    lexicon_max_entries: int = Field(
+        default=10, ge=1, description="Maximum glossary entries injected per query"
+    )
+    lexicon_max_chars: int = Field(
+        default=1500, ge=100, description="Maximum characters of glossary text per query"
+    )
+
+    # Critic
+    critic_enabled: bool = Field(
+        default=False,
+        description="Global critic enable flag (overridden by mode config)",
+    )
+    critic_threshold: int = Field(
+        default=3, ge=0, le=5, description="Minimum relevance score (0–5) for chunk inclusion"
+    )
+
     # Plugin System
     plugins: PluginConfiguration = Field(
         default_factory=PluginConfiguration,
@@ -388,6 +539,8 @@ class Configuration(BaseSettings):
         "model_cache_path",
         "corpus_cache_path",
         "logs_path",
+        "modes_dir",
+        "lexicon_path",
         mode="before",
     )
     @classmethod

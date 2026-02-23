@@ -85,6 +85,7 @@ class TestKragServiceStartShutdown:
         with (
             patch.object(service, "_init_embeddings"),
             patch.object(service, "_init_vector_store"),
+            patch.object(service, "_init_collection_manager"),
             patch.object(service, "_init_llm_pool"),
             patch.object(service, "_init_query_engine"),
         ):
@@ -126,6 +127,7 @@ class TestKragServiceStartShutdown:
         with (
             patch.object(service, "_init_embeddings"),
             patch.object(service, "_init_vector_store"),
+            patch.object(service, "_init_collection_manager"),
             patch.object(service, "_init_llm_pool"),
             patch.object(service, "_init_query_engine"),
         ):

@@ -209,7 +209,9 @@ class TestShutdownContract:
         assert "message" in data
         assert isinstance(data["message"], str)
 
-    def test_shutdown_content_type_json(self, mock_thread: MagicMock, test_client: TestClient) -> None:
+    def test_shutdown_content_type_json(
+        self, mock_thread: MagicMock, test_client: TestClient
+    ) -> None:
         """Response content-type is application/json."""
         resp = test_client.post("/shutdown")
         assert "application/json" in resp.headers["content-type"]

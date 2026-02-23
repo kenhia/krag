@@ -25,6 +25,9 @@ from krag.storage.qdrant_impl import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
 
+# Type alias: (collection_name, vectors) tuple for multi-collection routing
+_RoutedVectors = tuple[str, list[dict[str, Any]]]
+
 
 @dataclass
 class FileProcessingResult:
@@ -62,6 +65,7 @@ class IndexingOrchestrator:
         device: str = "cpu",
         config: Configuration | None = None,
         vector_store: "QdrantVectorStore | None" = None,
+        collection_manager: "Any | None" = None,
     ):
         """Initialize indexing orchestrator.
 
@@ -227,6 +231,9 @@ class IndexingOrchestrator:
         # Update plugin context with the real vector store
         if self.plugin_context is not None:
             self.plugin_context.vector_store = self.vector_store
+
+        # Store collection manager for multi-collection routing
+        self.collection_manager = collection_manager
 
         # Track indexed files for incremental updates (metadata storage)
         self.indexed_files: dict[str, FileMetadata] = {}  # path -> FileMetadata
@@ -563,6 +570,53 @@ class IndexingOrchestrator:
             handler_name=handler_name,
         )
 
+    def _store_routed_vectors(
+        self,
+        routed_vectors: dict[str, list[dict[str, Any]]],
+        job: IndexingJob,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> None:
+        """Upsert vectors to per-collection stores.
+
+        Args:
+            routed_vectors: ``{collection_name: [vector_dicts]}`` mapping.
+            job: Active indexing job for error tracking.
+            progress_callback: Optional progress callback.
+        """
+        assert self.collection_manager is not None
+
+        total = sum(len(v) for v in routed_vectors.values())
+        logger.info(
+            "Storing %d vectors across %d collections: %s",
+            total,
+            len(routed_vectors),
+            {k: len(v) for k, v in routed_vectors.items()},
+        )
+
+        stored = 0
+        batch_size = 100
+        for collection, vectors in routed_vectors.items():
+            store = self.collection_manager.get_store(collection)
+            try:
+                for i in range(0, len(vectors), batch_size):
+                    batch = vectors[i : i + batch_size]
+                    store.vector_store.upsert(batch)
+                    stored += len(batch)
+                    if progress_callback:
+                        progress_callback(stored, total, f"Storing vectors ({collection})")
+            except Exception as e:
+                logger.error(f"Error storing vectors to {collection}: {e}")
+                job.files_errored += 1
+                from krag.models.indexing_job import FileError
+
+                job.error_summary.append(
+                    FileError(
+                        file_path=Path("."),
+                        error_type="storage",
+                        error_message=f"Failed to store to {collection}: {e}",
+                    )
+                )
+
     def index_full(
         self, progress_callback: Callable[[int, int, str], None] | None = None
     ) -> IndexingJob:
@@ -617,7 +671,9 @@ class IndexingOrchestrator:
             return job
 
         # Stage 2-5: Process each file
-        all_vectors = []
+        all_vectors: list[dict[str, Any]] = []
+        # Multi-collection: group vectors by collection for routed upsert
+        routed_vectors: dict[str, list[dict[str, Any]]] = {}
         for i, file_metadata in enumerate(all_files):
             try:
                 if progress_callback:
@@ -625,10 +681,15 @@ class IndexingOrchestrator:
 
                 # Resolve plugin handler
                 plugin_handler = None
+                plugin_name: str | None = None
                 if self.plugin_registry is not None:
                     plugin_handler = self.plugin_registry.get_handler_for_file(
                         file_metadata.file_path, context=self.plugin_context
                     )
+                    if plugin_handler is not None:
+                        plugin_name = getattr(
+                            plugin_handler, "name", plugin_handler.__class__.__name__
+                        )
 
                 result = self._process_file(file_metadata, plugin_handler)
 
@@ -649,7 +710,15 @@ class IndexingOrchestrator:
                     job.files_skipped_other += 1
                     continue
 
-                all_vectors.extend(result.vectors)
+                # Route vectors to the correct collection (or single store)
+                if self.collection_manager is not None:
+                    collection = self.collection_manager.route_file(
+                        file_metadata.file_path, plugin_name=plugin_name
+                    )
+                    routed_vectors.setdefault(collection, []).extend(result.vectors)
+                else:
+                    all_vectors.extend(result.vectors)
+
                 job.chunks_generated += result.chunk_count
                 job.embeddings_created += result.embeddings_created
 
@@ -675,7 +744,10 @@ class IndexingOrchestrator:
                 )
 
         # Stage 6: Store vectors in batches
-        if all_vectors:
+        if self.collection_manager is not None and routed_vectors:
+            # Multi-collection: upsert to each collection's store
+            self._store_routed_vectors(routed_vectors, job, progress_callback)
+        elif all_vectors:
             logger.info(f"Storing {len(all_vectors)} vectors")
 
             try:
@@ -814,12 +886,21 @@ class IndexingOrchestrator:
             logger.info(f"Removing old vectors for {len(modified_changes)} modified files")
             for change in modified_changes:
                 try:
-                    self.vector_store.delete_by_filter({"file_path": str(change.file_path)})
+                    if self.collection_manager is not None:
+                        # Multi-collection: delete from the routed collection
+                        coll = self.collection_manager.route_file(
+                            change.file_path, plugin_name=None
+                        )
+                        store = self.collection_manager.get_store(coll)
+                        store.vector_store.delete_by_filter({"file_path": str(change.file_path)})
+                    else:
+                        self.vector_store.delete_by_filter({"file_path": str(change.file_path)})
                 except Exception as e:
                     logger.warning(f"Failed to remove old vectors for {change.file_path}: {e}")
 
         # Stage 5: Process new/modified files
-        all_vectors = []
+        all_vectors: list[dict[str, Any]] = []
+        routed_vectors: dict[str, list[dict[str, Any]]] = {}
         for i, file_metadata in enumerate(files_to_process):
             try:
                 if progress_callback:
@@ -827,10 +908,15 @@ class IndexingOrchestrator:
 
                 # Resolve plugin handler
                 plugin_handler = None
+                plugin_name: str | None = None
                 if self.plugin_registry is not None:
                     plugin_handler = self.plugin_registry.get_handler_for_file(
                         file_metadata.file_path, context=self.plugin_context
                     )
+                    if plugin_handler is not None:
+                        plugin_name = getattr(
+                            plugin_handler, "name", plugin_handler.__class__.__name__
+                        )
 
                 result = self._process_file(file_metadata, plugin_handler)
 
@@ -851,7 +937,15 @@ class IndexingOrchestrator:
                     job.files_skipped_other += 1
                     continue
 
-                all_vectors.extend(result.vectors)
+                # Route vectors to the correct collection (or single store)
+                if self.collection_manager is not None:
+                    collection = self.collection_manager.route_file(
+                        file_metadata.file_path, plugin_name=plugin_name
+                    )
+                    routed_vectors.setdefault(collection, []).extend(result.vectors)
+                else:
+                    all_vectors.extend(result.vectors)
+
                 job.chunks_generated += result.chunk_count
                 job.embeddings_created += result.embeddings_created
 
@@ -876,7 +970,9 @@ class IndexingOrchestrator:
                 )
 
         # Stage 6: Store vectors in batches
-        if all_vectors:
+        if self.collection_manager is not None and routed_vectors:
+            self._store_routed_vectors(routed_vectors, job, progress_callback)
+        elif all_vectors:
             logger.info(f"Storing {len(all_vectors)} vectors")
 
             try:

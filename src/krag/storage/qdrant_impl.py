@@ -47,6 +47,7 @@ class QdrantVectorStore(VectorStore):
         distance: str = "cosine",
         vectors_config: dict[str, VectorParams] | None = None,
         allow_recreate: bool = False,
+        client: QdrantClient | None = None,
     ):
         """Initialize Qdrant vector store.
 
@@ -64,6 +65,11 @@ class QdrantVectorStore(VectorStore):
                 when its format does not match the requested configuration.
                 Should only be True during indexing; query/eval should leave
                 this False so they never destroy stored data.
+            client: Optional pre-created QdrantClient instance.  When
+                provided the store *shares* this client instead of creating
+                its own.  ``storage_path`` is still recorded but not used
+                to open a new connection.  The caller is responsible for
+                closing the shared client.
         """
         self.collection_name = collection_name
         self.vector_size = vector_size
@@ -71,8 +77,14 @@ class QdrantVectorStore(VectorStore):
         self._vectors_config = vectors_config
         self._allow_recreate = allow_recreate
 
-        # Initialize client
-        if self.storage_path:
+        # Track whether we own the client (for close() behaviour)
+        self._owns_client = client is None
+
+        if client is not None:
+            # Use the pre-created shared client
+            self.client = client
+            logger.info(f"Using shared QdrantClient for collection '{collection_name}'")
+        elif self.storage_path:
             logger.info(f"Initializing Qdrant with storage at {self.storage_path}")
             self.storage_path.mkdir(parents=True, exist_ok=True)
             # Suppress Qdrant's large collection warning for local mode
@@ -420,7 +432,14 @@ class QdrantVectorStore(VectorStore):
         self._ensure_collection()
 
     def close(self) -> None:
-        """Close the Qdrant client and release resources."""
+        """Close the Qdrant client and release resources.
+
+        Only closes the client if this store owns it (i.e. it was not
+        injected via the ``client`` parameter).
+        """
+        if not self._owns_client:
+            logger.debug(f"Skipping client close for '{self.collection_name}' (shared client)")
+            return
         if hasattr(self, "client") and self.client:
             logger.info(f"Closing Qdrant client for collection '{self.collection_name}'...")
             self.client.close()

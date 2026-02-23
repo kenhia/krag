@@ -57,10 +57,17 @@ def query_command(
         "-p",
         help="Prompt preset (strict, balanced, verbose, code). Overrides config file setting.",
     ),
+    mode: str | None = typer.Option(
+        None,
+        "--mode",
+        "-m",
+        help="Named retrieval mode (e.g. default, code, docs). Bundles collections, LLM, preset.",
+    ),
     llm: str | None = typer.Option(
         None,
         "--llm",
-        help="LLM to use for synthesis: 'text' (general) or 'code' (code-specialized).",
+        help="[Deprecated — use --mode] LLM slot: 'text' or 'code'.",
+        hidden=True,
     ),
     config_path: Path | None = typer.Option(
         None,
@@ -91,6 +98,40 @@ def query_command(
         embedding_orchestrator = pipeline.embedding_orchestrator
         llm_pool = pipeline.llm_pool
         query_engine = pipeline.query_engine
+
+        # ── Mode resolution ───────────────────────────────────────
+        mode_config = None
+        if mode:
+            from krag.modes.mode_registry import ModeRegistry
+
+            registry = ModeRegistry()
+            registry.load_builtins()
+            if config.modes_dir:
+                registry.load_user_modes(config.modes_dir)
+            mode_config = registry.get(mode)
+            # Mode overrides top_k, preset, and llm slot
+            top_k = mode_config.top_k
+            if not preset:
+                preset = mode_config.preset
+            if not llm:
+                llm = mode_config.llm_slot
+            logger.info("Using mode '%s': preset=%s, llm=%s, top_k=%d", mode, preset, llm, top_k)
+
+        # Wire critic if mode has it enabled
+        critic = None
+        if mode_config and mode_config.critic_enabled:
+            from krag.critic.relevance_critic import RelevanceCritic
+
+            critic = RelevanceCritic(
+                llm_client=pipeline.llm_client,
+                threshold=mode_config.critic_threshold,
+                enabled=True,
+            )
+            logger.info(
+                "Critic enabled via mode '%s' (threshold=%d)", mode, mode_config.critic_threshold
+            )
+            # Attach critic to query engine for standard path
+            query_engine.critic = critic
 
         # Override llm_pool if user explicitly requests --llm routing.
         # Close the pipeline's standalone LLM first to free VRAM.
@@ -172,6 +213,11 @@ def query_command(
                     similarity_threshold=config.similarity_threshold,
                 )
 
+                # Apply critic filtering in multi-LLM path
+                if critic is not None and critic.enabled and results:
+                    scored = critic.score_chunks(query, results)
+                    results = critic.filter_chunks(scored)
+
                 if not results:
                     console.print(
                         Panel(
@@ -196,7 +242,25 @@ def query_command(
                     preset_name=active_preset,
                     system_prompt_override=config.prompt_system_override,
                 )
-                messages = prompt_builder.build(query, results)
+
+                # Lexicon injection for multi-LLM routing path
+                lexicon_glossary = None
+                if config.lexicon_path:
+                    from krag.lexicon.lexicon_injector import LexiconInjector
+                    from krag.lexicon.lexicon_store import LexiconStore
+
+                    try:
+                        _lex_store = LexiconStore()
+                        _lex_store.load(config.lexicon_path)
+                        _matches = _lex_store.match_terms(query)
+                        if _matches:
+                            _injector = LexiconInjector()
+                            _selected = _injector.select_top(_matches)
+                            lexicon_glossary = _injector.format_glossary(_selected)
+                    except Exception:
+                        logger.warning("Lexicon injection failed", exc_info=True)
+
+                messages = prompt_builder.build(query, results, lexicon_glossary=lexicon_glossary)
 
                 # Generate with spinner for potential hot-swap
                 with console.status(

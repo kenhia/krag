@@ -93,6 +93,7 @@ class IndexingJob(BaseModel):
     def files_skipped(self) -> int:
         """Total files skipped (unchanged + other). Backward compatibility."""
         return self.files_skipped_unchanged + self.files_skipped_other
+
     files_added: int = Field(default=0, ge=0, description="New files added (incremental only)")
     files_modified: int = Field(
         default=0, ge=0, description="Modified files re-indexed (incremental only)"

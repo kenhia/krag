@@ -18,7 +18,12 @@ def query_command(
     query_text: str = typer.Argument(..., help="Query text"),
     top_k: int | None = typer.Option(None, "--top-k", "-k", help="Number of results"),
     preset: str | None = typer.Option(None, "--preset", "-p", help="Prompt preset"),
-    llm: str | None = typer.Option(None, "--llm", help="Force LLM slot (text/code)"),
+    mode: str | None = typer.Option(
+        None, "--mode", "-m", help="Named retrieval mode (e.g. default, code, docs)"
+    ),
+    llm: str | None = typer.Option(
+        None, "--llm", help="[Deprecated — use --mode] Force LLM slot (text/code)", hidden=True
+    ),
     no_synthesis: bool = typer.Option(False, "--no-synthesis", "-n", help="Retrieve only, no LLM"),
     output_format: OutputFormat = typer.Option(
         OutputFormat.TEXT, "--format", "-f", help="Output format"
@@ -47,6 +52,8 @@ def query_command(
             kwargs: dict = {}
             if top_k is not None:
                 kwargs["top_k"] = top_k
+            if mode is not None:
+                kwargs["mode"] = mode
 
             sources = client.retrieve(query_text, **kwargs)
             display_retrieve_response(
@@ -61,6 +68,8 @@ def query_command(
                 kwargs["top_k"] = top_k
             if preset is not None:
                 kwargs["preset"] = preset
+            if mode is not None:
+                kwargs["mode"] = mode
             if llm is not None:
                 kwargs["llm"] = llm
             if debug:

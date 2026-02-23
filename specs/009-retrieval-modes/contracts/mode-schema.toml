@@ -1,0 +1,111 @@
+# Mode Configuration Schema
+# Location: ~/.config/krag/modes/<name>.toml
+# Or: src/krag/modes/builtin/<name>.toml (built-in)
+#
+# This schema defines the structure for retrieval mode TOML files.
+# Mode files control which collections are searched, which LLM generates
+# answers, which prompt preset is used, and what retrieval parameters apply.
+
+[mode]
+name = "example"                     # required | str | must match filename (sans .toml)
+description = "Example mode"         # optional | str | human-readable description
+
+[collections]
+# Key = collection name (code, tests, docs, text)
+# Value = weight (0.0, 1.0] — influences weighted RRF fusion
+# Omitted collections are not searched.
+# If section omitted entirely, all collections searched at weight 1.0.
+code = 1.0                           # optional | float | default 1.0
+tests = 1.0                          # optional | float | default 1.0
+docs = 1.0                           # optional | float | default 1.0
+text = 1.0                           # optional | float | default 1.0
+
+[llm]
+slot = "text"                        # optional | "text" | "code" | default "text"
+                                     # Falls back to "text" if "code" requested but not configured
+
+[prompt]
+preset = "balanced"                  # optional | "strict" | "balanced" | "verbose" | "code"
+                                     # default "balanced"
+
+[retrieval]
+top_k = 5                           # optional | int >= 1 | default 5
+similarity_threshold = 0.2          # optional | float [0.0, 1.0] | default 0.2
+
+[critic]
+enabled = false                      # optional | bool | default false
+threshold = 3                        # optional | int [0, 5] | default 3
+                                     # Only used when enabled = true
+
+
+# ─── Built-in Mode: default ───────────────────────────────────────────────
+# [mode]
+# name = "default"
+# description = "Balanced search across all collections"
+#
+# [collections]
+# code = 1.0
+# tests = 1.0
+# docs = 1.0
+# text = 1.0
+#
+# [llm]
+# slot = "text"
+#
+# [prompt]
+# preset = "balanced"
+#
+# [retrieval]
+# top_k = 5
+# similarity_threshold = 0.2
+#
+# [critic]
+# enabled = false
+# threshold = 3
+
+
+# ─── Built-in Mode: code ──────────────────────────────────────────────────
+# [mode]
+# name = "code"
+# description = "Optimized for source code queries"
+#
+# [collections]
+# code = 0.7
+# tests = 0.3
+#
+# [llm]
+# slot = "code"
+#
+# [prompt]
+# preset = "code"
+#
+# [retrieval]
+# top_k = 10
+# similarity_threshold = 0.15
+#
+# [critic]
+# enabled = false
+# threshold = 3
+
+
+# ─── Built-in Mode: docs ──────────────────────────────────────────────────
+# [mode]
+# name = "docs"
+# description = "Documentation-focused search"
+#
+# [collections]
+# docs = 1.0
+#
+# [llm]
+# slot = "text"
+#
+# [prompt]
+# preset = "balanced"
+#
+# [retrieval]
+# top_k = 5
+# similarity_threshold = 0.2
+#
+# [critic]
+# enabled = false
+# threshold = 3

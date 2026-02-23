@@ -49,6 +49,7 @@ class LLMLifecycleManager:
         self._inflight = 0
         self._lock = threading.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._paused = False
 
     # ── public API (called from thread-pool workers) ────
 
@@ -65,10 +66,14 @@ class LLMLifecycleManager:
         """Track request end. May schedule idle unload for secondary slot.
 
         Called from thread pool worker (sync ``def`` route handlers).
+        Skips timer scheduling when ``_paused`` (during indexing).
         """
         with self._lock:
             self._inflight -= 1
             inflight = self._inflight
+
+        if self._paused:
+            return
 
         if inflight == 0 and self._idle_timeout > 0:
             if self._primary_llm is not None:
@@ -90,12 +95,34 @@ class LLMLifecycleManager:
         logger.info("On-demand loading %s LLM", slot)
         self._pool.swap_to(slot)
 
+    def pause(self) -> None:
+        """Pause the idle timer (for indexing).
+
+        Cancels any pending timer task and sets ``_paused`` so that
+        ``on_request_end`` will not schedule new timers. Safe to call
+        from any thread — timer cancellation uses
+        ``loop.call_soon_threadsafe`` when crossing threads.
+        """
+        self._paused = True
+        self._cancel_timer()
+        logger.info("Lifecycle timer paused")
+
+    def resume(self) -> None:
+        """Resume the idle timer after indexing completes.
+
+        Clears ``_paused`` so that subsequent ``on_request_end`` calls
+        will schedule timers normally.
+        """
+        self._paused = False
+        logger.info("Lifecycle timer resumed")
+
     def get_status(self) -> dict[str, Any]:
         """Return lifecycle manager status for inclusion in service status."""
         return {
             "primary_llm": self._primary_llm,
             "idle_timeout_s": self._idle_timeout,
             "timer_active": self._timer_task is not None and not self._timer_task.done(),
+            "timer_paused": self._paused,
             "inflight_requests": self._inflight,
         }
 
@@ -117,7 +144,18 @@ class LLMLifecycleManager:
 
     async def _unload_after_timeout(self, slot: str) -> None:
         """Wait for idle_timeout, then unload if still idle."""
+        # Defense-in-depth: bail out if paused (belt-and-suspenders guard)
+        if self._paused:
+            logger.debug("Unload timer fired but lifecycle is paused — skipping")
+            return
+
         await asyncio.sleep(self._idle_timeout)
+
+        # Re-check _paused after sleep (may have been paused during wait)
+        if self._paused:
+            logger.debug("Unload timer woke but lifecycle is now paused — skipping")
+            return
+
         with self._lock:
             if self._inflight > 0:
                 logger.info(

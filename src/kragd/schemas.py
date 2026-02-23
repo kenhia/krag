@@ -29,7 +29,8 @@ class QueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=10000, description="Query text")
     top_k: int | None = Field(None, ge=1, le=100, description="Number of results")
     preset: str | None = Field(None, description="Prompt preset name")
-    llm: str | None = Field(None, description="Force specific LLM slot")
+    llm: str | None = Field(None, description="Force specific LLM slot (deprecated — use mode)")
+    mode: str | None = Field(None, description="Named retrieval mode (e.g. default, code, docs)")
     include_debug: bool = Field(False, description="Include debug metadata in response")
 
     @field_validator("llm")
@@ -46,6 +47,7 @@ class RetrieveRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=10000, description="Query text")
     top_k: int | None = Field(None, ge=1, le=100, description="Number of results")
+    mode: str | None = Field(None, description="Named retrieval mode")
 
 
 class DebugQueryRequest(BaseModel):
@@ -54,7 +56,8 @@ class DebugQueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=10000, description="Query text")
     top_k: int | None = Field(None, ge=1, le=100, description="Number of results")
     preset: str | None = Field(None, description="Prompt preset name")
-    llm: str | None = Field(None, description="Force specific LLM slot")
+    llm: str | None = Field(None, description="Force specific LLM slot (deprecated — use mode)")
+    mode: str | None = Field(None, description="Named retrieval mode")
 
     @field_validator("llm")
     @classmethod
@@ -69,8 +72,12 @@ class QdrantFilters(BaseModel):
     """Payload filters for QdrantSearchRequest."""
 
     file_type: str | None = Field(None, description="Filter by file_type payload field")
-    file_path_contains: str | None = Field(None, description="Substring match on file_path (include)")
-    file_path_excludes: list[str] | None = Field(None, description="Substring patterns to exclude from file_path")
+    file_path_contains: str | None = Field(
+        None, description="Substring match on file_path (include)"
+    )
+    file_path_excludes: list[str] | None = Field(
+        None, description="Substring patterns to exclude from file_path"
+    )
 
 
 class QdrantSearchRequest(BaseModel):
@@ -124,6 +131,7 @@ class SourceChunk(BaseModel):
     class_name: str | None = Field(None, description="Containing class")
     start_line: int | None = Field(None, description="Start line in source file")
     end_line: int | None = Field(None, description="End line in source file")
+    collection: str | None = Field(None, description="Source collection (code, tests, docs, text)")
 
 
 class DebugMetadata(BaseModel):
@@ -135,6 +143,10 @@ class DebugMetadata(BaseModel):
     auto_routed: bool = Field(..., description="Whether routing was automatic")
     route_reason: str | None = Field(None, description="Why auto-routing chose this LLM")
     preset: str = Field(..., description="Active prompt preset name")
+    mode: str | None = Field(None, description="Active retrieval mode name (if used)")
+    collections_searched: list[str] | None = Field(
+        None, description="Collections targeted by the active mode"
+    )
     retrieval_time_ms: float = Field(..., ge=0.0, description="Milliseconds for retrieval")
     generation_time_ms: float = Field(..., ge=0.0, description="Milliseconds for LLM synthesis")
     embedding_models_used: list[str] = Field(..., description="Embedding model names")
@@ -143,6 +155,14 @@ class DebugMetadata(BaseModel):
     total_candidates_after_dedup: int = Field(..., ge=0, description="Results after dedup")
     similarity_threshold: float = Field(..., description="Active similarity threshold")
     per_space_result_counts: dict[str, int] = Field(..., description="Results per vector space")
+    lexicon_terms_injected: int = Field(
+        0, ge=0, description="Number of lexicon terms injected into prompt"
+    )
+    critic_scores: list[int] = Field(
+        default_factory=list, description="Per-chunk critic scores (0–5)"
+    )
+    chunks_pre_critic: int = Field(0, ge=0, description="Number of chunks before critic filtering")
+    chunks_post_critic: int = Field(0, ge=0, description="Number of chunks after critic filtering")
 
 
 class QueryResponse(BaseModel):
@@ -205,14 +225,22 @@ class IndexResponse(BaseModel):
     files_scanned: int = Field(..., ge=0, description="Total files discovered")
     files_processed: int = Field(..., ge=0, description="Files successfully indexed")
     files_skipped: int = Field(..., ge=0, description="Total files skipped (unchanged + other)")
-    files_skipped_unchanged: int = Field(0, ge=0, description="Files skipped because content was unchanged")
-    files_skipped_other: int = Field(0, ge=0, description="Files skipped for other reasons (empty, no chunks)")
+    files_skipped_unchanged: int = Field(
+        0, ge=0, description="Files skipped because content was unchanged"
+    )
+    files_skipped_other: int = Field(
+        0, ge=0, description="Files skipped for other reasons (empty, no chunks)"
+    )
     files_errored: int = Field(..., ge=0, description="Files with errors")
     chunks_created: int = Field(..., ge=0, description="New chunks generated")
     vectors_stored: int = Field(..., ge=0, description="Vectors written to Qdrant")
     duration_seconds: float = Field(..., ge=0.0, description="Elapsed time")
     dry_run: bool = Field(..., description="Whether this was a preview")
     errors: list[IndexError] = Field(default_factory=list, description="Error details")
+    collections: dict[str, int] = Field(
+        default_factory=dict,
+        description="Per-collection vector counts (code, tests, docs, text)",
+    )
 
     @field_validator("status")
     @classmethod
@@ -240,12 +268,30 @@ class VectorStoreStatus(BaseModel):
     named_spaces: list[str] = Field(..., description="Available vector spaces")
 
 
+class CollectionStatus(BaseModel):
+    """Per-collection stats for the multi-collection vector store."""
+
+    collection_name: str = Field(..., description="Qdrant collection name")
+    vectors_count: int = Field(0, ge=0, description="Vectors stored in this collection")
+    status: str = Field("ok", description="Collection health (ok or error)")
+
+
 class VRAMStatus(BaseModel):
     """GPU memory status."""
 
     total_mb: int = Field(..., description="Total GPU memory (MB)")
     used_mb: int = Field(..., description="Used GPU memory (MB)")
     free_mb: int = Field(..., description="Free GPU memory (MB)")
+
+
+class ModeInfo(BaseModel):
+    """Summary of a registered retrieval mode."""
+
+    name: str = Field(..., description="Mode name")
+    description: str = Field("", description="Brief description")
+    collections: list[str] = Field(..., description="Target collections")
+    llm_slot: str = Field(..., description="LLM slot (text/code)")
+    preset: str = Field(..., description="Prompt preset")
 
 
 class ServiceStatus(BaseModel):
@@ -256,6 +302,13 @@ class ServiceStatus(BaseModel):
     llm: dict[str, LLMSlotStatus] = Field(..., description="Per-slot LLM status")
     embedding_models: list[str] = Field(..., description="Loaded embedding model names")
     vector_store: VectorStoreStatus = Field(..., description="Collection stats")
+    collections: dict[str, CollectionStatus] = Field(
+        default_factory=dict,
+        description="Per-collection stats (code, tests, docs, text)",
+    )
+    modes: list[ModeInfo] = Field(default_factory=list, description="Registered retrieval modes")
+    lexicon_loaded: bool = Field(False, description="Whether a domain lexicon is loaded")
+    lexicon_entry_count: int = Field(0, ge=0, description="Number of lexicon entries")
     vram: VRAMStatus | None = Field(None, description="GPU memory (null if no CUDA)")
 
 

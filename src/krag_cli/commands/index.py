@@ -61,9 +61,7 @@ def index_command(
         job_id = result.get("job_id", "")
 
         if status == "running":
-            console.print(
-                f"[yellow]Indexing started[/yellow] ({mode} mode)"
-            )
+            console.print(f"[yellow]Indexing started[/yellow] ({mode} mode)")
             if job_id:
                 console.print(f"[dim]Job {job_id}[/dim]")
 

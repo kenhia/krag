@@ -190,6 +190,21 @@ def build_query_pipeline(
     active_preset = preset if preset else config.prompt_preset
 
     # 11. Query engine
+    lexicon_store = None
+    if config.lexicon_path:
+        from krag.lexicon.lexicon_store import LexiconStore
+
+        lexicon_store = LexiconStore()
+        try:
+            lexicon_store.load(config.lexicon_path)
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Failed to load lexicon from %s", config.lexicon_path, exc_info=True
+            )
+            lexicon_store = None
+
     query_engine = QueryEngine(
         vector_store=vector_store,
         embedding_generator=embedding_generator,
@@ -200,6 +215,7 @@ def build_query_pipeline(
         system_prompt_override=config.prompt_system_override,
         similarity_threshold=config.similarity_threshold,
         embedding_orchestrator=embedding_orchestrator,
+        lexicon_store=lexicon_store,
     )
 
     return QueryPipeline(

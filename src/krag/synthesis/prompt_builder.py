@@ -136,7 +136,12 @@ class PromptBuilder:
         self.preset = PROMPT_PRESETS[preset_name]
         self.system_prompt_override = system_prompt_override
 
-    def build(self, query: str, results: list[QueryResult]) -> list[dict[str, str]]:
+    def build(
+        self,
+        query: str,
+        results: list[QueryResult],
+        lexicon_glossary: str | None = None,
+    ) -> list[dict[str, str]]:
         """Build chat messages from query and retrieved results.
 
         Returns a list of two message dicts: system and user.
@@ -145,6 +150,8 @@ class PromptBuilder:
         Args:
             query: User's query string.
             results: Retrieved context chunks.
+            lexicon_glossary: Optional formatted glossary section to append
+                to the system prompt (from LexiconInjector.format_glossary).
 
         Returns:
             List of message dicts with "role" and "content" keys.
@@ -153,6 +160,11 @@ class PromptBuilder:
             return self._build_no_context_messages(query)
 
         system_prompt = self.get_system_prompt()
+
+        # Inject lexicon glossary into system prompt if present
+        if lexicon_glossary:
+            system_prompt = system_prompt + "\n\n" + lexicon_glossary
+
         context = self._format_context(results)
 
         # Place context in the user message alongside the query.

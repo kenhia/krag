@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from krag.models.query_result import QueryResult
-from krag.retrieval.rrf import reciprocal_rank_fusion
+from krag.retrieval.rrf import RRFScoredPoint, reciprocal_rank_fusion
 
 if TYPE_CHECKING:
     from krag.embeddings.generator import EmbeddingGenerator
     from krag.embeddings.orchestrator import EmbeddingOrchestrator
+    from krag.storage.collection_manager import CollectionManager
     from krag.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,55 @@ _STOP_WORDS: frozenset[str] = frozenset(
 _MIN_KEYWORD_LENGTH = 3
 
 
+def _weighted_rrf(
+    result_lists: list[list[Any]],
+    weights: list[float],
+    k: int = 60,
+    limit: int = 10,
+) -> list[RRFScoredPoint]:
+    """Weighted Reciprocal Rank Fusion across multiple result lists.
+
+    Each list contributes ``weight * 1/(k + rank)`` per document.
+    This extends standard RRF to support per-collection weighting.
+
+    Args:
+        result_lists: One result list per collection.  Each element must
+            have ``.id``, ``.score``, and ``.payload`` attributes.
+        weights: Per-list weight (same length as *result_lists*).
+        k: RRF ranking constant (default 60).
+        limit: Maximum results to return.
+
+    Returns:
+        Merged and re-ranked results as ``RRFScoredPoint`` objects.
+    """
+    if not result_lists:
+        return []
+
+    scores: dict[str, float] = {}
+    point_map: dict[str, Any] = {}
+
+    for results, weight in zip(result_lists, weights, strict=True):
+        for rank, point in enumerate(results):
+            pid = str(point.id)
+            scores[pid] = scores.get(pid, 0.0) + weight * (1.0 / (k + rank + 1))
+            if pid not in point_map:
+                point_map[pid] = point
+
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+    merged: list[RRFScoredPoint] = []
+    for pid, rrf_score in ranked[:limit]:
+        original = point_map[pid]
+        merged.append(
+            RRFScoredPoint(
+                id=original.id,
+                score=rrf_score,
+                payload=getattr(original, "payload", {}),
+            )
+        )
+    return merged
+
+
 class Retriever:
     """Retrieves relevant chunks from vector store based on query similarity.
 
@@ -109,6 +159,7 @@ class Retriever:
         vector_store: VectorStore,
         embedding_generator: EmbeddingGenerator,
         embedding_orchestrator: EmbeddingOrchestrator | None = None,
+        collection_manager: CollectionManager | None = None,
     ):
         """Initialize retriever.
 
@@ -118,16 +169,21 @@ class Retriever:
             embedding_orchestrator: Multi-model orchestrator (optional).
                 When provided, queries use all loaded models and results
                 are merged via Reciprocal Rank Fusion.
+            collection_manager: Multi-collection manager (optional).
+                When provided with ``target_collections`` in ``retrieve()``,
+                queries each collection separately and merges via weighted RRF.
         """
         self.vector_store = vector_store
         self.embedding_generator = embedding_generator
         self.embedding_orchestrator = embedding_orchestrator
+        self.collection_manager = collection_manager
 
     def retrieve(
         self,
         query: str,
         top_k: int = 5,
         similarity_threshold: float | None = None,
+        target_collections: dict[str, float] | None = None,
     ) -> list[QueryResult]:
         """Retrieve most relevant chunks for a query.
 
@@ -143,6 +199,9 @@ class Retriever:
             query: User query string
             top_k: Number of results to return after dedup
             similarity_threshold: Minimum similarity score to keep (None = no filtering)
+            target_collections: Optional mapping of collection name → weight for
+                multi-collection queries.  Requires ``collection_manager`` to be
+                set.  When ``None``, uses the single ``vector_store``.
 
         Returns:
             List of QueryResult objects ranked by relevance
@@ -152,25 +211,30 @@ class Retriever:
         # Step 1: Over-fetch to have enough results after dedup
         fetch_limit = top_k * self._OVERFETCH_FACTOR
 
-        # Multi-model path: embed with all models and merge via RRF
-        using_rrf = (
-            self.embedding_orchestrator is not None
-            and self.embedding_orchestrator.is_multi_model
-            and hasattr(self.vector_store, "search_named")
-        )
-        if using_rrf:
-            query_results = self._multi_model_retrieve(query, fetch_limit)
+        # Multi-collection path: query each collection and merge
+        if target_collections and self.collection_manager is not None:
+            query_results = self._multi_collection_retrieve(query, fetch_limit, target_collections)
+            using_rrf = True
         else:
-            # Single-model path (backward compatible)
-            query_embedding = self.embedding_generator.generate_single(query)
-            logger.debug(f"Generated query embedding with dimension {len(query_embedding)}")
-
-            results = self.vector_store.search(query_embedding, limit=fetch_limit)
-            logger.debug(
-                f"Vector store returned {len(results)} results (fetch_limit={fetch_limit})"
+            # Multi-model path: embed with all models and merge via RRF
+            using_rrf = (
+                self.embedding_orchestrator is not None
+                and self.embedding_orchestrator.is_multi_model
+                and hasattr(self.vector_store, "search_named")
             )
+            if using_rrf:
+                query_results = self._multi_model_retrieve(query, fetch_limit)
+            else:
+                # Single-model path (backward compatible)
+                query_embedding = self.embedding_generator.generate_single(query)
+                logger.debug(f"Generated query embedding with dimension {len(query_embedding)}")
 
-            query_results = self._results_to_query_results(results)
+                results = self.vector_store.search(query_embedding, limit=fetch_limit)
+                logger.debug(
+                    f"Vector store returned {len(results)} results (fetch_limit={fetch_limit})"
+                )
+
+                query_results = self._results_to_query_results(results)
 
         # Step 3: Deduplicate by content
         query_results = self._deduplicate(query_results)
@@ -324,6 +388,102 @@ class Retriever:
         for rank, point in enumerate(merged, start=1):
             qr = self._payload_to_query_result(str(point.id), point.score, rank, point.payload)
             if qr is not None:
+                query_results.append(qr)
+
+        return query_results
+
+    def _multi_collection_retrieve(
+        self,
+        query: str,
+        fetch_limit: int,
+        target_collections: dict[str, float],
+    ) -> list[QueryResult]:
+        """Retrieve from multiple collections and merge via weighted RRF.
+
+        Two-level fusion:
+          Level 1: Within each collection, if multi-model, merge via RRF.
+          Level 2: Across collections, merge via weighted RRF.
+
+        Args:
+            query: User query string
+            fetch_limit: Number of results to fetch per collection
+            target_collections: Mapping of collection name → weight
+
+        Returns:
+            Merged and re-ranked QueryResult list tagged with collection name.
+        """
+        assert self.collection_manager is not None
+
+        query_embedding = self.embedding_generator.generate_single(query)
+        logger.debug(
+            "Multi-collection query: %d collections %s",
+            len(target_collections),
+            list(target_collections.keys()),
+        )
+
+        # Collect per-collection result lists with their weights
+        all_result_lists: list[list[Any]] = []
+        collection_weights: list[float] = []
+        collection_tags: list[str] = []
+
+        for collection_name, weight in target_collections.items():
+            try:
+                store = self.collection_manager.get_store(collection_name)
+            except KeyError:
+                logger.warning("Unknown collection '%s', skipping", collection_name)
+                continue
+
+            vs = store.vector_store
+            try:
+                results = vs.search(query_embedding, limit=fetch_limit)
+            except Exception:
+                logger.warning(
+                    "Search failed for collection '%s', returning empty",
+                    collection_name,
+                    exc_info=True,
+                )
+                results = []
+
+            if not results:
+                logger.debug("  Collection '%s': 0 results (empty)", collection_name)
+                continue
+
+            # Convert dicts to ScoredPointLike objects for RRF
+            points: list[RRFScoredPoint] = []
+            for r in results:
+                points.append(
+                    RRFScoredPoint(
+                        id=r["id"],
+                        score=r["score"],
+                        payload={**r.get("payload", {}), "_collection": collection_name},
+                    )
+                )
+
+            logger.debug(
+                "  Collection '%s': %d results (weight=%.2f)",
+                collection_name,
+                len(points),
+                weight,
+            )
+            all_result_lists.append(points)
+            collection_weights.append(weight)
+            collection_tags.append(collection_name)
+
+        if not all_result_lists:
+            logger.debug("No results from any collection")
+            return []
+
+        # Level 2: Weighted RRF across collections
+        merged = _weighted_rrf(all_result_lists, collection_weights, k=60, limit=fetch_limit)
+        logger.debug("Cross-collection RRF merged %d unique results", len(merged))
+
+        # Convert to QueryResult with collection tag
+        query_results: list[QueryResult] = []
+        for rank, point in enumerate(merged, start=1):
+            collection_tag = point.payload.pop("_collection", None)
+            qr = self._payload_to_query_result(str(point.id), point.score, rank, point.payload)
+            if qr is not None:
+                qr.collection = collection_tag
                 query_results.append(qr)
 
         return query_results
