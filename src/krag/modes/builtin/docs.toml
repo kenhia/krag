@@ -1,0 +1,20 @@
+[mode]
+name = "docs"
+description = "Documentation-focused search"
+
+[collections]
+docs = 1.0
+
+[llm]
+slot = "text"
+
+[prompt]
+preset = "balanced"
+
+[retrieval]
+top_k = 5
+similarity_threshold = 0.2
+
+[critic]
+enabled = false
+threshold = 3

@@ -20,6 +20,12 @@ class QueryResult(BaseModel):
     chunk_index: int = Field(..., ge=0, description="Position within source file")
     file_type: str = Field(..., description="Type of source file")
 
+    # Source collection (populated during multi-collection retrieval)
+    collection: str | None = Field(
+        default=None,
+        description="Source collection name (code, tests, docs, text)",
+    )
+
     # Enriched code metadata (optional — populated from vector payload)
     language: str | None = Field(default=None, description="Programming language")
     function_name: str | None = Field(default=None, description="Function/method name")
@@ -46,6 +52,7 @@ class QueryResult(BaseModel):
             "file_path": str(self.file_path),
             "chunk_index": self.chunk_index,
             "file_type": self.file_type,
+            "collection": self.collection,
             "language": self.language,
             "function_name": self.function_name,
             "class_name": self.class_name,

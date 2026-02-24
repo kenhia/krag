@@ -45,6 +45,18 @@ app.add_typer(plugin_app, name="plugin")
 app.add_typer(gpu_app, name="gpu")
 app.add_typer(log_app, name="log")
 
+# ── modes sub-app (service-backed) ────────────
+
+from krag_cli.commands.modes import modes_app  # noqa: E402
+
+app.add_typer(modes_app, name="modes")
+
+# ── lexicon sub-app (service-backed) ──────────
+
+from krag_cli.commands.lexicon import lexicon_app  # noqa: E402
+
+app.add_typer(lexicon_app, name="lexicon")
+
 
 # ── helpers ─────────────────────────────────────
 

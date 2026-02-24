@@ -13,13 +13,14 @@
 3. [FileTypeHandler Interface](#filetypehandler-interface)
 4. [Plugin Lifecycle](#plugin-lifecycle)
 5. [Chunking Strategy Selection](#chunking-strategy-selection)
-6. [Failure Reporting API](#failure-reporting-api)
-7. [Plugin Package Structure](#plugin-package-structure)
-8. [Installation and Registration](#installation-and-registration)
-9. [Configuration Schema](#configuration-schema)
-10. [Testing Your Plugin](#testing-your-plugin)
-11. [Best Practices](#best-practices)
-12. [Troubleshooting](#troubleshooting)
+6. [Collection Routing Override](#collection-routing-override)
+7. [Failure Reporting API](#failure-reporting-api)
+8. [Plugin Package Structure](#plugin-package-structure)
+9. [Installation and Registration](#installation-and-registration)
+10. [Configuration Schema](#configuration-schema)
+11. [Testing Your Plugin](#testing-your-plugin)
+12. [Best Practices](#best-practices)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -750,6 +751,86 @@ if errors:
 | `ChunkingStrategy.SEMANTIC` | Semantic chunker (future) | Advanced text |
 | Custom chunker with `chunk()` | Plugin's chunker directly | Full control |
 | Custom chunker with `chunk_text()` | Wrapped in adapter | Simple splitting |
+
+---
+
+## Collection Routing Override
+
+### Overview
+
+krag organizes indexed content into four Qdrant collections — `code`, `tests`, `docs`, and `text`. The `CollectionRouter` decides which collection each file belongs to using an 8-level precedence hierarchy. Plugins can influence this decision by declaring a **preferred collection** via the `plugin_overrides` mechanism.
+
+### How Routing Works
+
+When a file is indexed, the router evaluates these rules in order (first match wins):
+
+| Level | Rule | Target |
+|-------|------|--------|
+| 1 | Plugin override | Plugin-declared collection |
+| 2 | Test directory pattern (`tests/`, `test/`, `spec/`) | `tests` |
+| 3 | Test filename pattern (`test_*.py`, `*_test.go`) | `tests` |
+| 4 | Well-known doc filename (`README.md`, `LICENSE`) | `docs` |
+| 5 | Documentation extension (`.md`, `.rst`, `.txt`) | `docs` |
+| 6 | Code extension (`.py`, `.rs`, `.js`, `.ts`, etc.) | `code` |
+| 7 | Config/data extension (`.toml`, `.yaml`, `.json`) | `text` |
+| 8 | Fallback (no match) | `text` |
+
+Plugin overrides sit at **Level 1** — the highest priority. When a plugin declares a preferred collection, all files processed by that plugin route to the declared collection regardless of extension or path.
+
+### Declaring a Preferred Collection
+
+Plugin overrides are configured in the `[plugins.<name>]` section of `config.toml` and passed to the `CollectionRouter` at construction time as a `plugin_overrides` dictionary mapping plugin name → collection:
+
+```toml
+# config.toml
+[plugins.code]
+preferred_collection = "code"
+
+[plugins.logs]
+preferred_collection = "text"
+```
+
+The indexing pipeline reads these declarations and constructs the router:
+
+```python
+from krag.routing.collection_router import CollectionRouter
+
+# Built from plugin config during indexing
+router = CollectionRouter(plugin_overrides={
+    "code": "code",
+    "logs": "text",
+})
+
+# Route a file — plugin override takes priority
+collection = router.route(file_path, file_ext=".py", plugin_name="code")
+# → "code" (Level 1: plugin override)
+
+# Without a plugin override, normal rules apply
+collection = router.route(file_path, file_ext=".py", plugin_name=None)
+# → "code" (Level 6: code extension)
+```
+
+### Valid Collection Names
+
+Plugins may route to any of the four built-in collections:
+
+| Collection | Constant | Typical Content |
+|------------|----------|-----------------|
+| `code` | `COLLECTION_CODE` | Source files, scripts |
+| `tests` | `COLLECTION_TESTS` | Test files, specs |
+| `docs` | `COLLECTION_DOCS` | Documentation, READMEs |
+| `text` | `COLLECTION_TEXT` | Config, data, logs, fallback |
+
+### When to Use Plugin Overrides
+
+- **Code plugins**: Route all plugin-handled files to `code` so code-specific embeddings and retrieval modes target them
+- **Log plugins**: Route to `text` since log content is unstructured prose
+- **Documentation plugins** (e.g., DOCX, PDF): Route to `docs` so documentation queries find them
+- **Mixed-content plugins**: Omit the override and let the standard path/extension rules decide
+
+### Without an Override
+
+If a plugin does not declare a preferred collection, the router continues down the precedence chain (Levels 2–8) using file path patterns and extensions. This is the recommended default for plugins that handle file types whose natural collection matches the extension-based rules.
 
 ---
 

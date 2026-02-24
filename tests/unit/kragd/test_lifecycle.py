@@ -2,6 +2,8 @@
 
 T033: Primary never unloads, secondary idle timeout, in-flight defer,
 no-primary both-unload, timer cancel/restart.
+
+T009: pause()/resume()/_paused guard for indexing timer race fix.
 """
 
 from __future__ import annotations
@@ -362,3 +364,150 @@ class TestLifecycleStatus:
         status = mgr.get_status()
         assert status["inflight_requests"] == 1
         mgr.on_request_end("text")
+
+
+# ── T009: pause / resume / _paused guard ────────
+
+
+class TestPause:
+    """Test pause() cancels timer and sets _paused flag."""
+
+    def test_pause_sets_flag(self) -> None:
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        mgr.pause()
+        assert mgr._paused is True
+
+    def test_pause_idempotent(self) -> None:
+        """Calling pause() twice should not raise."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        mgr.pause()
+        mgr.pause()
+        assert mgr._paused is True
+
+    @pytest.mark.asyncio
+    async def test_pause_cancels_active_timer(self) -> None:
+        """pause() should cancel any pending idle timer."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        mgr._loop = asyncio.get_event_loop()
+
+        # Schedule a timer
+        mgr.on_request_start("code")
+        mgr.on_request_end("code")
+        assert mgr._timer_task is not None
+        old_task = mgr._timer_task
+
+        mgr.pause()
+        assert mgr._timer_task is None
+        assert old_task.cancelled() or old_task.cancelling()
+
+    def test_pause_without_timer(self) -> None:
+        """pause() when no timer is active should not raise."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        mgr.pause()  # no timer active
+        assert mgr._paused is True
+        assert mgr._timer_task is None
+
+
+class TestResume:
+    """Test resume() clears _paused flag and optionally re-schedules timer."""
+
+    def test_resume_clears_flag(self) -> None:
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        mgr.pause()
+        assert mgr._paused is True
+        mgr.resume()
+        assert mgr._paused is False
+
+    def test_resume_without_pause(self) -> None:
+        """resume() when not paused should not raise."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        mgr.resume()
+        assert mgr._paused is False
+
+    def test_resume_idempotent(self) -> None:
+        """Calling resume() twice should not raise."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        mgr.pause()
+        mgr.resume()
+        mgr.resume()
+        assert mgr._paused is False
+
+
+class TestPausedGuardInUnload:
+    """_unload_after_timeout should bail out when _paused is True (defense-in-depth)."""
+
+    @pytest.mark.asyncio
+    async def test_unload_skipped_when_paused(self) -> None:
+        """If _paused is True, _unload_after_timeout should return immediately."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=0.05, primary_llm="text")
+        mgr._loop = asyncio.get_event_loop()
+        mgr._paused = True
+
+        # Run unload directly — should bail out
+        await mgr._unload_after_timeout("code")
+        pool.swap_to.assert_not_called()
+        pool.close.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unload_proceeds_when_not_paused(self) -> None:
+        """If _paused is False, _unload_after_timeout should proceed normally."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=0.05, primary_llm="text")
+        mgr._loop = asyncio.get_event_loop()
+
+        await mgr._unload_after_timeout("code")
+        pool.swap_to.assert_called_with("text")
+
+
+class TestOnRequestEndPausedGuard:
+    """on_request_end should skip timer scheduling when _paused is True."""
+
+    def test_no_timer_when_paused(self) -> None:
+        """on_request_end should NOT schedule timer when paused."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=5, primary_llm="text")
+        mgr.pause()
+
+        mgr.on_request_start("code")
+        mgr.on_request_end("code")
+        assert mgr._timer_task is None
+
+    @pytest.mark.asyncio
+    async def test_timer_resumes_after_unpause(self) -> None:
+        """After resume(), on_request_end should schedule timer again."""
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=5, primary_llm="text")
+        mgr._loop = asyncio.get_event_loop()
+
+        mgr.pause()
+        mgr.resume()
+
+        mgr.on_request_start("code")
+        mgr.on_request_end("code")
+        assert mgr._timer_task is not None
+        mgr._cancel_timer()
+
+
+class TestPausedInStatus:
+    """get_status() should include timer_paused field."""
+
+    def test_status_timer_paused_false(self) -> None:
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        status = mgr.get_status()
+        assert status["timer_paused"] is False
+
+    def test_status_timer_paused_true(self) -> None:
+        pool = _make_pool()
+        mgr = LLMLifecycleManager(pool=pool, idle_timeout=300, primary_llm="text")
+        mgr.pause()
+        status = mgr.get_status()
+        assert status["timer_paused"] is True

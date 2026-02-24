@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from krag.models.query_result import QueryResult
@@ -13,8 +13,11 @@ from krag.synthesis.llm_client import LLMClient
 from krag.synthesis.prompt_builder import INSUFFICIENT_CONTEXT_PHRASE, PromptBuilder
 
 if TYPE_CHECKING:
+    from krag.critic.relevance_critic import RelevanceCritic
     from krag.embeddings.generator import EmbeddingGenerator
     from krag.embeddings.orchestrator import EmbeddingOrchestrator
+    from krag.lexicon.lexicon_injector import LexiconInjector
+    from krag.lexicon.lexicon_store import LexiconStore
     from krag.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -28,6 +31,10 @@ class QueryResponse:
     sources: list[QueryResult]
     query: str
     prompt: str = ""
+    lexicon_terms_injected: int = 0
+    critic_scores: list[int] = field(default_factory=list)
+    chunks_pre_critic: int = 0
+    chunks_post_critic: int = 0
 
 
 class QueryEngine:
@@ -48,6 +55,8 @@ class QueryEngine:
         system_prompt_override: str | None = None,
         similarity_threshold: float | None = None,
         embedding_orchestrator: EmbeddingOrchestrator | None = None,
+        lexicon_store: LexiconStore | None = None,
+        critic: RelevanceCritic | None = None,
     ):
         """Initialize query engine.
 
@@ -62,6 +71,8 @@ class QueryEngine:
             system_prompt_override: Custom system prompt that replaces preset prompt
             similarity_threshold: Minimum similarity score for retrieval results
             embedding_orchestrator: Multi-model orchestrator for named-vector search
+            lexicon_store: Optional lexicon store for term injection
+            critic: Optional relevance critic for chunk filtering
         """
         self.retriever = Retriever(
             vector_store, embedding_generator, embedding_orchestrator=embedding_orchestrator
@@ -75,6 +86,14 @@ class QueryEngine:
         self.llm_client = llm_client
         self.top_k = top_k
         self.similarity_threshold = similarity_threshold
+        self.lexicon_store = lexicon_store
+        self._lexicon_injector: LexiconInjector | None = None
+        self.critic = critic
+
+        if lexicon_store is not None:
+            from krag.lexicon.lexicon_injector import LexiconInjector
+
+            self._lexicon_injector = LexiconInjector()
 
     def query(
         self,
@@ -109,8 +128,51 @@ class QueryEngine:
         )
         logger.info(f"Retrieved {len(results)} results")
 
+        # Apply context relevance critic (T060: after retrieval, before prompt)
+        critic_scores: list[int] = []
+        chunks_pre_critic = len(results)
+        chunks_post_critic = len(results)
+
+        if self.critic is not None and self.critic.enabled and results:
+            scored_chunks = self.critic.score_chunks(query_text, results)
+            critic_scores = [s.critic_score for s in scored_chunks]
+            filtered_results = self.critic.filter_chunks(scored_chunks)
+            chunks_post_critic = len(filtered_results)
+            logger.info(
+                "Critic: %d/%d chunks passed (threshold %d)",
+                chunks_post_critic,
+                chunks_pre_critic,
+                self.critic.threshold,
+            )
+            results = filtered_results
+
+            # T061: Handle all-chunks-filtered case
+            if not results:
+                logger.info("All chunks filtered by critic — returning insufficient context")
+                return QueryResponse(
+                    answer=INSUFFICIENT_CONTEXT_PHRASE,
+                    sources=[],
+                    query=query_text,
+                    prompt="",
+                    lexicon_terms_injected=0,
+                    critic_scores=critic_scores,
+                    chunks_pre_critic=chunks_pre_critic,
+                    chunks_post_critic=0,
+                )
+
+        # Match lexicon terms and build glossary for prompt injection
+        lexicon_glossary: str | None = None
+        lexicon_terms_count = 0
+        if self.lexicon_store is not None and self._lexicon_injector is not None:
+            matches = self.lexicon_store.match_terms(query_text)
+            if matches:
+                selected = self._lexicon_injector.select_top(matches)
+                lexicon_glossary = self._lexicon_injector.format_glossary(selected)
+                lexicon_terms_count = len(selected)
+                logger.debug("Injecting %d lexicon terms into prompt", lexicon_terms_count)
+
         # Build chat messages
-        messages = self.prompt_builder.build(query_text, results)
+        messages = self.prompt_builder.build(query_text, results, lexicon_glossary=lexicon_glossary)
         prompt_str = json.dumps(messages, indent=2)
         logger.debug("Built prompt with %d messages", len(messages))
 
@@ -122,6 +184,10 @@ class QueryEngine:
                 sources=[],
                 query=query_text,
                 prompt=prompt_str,
+                lexicon_terms_injected=0,
+                critic_scores=critic_scores,
+                chunks_pre_critic=chunks_pre_critic,
+                chunks_post_critic=chunks_post_critic,
             )
 
         # Generate answer via chat completion
@@ -134,4 +200,8 @@ class QueryEngine:
             sources=results,
             query=query_text,
             prompt=prompt_str,
+            lexicon_terms_injected=lexicon_terms_count,
+            critic_scores=critic_scores,
+            chunks_pre_critic=chunks_pre_critic,
+            chunks_post_critic=chunks_post_critic,
         )

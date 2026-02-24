@@ -13,9 +13,8 @@ import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
-
 from kragd.schemas import (
+    CollectionStatus,
     DebugMetadata,
     DebugQueryRequest,
     DebugQueryResponse,
@@ -32,8 +31,10 @@ from kragd.schemas import (
     SourceChunk,
 )
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
-    from krag.models.configuration import Configuration
+    from krag.models.configuration import Configuration, ModeConfiguration
 
 
 class KragService:
@@ -51,9 +52,12 @@ class KragService:
         self.embedding_generator = None
         self.embedding_orchestrator = None
         self.vector_store = None
+        self.collection_manager = None
         self.llm_pool = None
         self.query_engine = None
         self.lifecycle_manager = None
+        self.mode_registry = None
+        self.lexicon_store = None
         self._last_index_job: IndexResponse | None = None
         self._index_job_cache: list[IndexResponse] = []
         self._max_index_cache: int = 10
@@ -86,10 +90,13 @@ class KragService:
     async def start(self) -> None:
         """Initialize all heavyweight components and write PID file."""
         self._init_embeddings()
+        self._init_collection_manager()
         self._init_vector_store()
         self._init_llm_pool()
         self._init_lifecycle_manager()
+        self._init_lexicon_store()
         self._init_query_engine()
+        self._init_mode_registry()
         self._started = True
         self._start_time = time.monotonic()
 
@@ -108,6 +115,8 @@ class KragService:
             self.lifecycle_manager._cancel_timer()
         if self.llm_pool is not None:
             self.llm_pool.close()
+        if self.collection_manager is not None:
+            self.collection_manager.close()
         if self.vector_store is not None:
             self.vector_store.close()
         self._started = False
@@ -148,13 +157,42 @@ class KragService:
                         self.embedding_orchestrator.register_model(meta.name, em)
 
     def _init_vector_store(self) -> None:
-        """Open Qdrant vector store."""
+        """Open legacy single-collection vector store.
+
+        When the ``CollectionManager`` is available its shared
+        ``QdrantClient`` is reused so only one file-lock is held.
+        """
         from krag.storage.qdrant_impl import QdrantVectorStore
 
+        shared_client = (
+            self.collection_manager._client
+            if self.collection_manager is not None
+            else None
+        )
         self.vector_store = QdrantVectorStore(
             collection_name=self.config.collection_name,
             vector_size=self.embedding_generator.get_dimension(),
             storage_path=str(self.config.vector_store_path),
+            distance=self.config.distance_metric,
+            client=shared_client,
+        )
+
+    def _init_collection_manager(self) -> None:
+        """Create multi-collection manager with shared Qdrant client.
+
+        Sets up four content-type collections (code, tests, docs, text)
+        managed by a single ``QdrantClient`` to avoid local-mode lock
+        conflicts.
+        """
+        from pathlib import Path
+
+        from krag.routing.collection_router import CollectionRouter
+        from krag.storage.collection_manager import CollectionManager
+
+        self.collection_manager = CollectionManager(
+            storage_path=Path(self.config.vector_store_path),
+            vector_size=self.embedding_generator.get_dimension(),
+            router=CollectionRouter(),
             distance=self.config.distance_metric,
         )
 
@@ -196,6 +234,7 @@ class KragService:
             system_prompt_override=self.config.prompt_system_override,
             similarity_threshold=self.config.similarity_threshold,
             embedding_orchestrator=self.embedding_orchestrator,
+            lexicon_store=self.lexicon_store,
         )
 
     def _init_lifecycle_manager(self) -> None:
@@ -219,6 +258,110 @@ class KragService:
         except RuntimeError:
             pass
 
+    # ── helpers ─────────────────────────────────
+
+    def _init_mode_registry(self) -> None:
+        """Initialize the mode registry with builtins and optional user modes."""
+        from krag.modes.mode_registry import ModeRegistry
+
+        self.mode_registry = ModeRegistry()
+        self.mode_registry.load_builtins()
+        if self.config.modes_dir:
+            self.mode_registry.load_user_modes(self.config.modes_dir)
+
+    def _init_lexicon_store(self) -> None:
+        """Initialize the lexicon store if a lexicon path is configured."""
+        lexicon_path = self.config.lexicon_path
+        if not lexicon_path:
+            return
+
+        from pathlib import Path
+
+        from krag.lexicon.lexicon_store import LexiconStore
+
+        self.lexicon_store = LexiconStore()
+        try:
+            count = self.lexicon_store.load(Path(lexicon_path))
+            logger.info("Loaded lexicon with %d entries from %s", count, lexicon_path)
+        except Exception:
+            logger.warning("Failed to load lexicon from %s", lexicon_path, exc_info=True)
+            self.lexicon_store = None
+
+    def _resolve_mode(self, mode_name: str | None) -> ModeConfiguration | None:
+        """Resolve a mode name to its ModeConfiguration, or None.
+
+        User modes are reloaded from disk on each call so that edits to
+        TOML files take effect without restarting kragd.
+        """
+        if mode_name is None or self.mode_registry is None:
+            return None
+
+        # Hot-reload user modes so file edits take effect immediately
+        if self.config.modes_dir:
+            self.mode_registry.load_user_modes(self.config.modes_dir)
+
+        return self.mode_registry.get(mode_name)
+
+    def _get_mode_infos(self) -> list:
+        """Build ModeInfo list for status endpoint."""
+        from kragd.schemas import ModeInfo
+
+        if self.mode_registry is None:
+            return []
+        return [
+            ModeInfo(
+                name=m.name,
+                description=m.description,
+                collections=sorted(m.collections.keys()),
+                llm_slot=m.llm_slot,
+                preset=m.preset,
+            )
+            for m in self.mode_registry.list_modes()
+        ]
+
+    def _get_collection_counts(self) -> dict[str, int]:
+        """Return per-collection vector counts from the CollectionManager.
+
+        Returns an empty dict when no collection manager is configured.
+        """
+        if self.collection_manager is None:
+            return {}
+        counts: dict[str, int] = {}
+        try:
+            for name, stats in self.collection_manager.get_all_stats().items():
+                counts[name] = int(stats.get("vectors_count", 0) or stats.get("count", 0) or 0)
+        except Exception:
+            logger.warning("Failed to get per-collection counts", exc_info=True)
+        return counts
+
+    def refresh_lexicon(self) -> dict[str, int | str]:
+        """Reload the lexicon from disk.
+
+        Returns:
+            Dict with 'entries' count and 'status' message.
+
+        Raises:
+            RuntimeError: If no lexicon is configured.
+        """
+        self._require_started()
+
+        if self.lexicon_store is None:
+            raise RuntimeError("No lexicon configured — set lexicon_path in configuration")
+
+        try:
+            count = self.lexicon_store.reload()
+            # Update the query engine's lexicon store reference (in case it was None before)
+            if self.query_engine is not None:
+                self.query_engine.lexicon_store = self.lexicon_store
+                if self.query_engine._lexicon_injector is None:
+                    from krag.lexicon.lexicon_injector import LexiconInjector
+
+                    self.query_engine._lexicon_injector = LexiconInjector()
+            return {"entries": count, "status": "reloaded"}
+        except Exception as exc:
+            logger.error("Failed to reload lexicon: %s", exc, exc_info=True)
+            raise RuntimeError(f"Failed to reload lexicon: {exc}") from exc
+
     # ── public API ──────────────────────────────
 
     def query(self, request: QueryRequest) -> QueryResponse:
@@ -229,6 +372,9 @@ class KragService:
         if self.query_engine is None:
             raise RuntimeError("No LLM model configured — cannot synthesize answers")
 
+        # Resolve mode — mode settings provide defaults, explicit params override
+        mode_config = self._resolve_mode(request.mode)
+
         # When debug metadata is requested, delegate to the debug path
         if request.include_debug:
             debug_req = DebugQueryRequest(
@@ -236,6 +382,7 @@ class KragService:
                 top_k=request.top_k,
                 preset=request.preset,
                 llm=request.llm,
+                mode=request.mode,
             )
             debug_resp = self.debug_query(debug_req)
             return QueryResponse(
@@ -245,7 +392,7 @@ class KragService:
             )
 
         # Determine which LLM slot will be used for lifecycle tracking
-        slot = request.llm or "text"
+        slot = request.llm or (mode_config.llm_slot if mode_config else None) or "text"
         if self.lifecycle_manager is not None:
             self.lifecycle_manager.ensure_loaded(slot)
             self.lifecycle_manager.on_request_start(slot)
@@ -259,7 +406,23 @@ class KragService:
                 if target_slot.instance is not None:
                     self.query_engine.llm_client = target_slot.instance
 
-            top_k = request.top_k or self.config.top_k
+            # Configure critic for this request based on mode settings
+            prev_critic = self.query_engine.critic
+            if mode_config and mode_config.critic_enabled:
+                from krag.critic.relevance_critic import RelevanceCritic
+
+                critic_llm = self.llm_pool._slot_for(slot).instance
+                self.query_engine.critic = RelevanceCritic(
+                    llm_client=critic_llm,
+                    threshold=mode_config.critic_threshold,
+                    enabled=True,
+                )
+            else:
+                self.query_engine.critic = None
+
+            top_k = (
+                request.top_k or (mode_config.top_k if mode_config else None) or self.config.top_k
+            )
             result = self.query_engine.query(request.query, top_k=top_k)
 
             sources = [
@@ -275,12 +438,14 @@ class KragService:
                     class_name=getattr(s, "class_name", None),
                     start_line=getattr(s, "start_line", None),
                     end_line=getattr(s, "end_line", None),
+                    collection=getattr(s, "collection", None),
                 )
                 for i, s in enumerate(result.sources)
             ]
 
             return QueryResponse(answer=result.answer, sources=sources, debug=None)
         finally:
+            self.query_engine.critic = prev_critic
             if self.lifecycle_manager is not None:
                 self.lifecycle_manager.on_request_end(slot)
 
@@ -291,16 +456,23 @@ class KragService:
 
         from krag.retrieval.retriever import Retriever
 
+        # Resolve mode settings
+        mode_config = self._resolve_mode(request.mode)
+
         retriever = Retriever(
             vector_store=self.vector_store,
             embedding_generator=self.embedding_generator,
             embedding_orchestrator=self.embedding_orchestrator,
+            collection_manager=self.collection_manager,
         )
-        top_k = request.top_k or self.config.top_k
+        top_k = request.top_k or (mode_config.top_k if mode_config else None) or self.config.top_k
+        threshold = (
+            mode_config.similarity_threshold if mode_config else None
+        ) or self.config.similarity_threshold
         results = retriever.retrieve(
             query=request.query,
             top_k=top_k,
-            similarity_threshold=self.config.similarity_threshold,
+            similarity_threshold=threshold,
         )
         return [
             SourceChunk(
@@ -310,6 +482,12 @@ class KragService:
                 rank=i + 1,
                 chunk_content=r.chunk_content,
                 file_type=getattr(r, "file_type", ""),
+                collection=getattr(r, "collection", None),
+                language=getattr(r, "language", None),
+                function_name=getattr(r, "function_name", None),
+                class_name=getattr(r, "class_name", None),
+                start_line=getattr(r, "start_line", None),
+                end_line=getattr(r, "end_line", None),
             )
             for i, r in enumerate(results)
         ]
@@ -326,7 +504,10 @@ class KragService:
         if self.query_engine is None:
             raise RuntimeError("No LLM model configured — cannot synthesize answers")
 
-        slot = request.llm or "text"
+        # Resolve mode
+        mode_config = self._resolve_mode(request.mode)
+
+        slot = request.llm or (mode_config.llm_slot if mode_config else None) or "text"
         if self.lifecycle_manager is not None:
             self.lifecycle_manager.ensure_loaded(slot)
             self.lifecycle_manager.on_request_start(slot)
@@ -334,7 +515,12 @@ class KragService:
         try:
             from krag.retrieval.retriever import Retriever
 
-            top_k = request.top_k or self.config.top_k
+            top_k = (
+                request.top_k or (mode_config.top_k if mode_config else None) or self.config.top_k
+            )
+            threshold = (
+                mode_config.similarity_threshold if mode_config else None
+            ) or self.config.similarity_threshold
 
             # Phase 1: Retrieval with timing
             t0 = time.monotonic()
@@ -342,11 +528,12 @@ class KragService:
                 vector_store=self.vector_store,
                 embedding_generator=self.embedding_generator,
                 embedding_orchestrator=self.embedding_orchestrator,
+                collection_manager=self.collection_manager,
             )
             results = retriever.retrieve(
                 query=request.query,
                 top_k=top_k,
-                similarity_threshold=self.config.similarity_threshold,
+                similarity_threshold=threshold,
             )
             retrieval_ms = (time.monotonic() - t0) * 1000
 
@@ -354,17 +541,105 @@ class KragService:
             total_before = getattr(retriever, "_last_total_before_dedup", len(results))
             total_after = len(results)
 
+            # Apply context relevance critic if enabled via mode config
+            critic_scores: list[int] = []
+            chunks_pre_critic = len(results)
+            chunks_post_critic = len(results)
+
+            if mode_config and mode_config.critic_enabled and results:
+                from krag.critic.relevance_critic import RelevanceCritic
+
+                # Use whichever LLM slot is already loaded for this request
+                critic_slot = self.llm_pool._slot_for(slot)
+                critic_llm = critic_slot.instance
+                critic = RelevanceCritic(
+                    llm_client=critic_llm,
+                    threshold=mode_config.critic_threshold,
+                    enabled=True,
+                )
+                scored = critic.score_chunks(request.query, results)
+                critic_scores = [s.critic_score for s in scored]
+                results = critic.filter_chunks(scored)
+                chunks_post_critic = len(results)
+                logger.info(
+                    "Critic: %d/%d chunks passed (threshold %d)",
+                    chunks_post_critic,
+                    chunks_pre_critic,
+                    mode_config.critic_threshold,
+                )
+
+            # Match lexicon terms for prompt injection
+            lexicon_glossary: str | None = None
+            lexicon_terms_count = 0
+            if self.lexicon_store is not None:
+                from krag.lexicon.lexicon_injector import LexiconInjector
+
+                matches = self.lexicon_store.match_terms(request.query)
+                if matches:
+                    injector = LexiconInjector()
+                    selected = injector.select_top(matches)
+                    lexicon_glossary = injector.format_glossary(selected)
+                    lexicon_terms_count = len(selected)
+
+            # Handle all-chunks-filtered-by-critic case (T061)
+            if chunks_pre_critic > 0 and chunks_post_critic == 0:
+                from krag.synthesis.prompt_builder import INSUFFICIENT_CONTEXT_PHRASE
+
+                logger.info("All chunks filtered by critic — returning insufficient context")
+
+                # Still need debug metadata for diagnostics
+                effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
+                auto_routed = effective_llm is None
+                debug = DebugMetadata(
+                    llm_used="none",
+                    llm_model="none",
+                    route="none",
+                    auto_routed=auto_routed,
+                    route_reason="All chunks filtered by critic",
+                    preset=request.preset
+                    or (mode_config.preset if mode_config else None)
+                    or self.config.prompt_preset
+                    or "default",
+                    mode=request.mode,
+                    collections_searched=sorted(mode_config.collections.keys())
+                    if mode_config
+                    else None,
+                    retrieval_time_ms=round(retrieval_ms, 2),
+                    generation_time_ms=0.0,
+                    embedding_models_used=list(self.embedding_orchestrator._model_names.values())
+                    if self.embedding_orchestrator is not None
+                    else [self.config.embedding_model],
+                    vector_spaces_searched=[],
+                    total_candidates_before_dedup=total_before,
+                    total_candidates_after_dedup=total_after,
+                    similarity_threshold=threshold,
+                    per_space_result_counts={},
+                    lexicon_terms_injected=lexicon_terms_count,
+                    critic_scores=critic_scores,
+                    chunks_pre_critic=chunks_pre_critic,
+                    chunks_post_critic=0,
+                )
+                return DebugQueryResponse(
+                    answer=INSUFFICIENT_CONTEXT_PHRASE,
+                    sources=[],
+                    debug=debug,
+                )
+
             # Phase 2: LLM generation with timing
+            # Use the mode's llm_slot when no explicit --llm override is given
+            effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
             t1 = time.monotonic()
             response_text, route_name = self.llm_pool.route_and_generate(
-                messages=self.query_engine.prompt_builder.build(request.query, results),
+                messages=self.query_engine.prompt_builder.build(
+                    request.query, results, lexicon_glossary=lexicon_glossary
+                ),
                 retrieved_chunks=results,
-                llm_override=request.llm,
+                llm_override=effective_llm,
             )
             generation_ms = (time.monotonic() - t1) * 1000
 
             # Determine routing info
-            auto_routed = request.llm is None
+            auto_routed = effective_llm is None
             route_slot = self.llm_pool._slot_for(route_name)
 
             sources = [
@@ -380,6 +655,7 @@ class KragService:
                     class_name=getattr(s, "class_name", None),
                     start_line=getattr(s, "start_line", None),
                     end_line=getattr(s, "end_line", None),
+                    collection=getattr(s, "collection", None),
                 )
                 for i, s in enumerate(results)
             ]
@@ -420,7 +696,14 @@ class KragService:
                 route=route_name,
                 auto_routed=auto_routed,
                 route_reason=None if not auto_routed else "Auto-routed based on chunk composition",
-                preset=request.preset or self.config.prompt_preset or "default",
+                preset=request.preset
+                or (mode_config.preset if mode_config else None)
+                or self.config.prompt_preset
+                or "default",
+                mode=request.mode,
+                collections_searched=sorted(mode_config.collections.keys())
+                if mode_config
+                else None,
                 retrieval_time_ms=round(retrieval_ms, 2),
                 generation_time_ms=round(generation_ms, 2),
                 embedding_models_used=list(self.embedding_orchestrator._model_names.values())
@@ -429,8 +712,12 @@ class KragService:
                 vector_spaces_searched=vector_spaces,
                 total_candidates_before_dedup=total_before,
                 total_candidates_after_dedup=total_after,
-                similarity_threshold=self.config.similarity_threshold,
+                similarity_threshold=threshold,
                 per_space_result_counts=per_space_counts,
+                lexicon_terms_injected=lexicon_terms_count,
+                critic_scores=critic_scores,
+                chunks_pre_critic=chunks_pre_critic,
+                chunks_post_critic=chunks_post_critic,
             )
 
             return DebugQueryResponse(
@@ -601,6 +888,12 @@ class KragService:
 
         from krag.orchestration.indexer import IndexingOrchestrator
 
+        # Pause the lifecycle idle timer to prevent it from firing during
+        # indexing — the LLM will be closed and reloaded, so the timer
+        # must not attempt to swap/unload while that happens.
+        if self.lifecycle_manager is not None:
+            self.lifecycle_manager.pause()
+
         # Temporarily unload the LLM to free VRAM for embedding models.
         # The code embedding model may have been skipped at startup due to
         # insufficient VRAM while the LLM was loaded.
@@ -630,7 +923,11 @@ class KragService:
 
         # Build orchestrator with service's pre-loaded components,
         # sharing the existing vector store to avoid Qdrant local-mode lock conflicts
-        orchestrator = IndexingOrchestrator(config=index_config, vector_store=self.vector_store)
+        orchestrator = IndexingOrchestrator(
+            config=index_config,
+            vector_store=self.vector_store,
+            collection_manager=self.collection_manager,
+        )
 
         try:
             is_full = request.mode == "full"
@@ -665,6 +962,7 @@ class KragService:
                 duration_seconds=round(duration, 2),
                 dry_run=request.dry_run,
                 errors=errors,
+                collections=self._get_collection_counts(),
             )
 
             self._last_index_job = response
@@ -688,11 +986,13 @@ class KragService:
                 vectors_stored=0,
                 duration_seconds=round(time.monotonic() - t0, 2),
                 dry_run=request.dry_run,
-                errors=[IndexErr(
-                    file_path="<system>",
-                    error_type=type(exc).__name__,
-                    error_message=str(exc),
-                )],
+                errors=[
+                    IndexErr(
+                        file_path="<system>",
+                        error_type=type(exc).__name__,
+                        error_message=str(exc),
+                    )
+                ],
             )
             self._index_job_cache.append(self._last_index_job)
         finally:
@@ -718,6 +1018,10 @@ class KragService:
                         exc_info=True,
                     )
 
+            # Resume the lifecycle idle timer now that LLM is reloaded
+            if self.lifecycle_manager is not None:
+                self.lifecycle_manager.resume()
+
             # Always clear the indexing flag
             with self._indexing_lock:
                 self._indexing = False
@@ -732,10 +1036,32 @@ class KragService:
         self._require_started()
 
         if not self._index_job_cache:
-            # No indexing has been run yet — return empty response
+            # Check if indexing is currently running but hasn't finished yet
+            with self._indexing_lock:
+                is_indexing = self._indexing
+
+            if is_indexing:
+                return IndexResponse(
+                    job_id="pending",
+                    status="running",
+                    mode="incremental",
+                    files_scanned=0,
+                    files_processed=0,
+                    files_skipped=0,
+                    files_skipped_unchanged=0,
+                    files_skipped_other=0,
+                    files_errored=0,
+                    chunks_created=0,
+                    vectors_stored=0,
+                    duration_seconds=0.0,
+                    dry_run=False,
+                    errors=[],
+                )
+
+            # No indexing has been run yet
             return IndexResponse(
                 job_id="none",
-                status="completed",
+                status="none",
                 mode="incremental",
                 files_scanned=0,
                 files_processed=0,
@@ -840,6 +1166,23 @@ class KragService:
         except Exception:
             pass
 
+        # Per-collection stats
+        collections: dict[str, CollectionStatus] = {}
+        if self.collection_manager is not None:
+            try:
+                all_stats = self.collection_manager.get_all_stats()
+                for coll_name, stats in all_stats.items():
+                    vec_count = stats.get("vectors_count", 0) or stats.get("count", 0) or 0
+                    coll_status = stats.get("status", "ok")
+                    qdrant_name = stats.get("collection_name", coll_name)
+                    collections[coll_name] = CollectionStatus(
+                        collection_name=str(qdrant_name),
+                        vectors_count=int(vec_count),
+                        status=str(coll_status) if coll_status != "ok" else "ok",
+                    )
+            except Exception:
+                logger.warning("Failed to get collection stats", exc_info=True)
+
         return ServiceStatus(
             version=_get_version(),
             uptime_seconds=uptime,
@@ -850,6 +1193,10 @@ class KragService:
                 total_vectors=total_vectors,
                 named_spaces=named_spaces,
             ),
+            collections=collections,
+            modes=self._get_mode_infos(),
+            lexicon_loaded=self.lexicon_store is not None,
+            lexicon_entry_count=len(self.lexicon_store.entries) if self.lexicon_store else 0,
             vram=vram,
         )
 

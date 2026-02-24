@@ -235,7 +235,15 @@ code_chunk_size = 2048       # Max chunk size in chars (default: 2048)
 
 ### Code LLM Integration
 
-For improved code-specific answers, configure the code LLM:
+For improved code-specific answers, use the `code` retrieval mode:
+
+```bash
+krag query --mode code "explain the Retriever class"
+```
+
+The `code` mode targets `code` and `tests` collections, routes to the code LLM slot, and uses the `code` prompt preset for technically precise answers.
+
+Configure the code LLM in `config.toml`:
 
 ```toml
 [llm]
@@ -243,10 +251,7 @@ code_model = "/path/to/qwen2.5-coder-7b-instruct-q5_k_m.gguf"
 load_multi_llm = false    # true = try to load both simultaneously
 ```
 
-Query with the code LLM:
-```bash
-krag query --llm code "explain the Retriever class"
-```
+> **Note**: The `--llm code` flag is deprecated. Use `--mode code` instead, which provides the same LLM routing plus collection targeting and prompt preset selection.
 
 ### Adding Language Support
 
@@ -256,6 +261,123 @@ uv pip install tree-sitter-javascript tree-sitter-go tree-sitter-c
 ```
 
 No plugin code changes needed — grammars are discovered dynamically.
+
+## Retrieval Modes
+
+Retrieval modes configure how krag searches and synthesises answers. A mode bundles collection targeting, LLM selection, prompt presets, and relevance parameters into a named configuration.
+
+### Built-in Modes
+
+krag ships with three modes:
+
+| Mode | Collections | LLM Slot | Preset | Description |
+|------|-------------|----------|--------|-------------|
+| `default` | All equally weighted | `text` | `balanced` | General-purpose queries |
+| `code` | `code` (0.7), `tests` (0.3) | `code` | `code` | Code-focused questions |
+| `docs` | `docs` (0.8), `text` (0.2) | `text` | `balanced` | Documentation search |
+
+### Using Modes
+
+```bash
+# Query with a specific mode
+krag query --mode code "what does the _deduplicate method do?"
+krag query --mode docs "how do I configure logging?"
+
+# Without --mode, the default mode is used
+krag query "what are the main features?"
+```
+
+### Listing and Inspecting Modes
+
+```bash
+# List all available modes
+krag modes list
+
+# Show full details for a mode
+krag modes show code
+```
+
+`modes show` displays the complete configuration including collection weights, LLM slot, prompt preset, retrieval parameters (`top_k`, `similarity_threshold`), and critic settings.
+
+### Creating Custom Modes
+
+Add TOML files to your modes directory (default: `~/.config/krag/modes/`):
+
+```toml
+# ~/.config/krag/modes/research.toml
+[mode]
+name = "research"
+description = "Deep research across all documentation"
+
+[collections]
+docs = 0.6
+text = 0.3
+code = 0.1
+
+[llm]
+slot = "text"
+
+[prompt]
+preset = "balanced"
+
+[retrieval]
+top_k = 20
+similarity_threshold = 0.10
+
+[critic]
+enabled = true
+threshold = 2
+```
+
+Configure the modes directory and default mode in `config.toml`:
+
+```toml
+modes_dir = "~/.config/krag/modes"
+default_mode = "default"
+```
+
+User-defined modes override built-in modes of the same name.
+
+## Domain Lexicon
+
+The domain lexicon injects project-specific terminology into LLM prompts so the model understands specialised terms that appear in your queries and documents.
+
+### Setup
+
+Create a `lexicon.json` file — a flat JSON object mapping terms to definitions:
+
+```json
+{
+  "kragd": "The krag daemon service that handles queries and indexing",
+  "CollectionRouter": "Routes indexed files to Qdrant collections based on type",
+  "ModeConfiguration": "A named retrieval configuration loaded from TOML",
+  "tree-sitter": "A parser generator for language-aware AST chunking"
+}
+```
+
+Point krag to the lexicon in `config.toml`:
+
+```toml
+lexicon_path = "~/.config/krag/lexicon.json"
+lexicon_max_entries = 10   # Max glossary entries per query (default: 10)
+lexicon_max_chars = 1500   # Max glossary text per query (default: 1500)
+```
+
+### How It Works
+
+When you query, krag scans your query text for lexicon terms (case-insensitive, word-boundary matching). Matched terms are sorted by specificity (longest first), capped at the configured limits, and injected into the LLM system prompt as a glossary section. This helps the LLM use your project's terminology correctly.
+
+### Refreshing the Lexicon
+
+After editing `lexicon.json`, reload it without restarting kragd:
+
+```bash
+krag lexicon refresh
+```
+
+### Without a Lexicon
+
+If `lexicon_path` is not set or the file does not exist, queries proceed normally — no glossary is injected. There is no performance penalty when the lexicon is disabled.
 
 ## See Also
 

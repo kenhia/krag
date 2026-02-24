@@ -55,7 +55,9 @@ def test_client() -> TestClient:
 
         # Default index_status response
         mock_service.get_index_status.return_value = _make_index_response(
-            status="completed", duration_seconds=15.0
+            status="none", job_id="none", files_scanned=0, files_processed=0,
+            files_skipped=0, files_errored=0, chunks_created=0, vectors_stored=0,
+            duration_seconds=0.0,
         )
 
         MockService.return_value = mock_service
@@ -87,7 +89,7 @@ class TestIndexContract:
         resp = test_client.post("/index", json={})
         data = resp.json()
         assert "status" in data
-        assert data["status"] in ("completed", "failed", "running")
+        assert data["status"] in ("completed", "failed", "none", "running")
 
     def test_index_response_has_mode(self, test_client: TestClient) -> None:
         resp = test_client.post("/index", json={})

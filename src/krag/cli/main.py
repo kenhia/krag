@@ -18,6 +18,7 @@ from krag.cli.eval import eval_command
 from krag.cli.gpu import gpu_app
 from krag.cli.index import index_command
 from krag.cli.log import log_app
+from krag.cli.modes import modes_app
 from krag.cli.plugin import plugin_app
 from krag.cli.query import query_command
 from krag.cli.utils import exit_with_code
@@ -96,6 +97,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(gpu_app, name="gpu")
 app.add_typer(log_app, name="log")
+app.add_typer(modes_app, name="modes")
 
 # Console for rich output
 console = Console()
