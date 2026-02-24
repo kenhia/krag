@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 _LLM_SLOTS = {"text", "code"}
 _INDEX_MODES = {"full", "incremental"}
 _HEALTH_STATUSES = {"healthy", "degraded"}
-_INDEX_STATUSES = {"completed", "failed", "running"}
+_INDEX_STATUSES = {"completed", "failed", "none", "running"}
 
 
 # ──────────────────────────────────────────────

@@ -1,9 +1,10 @@
-# Known Issues (Pre-items for Next Sprint)
+# Known Issues
 
-## Lifecycle idle timer races with indexing LLM reload
+## ~~Lifecycle idle timer races with indexing LLM reload~~ — RESOLVED
 
-**Discovered**: 2026-02-21 (Sprint 008, post-merge manual testing)  
-**Severity**: Low (cosmetic — scary log message, service continues working)  
+**Discovered**: 2026-02-21 (Sprint 008, post-merge manual testing)
+**Resolved**: 2026-02-22 (Sprint 009, Phase 3 — T009–T015)
+**Severity**: Low (cosmetic — scary log message, service continues working)
 **Files**: `src/kragd/service.py`, `src/kragd/lifecycle.py`
 
 ### Symptom
@@ -26,3 +27,13 @@ Race condition between the lifecycle manager's idle timer and the post-indexing 
 ### Fix
 
 Pause/disable the lifecycle manager's idle timer when `_indexing` is set. Resume it in the `_run_indexing` finally block before attempting the LLM reload. This prevents the timer from loading LLMs while embedding models occupy VRAM.
+
+### Resolution
+
+Implemented in Sprint 009, Phase 3 (Lifecycle Timer Fix — US1):
+- Added `pause()` / `resume()` methods to `LLMLifecycleManager`
+- `pause()` cancels the idle timer task and sets a `_paused` flag
+- `_unload_after_timeout()` returns early if `_paused` is set (defense-in-depth)
+- `resume()` clears the flag and re-schedules the idle timer
+- `_run_indexing()` calls `pause()` before `llm_pool.close()` and `resume()` after LLM reload
+- Covered by unit tests in `tests/unit/kragd/test_lifecycle.py` and integration tests in `tests/integration/test_lifecycle_pause_resume.py`

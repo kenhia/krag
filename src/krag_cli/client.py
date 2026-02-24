@@ -155,4 +155,10 @@ class KragClient:
         if resp.status_code == 422:
             detail = resp.json().get("detail", "Unknown validation error")
             raise ValueError(f"Request validation failed: {detail}")
+        if resp.status_code >= 500:
+            try:
+                detail = resp.json().get("detail", "Internal server error")
+            except Exception:
+                detail = resp.text or "Internal server error"
+            raise RuntimeError(f"Server error: {detail}")
         resp.raise_for_status()

@@ -4,7 +4,7 @@ T007: Tests written before implementation (TDD Red phase).
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -147,3 +147,183 @@ class TestKragServiceStartShutdown:
 
         await service.shutdown()
         mock_pool.close.assert_called_once()
+
+
+class TestDebugQueryCritic:
+    """Test that debug_query correctly invokes the relevance critic."""
+
+    def _make_started_service(self):
+        """Create a KragService with enough mocks to call debug_query."""
+        from kragd.service import KragService
+
+        service = KragService(_make_config())
+        service._started = True
+        service._indexing = False
+
+        # Mock query engine
+        service.query_engine = MagicMock()
+
+        # Mock LLM pool — _slot_for(slot).instance provides the critic LLM
+        mock_llm_client = MagicMock()
+        mock_pool = MagicMock()
+        mock_slot = MagicMock()
+        mock_slot.instance = mock_llm_client
+        mock_slot.model_path = "/fake/model.gguf"
+        mock_pool._slot_for.return_value = mock_slot
+        mock_pool.route_and_generate.return_value = ("test answer", "text")
+        service.llm_pool = mock_pool
+
+        # Mock retriever results
+        mock_result = MagicMock()
+        mock_result.chunk_id = "chunk-1"
+        mock_result.file_path = "/test/file.py"
+        mock_result.score = 0.9
+        mock_result.chunk_content = "def hello(): pass  # some code content that is long enough"
+        mock_result.file_type = "python"
+        mock_result.collection = "code"
+        mock_result.critic_score = 4
+        mock_result.language = "python"
+        mock_result.function_name = "hello"
+        mock_result.class_name = None
+        mock_result.start_line = 1
+        mock_result.end_line = 1
+
+        # Mock embedding/vector/collection components
+        service.vector_store = MagicMock()
+        service.embedding_generator = MagicMock()
+        service.embedding_orchestrator = MagicMock()
+        service.collection_manager = MagicMock()
+        service.lexicon_store = None
+        service.lifecycle_manager = None
+
+        # Mock mode registry to return a mode with critic enabled
+        from krag.models.configuration import ModeConfiguration
+
+        mode_config = ModeConfiguration(
+            name="test-critic",
+            critic_enabled=True,
+            critic_threshold=3,
+            top_k=5,
+        )
+        service.mode_registry = MagicMock()
+        service.mode_registry.get.return_value = mode_config
+
+        return service, mock_result, mock_llm_client
+
+    @patch("krag.retrieval.retriever.Retriever")
+    def test_debug_query_with_critic_uses_active_slot(self, MockRetriever: MagicMock) -> None:
+        """debug_query with critic_enabled uses the active LLM slot for critic scoring."""
+        from kragd.schemas import DebugQueryRequest
+
+        service, mock_result, mock_llm_client = self._make_started_service()
+
+        # Configure mock retriever
+        mock_retriever_instance = MagicMock()
+        mock_retriever_instance.retrieve.return_value = [mock_result]
+        mock_retriever_instance._last_total_before_dedup = 1
+        MockRetriever.return_value = mock_retriever_instance
+
+        # Mock the critic to pass chunks through
+        with patch("krag.critic.relevance_critic.RelevanceCritic") as MockCritic:
+            mock_critic = MagicMock()
+            scored_chunk = MagicMock()
+            scored_chunk.critic_score = 4
+            scored_chunk.chunk = mock_result
+            scored_chunk.passed = True
+            mock_critic.score_chunks.return_value = [scored_chunk]
+            mock_critic.filter_chunks.return_value = [mock_result]
+            MockCritic.return_value = mock_critic
+
+            # Mock query engine for synthesis phase
+            synth_result = MagicMock()
+            synth_result.answer = "test answer"
+            synth_result.sources = []
+            service.query_engine.query_with_chunks.return_value = synth_result
+
+            request = DebugQueryRequest(query="test query", mode="test-critic")
+            service.debug_query(request)
+
+            # Verify critic was created with the active slot's LLM instance
+            MockCritic.assert_called_once_with(
+                llm_client=mock_llm_client,
+                threshold=3,
+                enabled=True,
+            )
+
+    @patch("krag.retrieval.retriever.Retriever")
+    def test_debug_query_critic_uses_code_slot_when_mode_says_code(
+        self, MockRetriever: MagicMock
+    ) -> None:
+        """When mode.llm_slot='code', critic uses the code LLM (not text)."""        
+        from krag.models.configuration import ModeConfiguration
+        from kragd.schemas import DebugQueryRequest
+
+        service, mock_result, mock_llm_client = self._make_started_service()
+
+        # Override mode to have llm_slot="code" + critic enabled
+        mode_config = ModeConfiguration(
+            name="code-critic",
+            llm_slot="code",
+            critic_enabled=True,
+            critic_threshold=3,
+            top_k=5,
+        )
+        service.mode_registry.get.return_value = mode_config
+
+        mock_retriever_instance = MagicMock()
+        mock_retriever_instance.retrieve.return_value = [mock_result]
+        mock_retriever_instance._last_total_before_dedup = 1
+        MockRetriever.return_value = mock_retriever_instance
+
+        with patch("krag.critic.relevance_critic.RelevanceCritic") as MockCritic:
+            mock_critic = MagicMock()
+            scored_chunk = MagicMock()
+            scored_chunk.critic_score = 4
+            scored_chunk.chunk = mock_result
+            scored_chunk.passed = True
+            mock_critic.score_chunks.return_value = [scored_chunk]
+            mock_critic.filter_chunks.return_value = [mock_result]
+            MockCritic.return_value = mock_critic
+
+            request = DebugQueryRequest(query="test query", mode="code-critic")
+            service.debug_query(request)
+
+            # _slot_for should have been called with "code"
+            service.llm_pool._slot_for.assert_any_call("code")
+            MockCritic.assert_called_once_with(
+                llm_client=mock_llm_client,
+                threshold=3,
+                enabled=True,
+            )
+
+    @patch("krag.retrieval.retriever.Retriever")
+    def test_debug_query_without_critic_skips_scoring(self, MockRetriever: MagicMock) -> None:
+        """debug_query without critic_enabled does not instantiate RelevanceCritic."""
+        from krag.models.configuration import ModeConfiguration
+        from kragd.schemas import DebugQueryRequest
+
+        service, mock_result, _ = self._make_started_service()
+
+        # Override mode to have critic disabled
+        mode_config = ModeConfiguration(
+            name="test-no-critic",
+            critic_enabled=False,
+            top_k=5,
+        )
+        service.mode_registry.get.return_value = mode_config
+
+        mock_retriever_instance = MagicMock()
+        mock_retriever_instance.retrieve.return_value = [mock_result]
+        mock_retriever_instance._last_total_before_dedup = 1
+        MockRetriever.return_value = mock_retriever_instance
+
+        synth_result = MagicMock()
+        synth_result.answer = "test answer"
+        synth_result.sources = []
+        service.query_engine.query_with_chunks.return_value = synth_result
+
+        with patch("krag.critic.relevance_critic.RelevanceCritic") as MockCritic:
+            request = DebugQueryRequest(query="test query", mode="test-no-critic")
+            service.debug_query(request)
+
+            MockCritic.assert_not_called()

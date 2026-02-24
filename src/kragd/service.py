@@ -90,8 +90,8 @@ class KragService:
     async def start(self) -> None:
         """Initialize all heavyweight components and write PID file."""
         self._init_embeddings()
-        self._init_vector_store()
         self._init_collection_manager()
+        self._init_vector_store()
         self._init_llm_pool()
         self._init_lifecycle_manager()
         self._init_lexicon_store()
@@ -157,14 +157,24 @@ class KragService:
                         self.embedding_orchestrator.register_model(meta.name, em)
 
     def _init_vector_store(self) -> None:
-        """Open Qdrant vector store."""
+        """Open legacy single-collection vector store.
+
+        When the ``CollectionManager`` is available its shared
+        ``QdrantClient`` is reused so only one file-lock is held.
+        """
         from krag.storage.qdrant_impl import QdrantVectorStore
 
+        shared_client = (
+            self.collection_manager._client
+            if self.collection_manager is not None
+            else None
+        )
         self.vector_store = QdrantVectorStore(
             collection_name=self.config.collection_name,
             vector_size=self.embedding_generator.get_dimension(),
             storage_path=str(self.config.vector_store_path),
             distance=self.config.distance_metric,
+            client=shared_client,
         )
 
     def _init_collection_manager(self) -> None:
@@ -278,9 +288,17 @@ class KragService:
             self.lexicon_store = None
 
     def _resolve_mode(self, mode_name: str | None) -> ModeConfiguration | None:
-        """Resolve a mode name to its ModeConfiguration, or None."""
+        """Resolve a mode name to its ModeConfiguration, or None.
+
+        User modes are reloaded from disk on each call so that edits to
+        TOML files take effect without restarting kragd.
+        """
         if mode_name is None or self.mode_registry is None:
             return None
+
+        # Hot-reload user modes so file edits take effect immediately
+        if self.config.modes_dir:
+            self.mode_registry.load_user_modes(self.config.modes_dir)
 
         return self.mode_registry.get(mode_name)
 
@@ -388,6 +406,20 @@ class KragService:
                 if target_slot.instance is not None:
                     self.query_engine.llm_client = target_slot.instance
 
+            # Configure critic for this request based on mode settings
+            prev_critic = self.query_engine.critic
+            if mode_config and mode_config.critic_enabled:
+                from krag.critic.relevance_critic import RelevanceCritic
+
+                critic_llm = self.llm_pool._slot_for(slot).instance
+                self.query_engine.critic = RelevanceCritic(
+                    llm_client=critic_llm,
+                    threshold=mode_config.critic_threshold,
+                    enabled=True,
+                )
+            else:
+                self.query_engine.critic = None
+
             top_k = (
                 request.top_k or (mode_config.top_k if mode_config else None) or self.config.top_k
             )
@@ -413,6 +445,7 @@ class KragService:
 
             return QueryResponse(answer=result.answer, sources=sources, debug=None)
         finally:
+            self.query_engine.critic = prev_critic
             if self.lifecycle_manager is not None:
                 self.lifecycle_manager.on_request_end(slot)
 
@@ -516,9 +549,9 @@ class KragService:
             if mode_config and mode_config.critic_enabled and results:
                 from krag.critic.relevance_critic import RelevanceCritic
 
-                # Use the same LLM pool's text slot for critic scoring
-                critic_llm_name = self.llm_pool._resolve_name("text")
-                critic_llm = self.llm_pool._clients[critic_llm_name]
+                # Use whichever LLM slot is already loaded for this request
+                critic_slot = self.llm_pool._slot_for(slot)
+                critic_llm = critic_slot.instance
                 critic = RelevanceCritic(
                     llm_client=critic_llm,
                     threshold=mode_config.critic_threshold,
@@ -555,7 +588,8 @@ class KragService:
                 logger.info("All chunks filtered by critic — returning insufficient context")
 
                 # Still need debug metadata for diagnostics
-                auto_routed = request.llm is None
+                effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
+                auto_routed = effective_llm is None
                 debug = DebugMetadata(
                     llm_used="none",
                     llm_model="none",
@@ -592,18 +626,20 @@ class KragService:
                 )
 
             # Phase 2: LLM generation with timing
+            # Use the mode's llm_slot when no explicit --llm override is given
+            effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
             t1 = time.monotonic()
             response_text, route_name = self.llm_pool.route_and_generate(
                 messages=self.query_engine.prompt_builder.build(
                     request.query, results, lexicon_glossary=lexicon_glossary
                 ),
                 retrieved_chunks=results,
-                llm_override=request.llm,
+                llm_override=effective_llm,
             )
             generation_ms = (time.monotonic() - t1) * 1000
 
             # Determine routing info
-            auto_routed = request.llm is None
+            auto_routed = effective_llm is None
             route_slot = self.llm_pool._slot_for(route_name)
 
             sources = [
@@ -1000,10 +1036,32 @@ class KragService:
         self._require_started()
 
         if not self._index_job_cache:
-            # No indexing has been run yet — return empty response
+            # Check if indexing is currently running but hasn't finished yet
+            with self._indexing_lock:
+                is_indexing = self._indexing
+
+            if is_indexing:
+                return IndexResponse(
+                    job_id="pending",
+                    status="running",
+                    mode="incremental",
+                    files_scanned=0,
+                    files_processed=0,
+                    files_skipped=0,
+                    files_skipped_unchanged=0,
+                    files_skipped_other=0,
+                    files_errored=0,
+                    chunks_created=0,
+                    vectors_stored=0,
+                    duration_seconds=0.0,
+                    dry_run=False,
+                    errors=[],
+                )
+
+            # No indexing has been run yet
             return IndexResponse(
                 job_id="none",
-                status="completed",
+                status="none",
                 mode="incremental",
                 files_scanned=0,
                 files_processed=0,

@@ -158,6 +158,16 @@ def _display_index_result(result: dict[str, Any]) -> None:
     mode = result.get("mode", "unknown")
     dry_run = result.get("dry_run", False)
 
+    # Handle special states before showing the full table
+    if status == "none":
+        console.print("\n[dim]No indexing runs since kragd was started.[/dim]")
+        return
+
+    if status == "running":
+        console.print("\n[yellow]Indexing still in progress...[/yellow]")
+        console.print("[dim]Use 'krag index-status' again to poll for completion.[/dim]")
+        return
+
     status_color = "green" if status == "completed" else "red" if status == "failed" else "yellow"
     title = f"Indexing {'(dry run) ' if dry_run else ''}{status}"
 
