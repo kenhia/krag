@@ -78,14 +78,14 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T016 [P] [US1] Write unit tests for metadata merge (directory changes, prune stale) in tests/unit/test_metadata_merge.py
-- [ ] T017 [P] [US1] Write integration test for metadata round-trip with vector store in tests/integration/test_metadata_roundtrip.py
+- [X] T016 [P] [US1] Write unit tests for metadata merge (directory changes, prune stale) in tests/unit/test_metadata_merge.py
+- [X] T017 [P] [US1] Write integration test for metadata round-trip with vector store in tests/integration/test_metadata_roundtrip.py
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Remove directory-path filter from `_load_metadata()` (~L353–362) in src/krag/orchestration/indexer.py — load all entries unconditionally
-- [ ] T019 [US1] Preserve previously-indexed entries in `index_full()` — merge current run results into loaded metadata, retain untouched entries in src/krag/orchestration/indexer.py
-- [ ] T020 [US1] Add stale-entry pruning to `_save_metadata()` — remove entries where `file_path` no longer exists on disk in src/krag/orchestration/indexer.py
+- [X] T018 [US1] Remove directory-path filter from `_load_metadata()` (~L353–362) in src/krag/orchestration/indexer.py — load all entries unconditionally
+- [X] T019 [US1] Preserve previously-indexed entries in `index_full()` — merge current run results into loaded metadata, retain untouched entries in src/krag/orchestration/indexer.py
+- [X] T020 [US1] Add stale-entry pruning to `_save_metadata()` — remove entries where `file_path` no longer exists on disk in src/krag/orchestration/indexer.py
 
 **Checkpoint**: Incremental indexing across directory changes preserves unchanged files. `files_skipped_unchanged` reflects correct count.
 

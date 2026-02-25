@@ -1056,36 +1056,37 @@ class KragService:
     def get_index_status(self) -> IndexResponse | list[IndexResponse]:
         """Return cached indexing job results.
 
-        Returns all undelivered results plus the most recent job.
+        Checks active indexing state first — returns 'running' immediately
+        if indexing is in progress, regardless of cache contents.
+        Otherwise returns all undelivered results plus the most recent job.
         After retrieval, marks results as delivered so they can be
         evicted when new jobs arrive.
         """
         self._require_started()
 
+        # Check active indexing state first (US2 fix: running takes priority)
+        with self._indexing_lock:
+            is_indexing = self._indexing
+
+        if is_indexing:
+            return IndexResponse(
+                job_id="pending",
+                status="running",
+                mode="incremental",
+                files_scanned=0,
+                files_processed=0,
+                files_skipped=0,
+                files_skipped_unchanged=0,
+                files_skipped_other=0,
+                files_errored=0,
+                chunks_created=0,
+                vectors_stored=0,
+                duration_seconds=0.0,
+                dry_run=False,
+                errors=[],
+            )
+
         if not self._index_job_cache:
-            # Check if indexing is currently running but hasn't finished yet
-            with self._indexing_lock:
-                is_indexing = self._indexing
-
-            if is_indexing:
-                return IndexResponse(
-                    job_id="pending",
-                    status="running",
-                    mode="incremental",
-                    files_scanned=0,
-                    files_processed=0,
-                    files_skipped=0,
-                    files_skipped_unchanged=0,
-                    files_skipped_other=0,
-                    files_errored=0,
-                    chunks_created=0,
-                    vectors_stored=0,
-                    duration_seconds=0.0,
-                    dry_run=False,
-                    errors=[],
-                )
-
-            # No indexing has been run yet
             return IndexResponse(
                 job_id="none",
                 status="none",
