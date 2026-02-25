@@ -251,6 +251,15 @@ code_model = "/path/to/qwen2.5-coder-7b-instruct-q5_k_m.gguf"
 load_multi_llm = false    # true = try to load both simultaneously
 ```
 
+> **Note**: If you only need code embeddings without the full code plugin, you can add a core config section instead:
+>
+> ```toml
+> [embedding_code]
+> model = "jinaai/jina-embeddings-v2-base-code"
+> ```
+>
+> When both are configured, the core `[embedding_code]` takes precedence over the plugin's `get_embedding_model()`.
+
 > **Note**: The `--llm code` flag is deprecated. Use `--mode code` instead, which provides the same LLM routing plus collection targeting and prompt preset selection.
 
 ### Adding Language Support

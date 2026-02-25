@@ -616,7 +616,8 @@ Returns a frozen `QueryPipeline` dataclass bundling all components.
 
 `ConfigManager` provides static methods for the configuration lifecycle:
 
-- **`load(path)`** — Auto-detects file format from extension (`.toml` or `.yaml`/`.yml`). TOML files use a section-based layout (`[directories]`, `[embedding]`, `[chunking]`, `[llm]`, `[plugins]`, etc.) that is flattened into `Configuration` model fields.
+- **`load(path)`** — Auto-detects file format from extension (`.toml` or `.yaml`/`.yml`). TOML files use a section-based layout (`[directories]`, `[embedding]`, `[embedding_code]`, `[chunking]`, `[llm]`, `[plugins]`, etc.) that is flattened into `Configuration` model fields.
+- **`find_and_load()`** — Discovers the config file via XDG search order and loads it in one call. Checks `./krag.toml`, then `XDG_CONFIG_HOME/krag/config.toml`, then `config.yaml`.
 - **`create_default(path, format)`** — Generates a default configuration file.
 - **`validate(config)`** — Checks directory existence, storage path writability, valid distance metric, valid embedding device.
 - **`migrate_yaml_to_toml(yaml_path, toml_path)`** — Converts legacy YAML configuration to the section-based TOML format.
@@ -1070,12 +1071,20 @@ KragError (base)
 ├── ModelLoadError
 ├── IndexingError
 ├── QueryError
-└── FileProcessingError(file_path, message)
+├── FileProcessingError(file_path, message)
+├── ServiceNotReadyError
+├── IndexingInProgressError
+└── ResourceNotConfiguredError(resource, message)
 
 EvalLoadError (ValueError)
 ```
 
 All exceptions inherit from `KragError`. `FileProcessingError` carries the path of the file that caused the error, enabling per-file error tracking in `IndexingJob.error_summary`. `EvalLoadError` inherits from `ValueError` and is raised during evaluation TOML parsing.
+
+**Service-layer exceptions** (added for kragd):
+- `ServiceNotReadyError` — raised when endpoints are called before `start()` completes (HTTP 503).
+- `IndexingInProgressError` — raised when a conflicting operation is requested during indexing (HTTP 409).
+- `ResourceNotConfiguredError(resource, message)` — raised when a required resource (LLM, vector store) is not configured (HTTP 500).
 
 ---
 
@@ -1239,6 +1248,7 @@ The configuration system supports two file formats with automatic detection:
 | `[embedding]` | `model` | `str` | `"BAAI/bge-base-en-v1.5"` |
 | | `batch_size` | `int` | `64` |
 | | `device` | `str` | `"cpu"` |
+| `[embedding_code]` | `model` | `str \| None` | `None` |
 | `[chunking]` | `chunk_size` | `int` | `384` |
 | | `chunk_overlap` | `int` | `64` |
 | `[storage]` | `vector_store_path` | `Path` | `XDG_CACHE/krag/storage` |

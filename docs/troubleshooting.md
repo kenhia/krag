@@ -159,8 +159,34 @@ This converts `config.yaml` to `config.toml` format.
 1. Check this troubleshooting guide
 2. Run `krag --help` for command documentation
 3. Run `krag plugin validate` for plugin diagnostics
-4. Review logs in `~/.local/state/krag/logs/`
+4. Review logs in `~/.local/state/krag/logs/` (use `kragd --rotate-logs` to archive old logs before restarting)
 5. File an issue on the project repository
+
+## Service Errors (kragd)
+
+### ServiceNotReadyError (HTTP 503)
+
+**Symptom**: API calls return 503 with "Service not ready" message.
+
+**Cause**: Endpoints were called before kragd finished initialization.
+
+**Solution**: Wait for `══ KRAGD READY ══` to appear in the log, or poll `GET /health` until it returns 200.
+
+### IndexingInProgressError (HTTP 409)
+
+**Symptom**: API calls return 409 with "Indexing in progress" message.
+
+**Cause**: A conflicting operation (e.g., starting a second index) was requested while indexing is active.
+
+**Solution**: Wait for the current indexing run to finish, or check `GET /index/status`.
+
+### ResourceNotConfiguredError (HTTP 500)
+
+**Symptom**: API calls return 500 with a message indicating a missing resource.
+
+**Cause**: A required resource (LLM, vector store, lexicon) is not configured in `config.toml`.
+
+**Solution**: Check your `config.toml` has the relevant section configured (e.g., `[llm]` for LLM, `[storage]` for vector store).
 
 ## GPU and LLM Issues
 

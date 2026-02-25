@@ -242,9 +242,9 @@
 
 **Purpose**: Final validation across all user stories
 
-- [ ] T052 [P] Run quickstart.md verification commands for all user stories
-- [ ] T053 [P] Run full pre-commit validation: `uv run ruff format . && uv run ruff check --fix . && uv run pytest`
-- [ ] T054 Update docs/ if any public API behaviour changed (e.g., new exception types, config sections)
+- [X] T052 [P] Run quickstart.md verification commands for all user stories
+- [X] T053 [P] Run full pre-commit validation: `uv run ruff format . && uv run ruff check --fix . && uv run pytest`
+- [X] T054 Update docs/ if any public API behaviour changed (e.g., new exception types, config sections)
 
 ---
 
