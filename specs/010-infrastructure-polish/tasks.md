@@ -52,17 +52,17 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T008 [P] [US8] Write unit tests for domain exception classes and hierarchy in tests/unit/test_domain_exceptions.py
-- [ ] T009 [P] [US8] Write contract tests for HTTP error code dispatch (isinstance-based) in tests/contract/test_api_error_codes.py
+- [X] T008 [P] [US8] Write unit tests for domain exception classes and hierarchy in tests/unit/test_domain_exceptions.py
+- [X] T009 [P] [US8] Write contract tests for HTTP error code dispatch (isinstance-based) in tests/contract/test_api_error_codes.py
 
 ### Implementation for User Story 8
 
-- [ ] T010 [US8] Add ServiceNotReadyError, IndexingInProgressError, ResourceNotConfiguredError to src/krag/models/exceptions.py (all inherit KragError)
-- [ ] T011 [P] [US8] Fix LexiconValidationError to inherit from KragError in src/krag/lexicon/lexicon_store.py
-- [ ] T012 [P] [US8] Fix EvalLoadError to inherit from KragError in src/krag/evaluation/loader.py
-- [ ] T013 [US8] Replace all 9 RuntimeError raises with domain exceptions in src/kragd/service.py
-- [ ] T014 [US8] Replace string-matching exception handler with isinstance-based dispatch in src/kragd/app.py (per contracts/api-changes.md)
-- [ ] T015 [US8] Replace silent `except Exception: pass` blocks with logged warnings in src/krag/orchestration/indexer.py and src/kragd/service.py (~10 locations)
+- [X] T010 [US8] Add ServiceNotReadyError, IndexingInProgressError, ResourceNotConfiguredError to src/krag/models/exceptions.py (all inherit KragError)
+- [X] T011 [P] [US8] Fix LexiconValidationError to inherit from KragError in src/krag/lexicon/lexicon_store.py
+- [X] T012 [P] [US8] Fix EvalLoadError to inherit from KragError in src/krag/evaluation/loader.py
+- [X] T013 [US8] Replace all 9 RuntimeError raises with domain exceptions in src/kragd/service.py
+- [X] T014 [US8] Replace string-matching exception handler with isinstance-based dispatch in src/kragd/app.py (per contracts/api-changes.md)
+- [X] T015 [US8] Replace silent `except Exception: pass` blocks with logged warnings in src/krag/orchestration/indexer.py and src/kragd/service.py (~10 locations)
 
 **Checkpoint**: Exception architecture is type-safe. All HTTP status codes dispatched by `isinstance`, no string matching. All formerly-silent excepts now log warnings.
 
