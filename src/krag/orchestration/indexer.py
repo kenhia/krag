@@ -326,8 +326,8 @@ class IndexingOrchestrator:
     def _load_metadata(self) -> None:
         """Load previously indexed file metadata from disk.
 
-        Only loads metadata for files within the configured directory paths
-        to avoid cross-contamination between different workspaces.
+        Loads all entries unconditionally — no directory-path filtering.
+        Stale entries (deleted files) are pruned at save time, not load time.
         """
         metadata_path = self._get_metadata_path()
 
@@ -350,20 +350,6 @@ class IndexingOrchestrator:
                 # Recreate FileMetadata object
                 file_path = Path(item["file_path"])
 
-                # Only load metadata for files within our configured directories
-                # This prevents cross-contamination between different workspaces
-                # Get directory paths from config or from direct parameters
-                dir_paths = (
-                    self.config.directory_paths
-                    if self.config
-                    else [Path(d) for d in self.directory_paths]
-                )
-
-                is_in_workspace = any(file_path.is_relative_to(dir_path) for dir_path in dir_paths)
-
-                if not is_in_workspace:
-                    continue
-
                 metadata = FileMetadata(
                     file_path=file_path,
                     file_size=item["file_size"],
@@ -384,12 +370,24 @@ class IndexingOrchestrator:
             self.indexed_files = {}
 
     def _save_metadata(self) -> None:
-        """Save indexed file metadata to disk for incremental indexing."""
+        """Save indexed file metadata to disk for incremental indexing.
+
+        Prunes entries where the file no longer exists on disk before saving.
+        """
         metadata_path = self._get_metadata_path()
 
         try:
             # Ensure parent directory exists
             metadata_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Prune stale entries (files that no longer exist on disk)
+            stale_keys = [
+                key for key, meta in self.indexed_files.items() if not meta.file_path.exists()
+            ]
+            for key in stale_keys:
+                del self.indexed_files[key]
+            if stale_keys:
+                logger.info(f"Pruned {len(stale_keys)} stale metadata entries (files deleted)")
 
             # Serialize FileMetadata objects
             data = []
