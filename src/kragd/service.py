@@ -373,7 +373,12 @@ class KragService:
     # ── public API ──────────────────────────────
 
     def query(self, request: QueryRequest) -> QueryResponse:
-        """Execute a full RAG query with LLM synthesis."""
+        """Execute a full RAG query with LLM synthesis.
+
+        When ``request.include_debug`` is True the response contains
+        populated :class:`DebugMetadata`; otherwise ``debug`` is None.
+        Both paths follow the same retrieval → critic → synthesis pipeline.
+        """
         self._require_started()
         self._require_not_indexing()
 
@@ -386,22 +391,7 @@ class KragService:
 
         # Resolve mode — mode settings provide defaults, explicit params override
         mode_config = self._resolve_mode(request.mode)
-
-        # When debug metadata is requested, delegate to the debug path
-        if request.include_debug:
-            debug_req = DebugQueryRequest(
-                query=request.query,
-                top_k=request.top_k,
-                preset=request.preset,
-                llm=request.llm,
-                mode=request.mode,
-            )
-            debug_resp = self.debug_query(debug_req)
-            return QueryResponse(
-                answer=debug_resp.answer,
-                sources=debug_resp.sources,
-                debug=debug_resp.debug,
-            )
+        include_debug = request.include_debug
 
         # Determine which LLM slot will be used for lifecycle tracking
         slot = request.llm or (mode_config.llm_slot if mode_config else None) or "text"
@@ -410,33 +400,133 @@ class KragService:
             self.lifecycle_manager.on_request_start(slot)
 
         try:
-            # Swap query engine's LLM client to the requested slot
-            if self.llm_pool is not None:
-                target_slot = self.llm_pool._slot_for(slot)
-                if not target_slot.is_loaded:
-                    self.llm_pool.swap_to(slot)
-                if target_slot.instance is not None:
-                    self.query_engine.llm_client = target_slot.instance
-
-            # Configure critic for this request based on mode settings
-            prev_critic = self.query_engine.critic
-            if mode_config and mode_config.critic_enabled:
-                from krag.critic.relevance_critic import RelevanceCritic
-
-                critic_llm = self.llm_pool._slot_for(slot).instance
-                self.query_engine.critic = RelevanceCritic(
-                    llm_client=critic_llm,
-                    threshold=mode_config.critic_threshold,
-                    enabled=True,
-                )
-            else:
-                self.query_engine.critic = None
+            from krag.retrieval.retriever import Retriever
 
             top_k = (
                 request.top_k or (mode_config.top_k if mode_config else None) or self.config.top_k
             )
-            result = self.query_engine.query(request.query, top_k=top_k)
+            threshold = (
+                mode_config.similarity_threshold if mode_config else None
+            ) or self.config.similarity_threshold
 
+            # Phase 1: Retrieval (with optional timing)
+            t0 = time.monotonic()
+            retriever = Retriever(
+                vector_store=self.vector_store,
+                embedding_generator=self.embedding_generator,
+                embedding_orchestrator=self.embedding_orchestrator,
+                collection_manager=self.collection_manager,
+            )
+            results = retriever.retrieve(
+                query=request.query,
+                top_k=top_k,
+                similarity_threshold=threshold,
+            )
+            retrieval_ms = (time.monotonic() - t0) * 1000
+
+            # Collect retrieval statistics
+            total_before = getattr(retriever, "_last_total_before_dedup", len(results))
+            total_after = len(results)
+
+            # Apply context relevance critic if enabled via mode config
+            critic_scores: list[int] = []
+            chunks_pre_critic = len(results)
+            chunks_post_critic = len(results)
+
+            if mode_config and mode_config.critic_enabled and results:
+                from krag.critic.relevance_critic import RelevanceCritic
+
+                critic_slot = self.llm_pool._slot_for(slot)
+                critic_llm = critic_slot.instance
+                critic = RelevanceCritic(
+                    llm_client=critic_llm,
+                    threshold=mode_config.critic_threshold,
+                    enabled=True,
+                )
+                scored = critic.score_chunks(request.query, results)
+                critic_scores = [s.critic_score for s in scored]
+                results = critic.filter_chunks(scored)
+                chunks_post_critic = len(results)
+                logger.info(
+                    "Critic: %d/%d chunks passed (threshold %d)",
+                    chunks_post_critic,
+                    chunks_pre_critic,
+                    mode_config.critic_threshold,
+                )
+
+            # Match lexicon terms for prompt injection
+            lexicon_glossary: str | None = None
+            lexicon_terms_count = 0
+            if self.lexicon_store is not None:
+                from krag.lexicon.lexicon_injector import LexiconInjector
+
+                matches = self.lexicon_store.match_terms(request.query)
+                if matches:
+                    injector = LexiconInjector()
+                    selected = injector.select_top(matches)
+                    lexicon_glossary = injector.format_glossary(selected)
+                    lexicon_terms_count = len(selected)
+
+            # Handle all-chunks-filtered-by-critic case (T061)
+            if chunks_pre_critic > 0 and chunks_post_critic == 0:
+                from krag.synthesis.prompt_builder import INSUFFICIENT_CONTEXT_PHRASE
+
+                logger.info("All chunks filtered by critic — returning insufficient context")
+
+                debug = None
+                if include_debug:
+                    effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
+                    auto_routed = effective_llm is None
+                    debug = DebugMetadata(
+                        llm_used="none",
+                        llm_model="none",
+                        route="none",
+                        auto_routed=auto_routed,
+                        route_reason="All chunks filtered by critic",
+                        preset=request.preset
+                        or (mode_config.preset if mode_config else None)
+                        or self.config.prompt_preset
+                        or "default",
+                        mode=request.mode,
+                        collections_searched=sorted(mode_config.collections.keys())
+                        if mode_config
+                        else None,
+                        retrieval_time_ms=round(retrieval_ms, 2),
+                        generation_time_ms=0.0,
+                        embedding_models_used=list(
+                            self.embedding_orchestrator._model_names.values()
+                        )
+                        if self.embedding_orchestrator is not None
+                        else [self.config.embedding_model],
+                        vector_spaces_searched=[],
+                        total_candidates_before_dedup=total_before,
+                        total_candidates_after_dedup=total_after,
+                        similarity_threshold=threshold,
+                        per_space_result_counts={},
+                        lexicon_terms_injected=lexicon_terms_count,
+                        critic_scores=critic_scores,
+                        chunks_pre_critic=chunks_pre_critic,
+                        chunks_post_critic=0,
+                    )
+                return QueryResponse(
+                    answer=INSUFFICIENT_CONTEXT_PHRASE,
+                    sources=[],
+                    debug=debug,
+                )
+
+            # Phase 2: LLM generation with timing
+            effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
+            t1 = time.monotonic()
+            response_text, route_name = self.llm_pool.route_and_generate(
+                messages=self.query_engine.prompt_builder.build(
+                    request.query, results, lexicon_glossary=lexicon_glossary
+                ),
+                retrieved_chunks=results,
+                llm_override=effective_llm,
+            )
+            generation_ms = (time.monotonic() - t1) * 1000
+
+            # Build source chunks
             sources = [
                 SourceChunk(
                     chunk_id=str(getattr(s, "chunk_id", "")),
@@ -452,12 +542,83 @@ class KragService:
                     end_line=getattr(s, "end_line", None),
                     collection=getattr(s, "collection", None),
                 )
-                for i, s in enumerate(result.sources)
+                for i, s in enumerate(results)
             ]
 
-            return QueryResponse(answer=result.answer, sources=sources, debug=None)
+            # Build debug metadata only when requested
+            debug = None
+            if include_debug:
+                auto_routed = effective_llm is None
+                route_slot = self.llm_pool._slot_for(route_name)
+
+                # Collect vector space info
+                vector_spaces: list[str] = []
+                per_space_counts: dict[str, int] = {}
+                retriever_per_space = getattr(retriever, "_last_per_space_counts", None)
+                if retriever_per_space:
+                    vector_spaces = list(retriever_per_space.keys())
+                    per_space_counts = dict(retriever_per_space)
+                else:
+                    if self.vector_store is not None:
+                        try:
+                            import warnings
+
+                            with warnings.catch_warnings():
+                                warnings.simplefilter("ignore", UserWarning)
+                                qdrant_info = self.vector_store.client.get_collection(
+                                    self.vector_store.collection_name
+                                )
+                            vectors_cfg = qdrant_info.config.params.vectors
+                            if isinstance(vectors_cfg, dict):
+                                vector_spaces = list(vectors_cfg.keys())
+                        except Exception:
+                            logger.warning(
+                                "Failed to introspect vector spaces from Qdrant",
+                                exc_info=True,
+                            )
+                    if not vector_spaces:
+                        vector_spaces = ["default"]
+                    for space in vector_spaces:
+                        per_space_counts[space] = total_before
+
+                debug = DebugMetadata(
+                    llm_used=route_name,
+                    llm_model=str(route_slot.model_path) if route_slot.model_path else "unknown",
+                    route=route_name,
+                    auto_routed=auto_routed,
+                    route_reason=None
+                    if not auto_routed
+                    else "Auto-routed based on chunk composition",
+                    preset=request.preset
+                    or (mode_config.preset if mode_config else None)
+                    or self.config.prompt_preset
+                    or "default",
+                    mode=request.mode,
+                    collections_searched=sorted(mode_config.collections.keys())
+                    if mode_config
+                    else None,
+                    retrieval_time_ms=round(retrieval_ms, 2),
+                    generation_time_ms=round(generation_ms, 2),
+                    embedding_models_used=list(self.embedding_orchestrator._model_names.values())
+                    if self.embedding_orchestrator is not None
+                    else [self.config.embedding_model],
+                    vector_spaces_searched=vector_spaces,
+                    total_candidates_before_dedup=total_before,
+                    total_candidates_after_dedup=total_after,
+                    similarity_threshold=threshold,
+                    per_space_result_counts=per_space_counts,
+                    lexicon_terms_injected=lexicon_terms_count,
+                    critic_scores=critic_scores,
+                    chunks_pre_critic=chunks_pre_critic,
+                    chunks_post_critic=chunks_post_critic,
+                )
+
+            return QueryResponse(
+                answer=response_text,
+                sources=sources,
+                debug=debug,
+            )
         finally:
-            self.query_engine.critic = prev_critic
             if self.lifecycle_manager is not None:
                 self.lifecycle_manager.on_request_end(slot)
 
@@ -507,246 +668,22 @@ class KragService:
     def debug_query(self, request: DebugQueryRequest) -> DebugQueryResponse:
         """Execute a query with full debug metadata.
 
-        Wraps query with timing instrumentation, collects routing decision,
-        embedding models, vector spaces, candidate counts.
+        Thin wrapper around :meth:`query` with ``include_debug=True``.
         """
-        self._require_started()
-        self._require_not_indexing()
-
-        if self.query_engine is None:
-            from krag.models.exceptions import ResourceNotConfiguredError
-
-            raise ResourceNotConfiguredError(
-                "LLM", "No LLM model configured — cannot synthesize answers"
-            )
-
-        # Resolve mode
-        mode_config = self._resolve_mode(request.mode)
-
-        slot = request.llm or (mode_config.llm_slot if mode_config else None) or "text"
-        if self.lifecycle_manager is not None:
-            self.lifecycle_manager.ensure_loaded(slot)
-            self.lifecycle_manager.on_request_start(slot)
-
-        try:
-            from krag.retrieval.retriever import Retriever
-
-            top_k = (
-                request.top_k or (mode_config.top_k if mode_config else None) or self.config.top_k
-            )
-            threshold = (
-                mode_config.similarity_threshold if mode_config else None
-            ) or self.config.similarity_threshold
-
-            # Phase 1: Retrieval with timing
-            t0 = time.monotonic()
-            retriever = Retriever(
-                vector_store=self.vector_store,
-                embedding_generator=self.embedding_generator,
-                embedding_orchestrator=self.embedding_orchestrator,
-                collection_manager=self.collection_manager,
-            )
-            results = retriever.retrieve(
-                query=request.query,
-                top_k=top_k,
-                similarity_threshold=threshold,
-            )
-            retrieval_ms = (time.monotonic() - t0) * 1000
-
-            # Collect retrieval statistics
-            total_before = getattr(retriever, "_last_total_before_dedup", len(results))
-            total_after = len(results)
-
-            # Apply context relevance critic if enabled via mode config
-            critic_scores: list[int] = []
-            chunks_pre_critic = len(results)
-            chunks_post_critic = len(results)
-
-            if mode_config and mode_config.critic_enabled and results:
-                from krag.critic.relevance_critic import RelevanceCritic
-
-                # Use whichever LLM slot is already loaded for this request
-                critic_slot = self.llm_pool._slot_for(slot)
-                critic_llm = critic_slot.instance
-                critic = RelevanceCritic(
-                    llm_client=critic_llm,
-                    threshold=mode_config.critic_threshold,
-                    enabled=True,
-                )
-                scored = critic.score_chunks(request.query, results)
-                critic_scores = [s.critic_score for s in scored]
-                results = critic.filter_chunks(scored)
-                chunks_post_critic = len(results)
-                logger.info(
-                    "Critic: %d/%d chunks passed (threshold %d)",
-                    chunks_post_critic,
-                    chunks_pre_critic,
-                    mode_config.critic_threshold,
-                )
-
-            # Match lexicon terms for prompt injection
-            lexicon_glossary: str | None = None
-            lexicon_terms_count = 0
-            if self.lexicon_store is not None:
-                from krag.lexicon.lexicon_injector import LexiconInjector
-
-                matches = self.lexicon_store.match_terms(request.query)
-                if matches:
-                    injector = LexiconInjector()
-                    selected = injector.select_top(matches)
-                    lexicon_glossary = injector.format_glossary(selected)
-                    lexicon_terms_count = len(selected)
-
-            # Handle all-chunks-filtered-by-critic case (T061)
-            if chunks_pre_critic > 0 and chunks_post_critic == 0:
-                from krag.synthesis.prompt_builder import INSUFFICIENT_CONTEXT_PHRASE
-
-                logger.info("All chunks filtered by critic — returning insufficient context")
-
-                # Still need debug metadata for diagnostics
-                effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
-                auto_routed = effective_llm is None
-                debug = DebugMetadata(
-                    llm_used="none",
-                    llm_model="none",
-                    route="none",
-                    auto_routed=auto_routed,
-                    route_reason="All chunks filtered by critic",
-                    preset=request.preset
-                    or (mode_config.preset if mode_config else None)
-                    or self.config.prompt_preset
-                    or "default",
-                    mode=request.mode,
-                    collections_searched=sorted(mode_config.collections.keys())
-                    if mode_config
-                    else None,
-                    retrieval_time_ms=round(retrieval_ms, 2),
-                    generation_time_ms=0.0,
-                    embedding_models_used=list(self.embedding_orchestrator._model_names.values())
-                    if self.embedding_orchestrator is not None
-                    else [self.config.embedding_model],
-                    vector_spaces_searched=[],
-                    total_candidates_before_dedup=total_before,
-                    total_candidates_after_dedup=total_after,
-                    similarity_threshold=threshold,
-                    per_space_result_counts={},
-                    lexicon_terms_injected=lexicon_terms_count,
-                    critic_scores=critic_scores,
-                    chunks_pre_critic=chunks_pre_critic,
-                    chunks_post_critic=0,
-                )
-                return DebugQueryResponse(
-                    answer=INSUFFICIENT_CONTEXT_PHRASE,
-                    sources=[],
-                    debug=debug,
-                )
-
-            # Phase 2: LLM generation with timing
-            # Use the mode's llm_slot when no explicit --llm override is given
-            effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
-            t1 = time.monotonic()
-            response_text, route_name = self.llm_pool.route_and_generate(
-                messages=self.query_engine.prompt_builder.build(
-                    request.query, results, lexicon_glossary=lexicon_glossary
-                ),
-                retrieved_chunks=results,
-                llm_override=effective_llm,
-            )
-            generation_ms = (time.monotonic() - t1) * 1000
-
-            # Determine routing info
-            auto_routed = effective_llm is None
-            route_slot = self.llm_pool._slot_for(route_name)
-
-            sources = [
-                SourceChunk(
-                    chunk_id=str(getattr(s, "chunk_id", "")),
-                    file_path=str(s.file_path),
-                    score=s.score,
-                    rank=i + 1,
-                    chunk_content=s.chunk_content,
-                    file_type=getattr(s, "file_type", ""),
-                    language=getattr(s, "language", None),
-                    function_name=getattr(s, "function_name", None),
-                    class_name=getattr(s, "class_name", None),
-                    start_line=getattr(s, "start_line", None),
-                    end_line=getattr(s, "end_line", None),
-                    collection=getattr(s, "collection", None),
-                )
-                for i, s in enumerate(results)
-            ]
-
-            # Collect vector space info
-            vector_spaces = []
-            per_space_counts: dict[str, int] = {}
-
-            # Prefer actual per-space counts from the retriever (set during multi-model search)
-            retriever_per_space = getattr(retriever, "_last_per_space_counts", None)
-            if retriever_per_space:
-                vector_spaces = list(retriever_per_space.keys())
-                per_space_counts = dict(retriever_per_space)
-            else:
-                # Single-model fallback — discover space names from Qdrant
-                if self.vector_store is not None:
-                    try:
-                        import warnings
-
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore", UserWarning)
-                            qdrant_info = self.vector_store.client.get_collection(
-                                self.vector_store.collection_name
-                            )
-                        vectors_cfg = qdrant_info.config.params.vectors
-                        if isinstance(vectors_cfg, dict):
-                            vector_spaces = list(vectors_cfg.keys())
-                    except Exception:
-                        logger.warning(
-                            "Failed to introspect vector spaces from Qdrant",
-                            exc_info=True,
-                        )
-                if not vector_spaces:
-                    vector_spaces = ["default"]
-                for space in vector_spaces:
-                    per_space_counts[space] = total_before
-
-            debug = DebugMetadata(
-                llm_used=route_name,
-                llm_model=str(route_slot.model_path) if route_slot.model_path else "unknown",
-                route=route_name,
-                auto_routed=auto_routed,
-                route_reason=None if not auto_routed else "Auto-routed based on chunk composition",
-                preset=request.preset
-                or (mode_config.preset if mode_config else None)
-                or self.config.prompt_preset
-                or "default",
-                mode=request.mode,
-                collections_searched=sorted(mode_config.collections.keys())
-                if mode_config
-                else None,
-                retrieval_time_ms=round(retrieval_ms, 2),
-                generation_time_ms=round(generation_ms, 2),
-                embedding_models_used=list(self.embedding_orchestrator._model_names.values())
-                if self.embedding_orchestrator is not None
-                else [self.config.embedding_model],
-                vector_spaces_searched=vector_spaces,
-                total_candidates_before_dedup=total_before,
-                total_candidates_after_dedup=total_after,
-                similarity_threshold=threshold,
-                per_space_result_counts=per_space_counts,
-                lexicon_terms_injected=lexicon_terms_count,
-                critic_scores=critic_scores,
-                chunks_pre_critic=chunks_pre_critic,
-                chunks_post_critic=chunks_post_critic,
-            )
-
-            return DebugQueryResponse(
-                answer=response_text,
-                sources=sources,
-                debug=debug,
-            )
-        finally:
-            if self.lifecycle_manager is not None:
-                self.lifecycle_manager.on_request_end(slot)
+        query_request = QueryRequest(
+            query=request.query,
+            top_k=request.top_k,
+            preset=request.preset,
+            llm=request.llm,
+            mode=request.mode,
+            include_debug=True,
+        )
+        result = self.query(query_request)
+        return DebugQueryResponse(
+            answer=result.answer,
+            sources=result.sources,
+            debug=result.debug,
+        )
 
     def debug_qdrant(self, request: QdrantSearchRequest) -> QdrantSearchResponse:
         """Raw vector store search bypassing Retriever (R-09).

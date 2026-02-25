@@ -163,13 +163,13 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T034 [P] [US3] Write unit tests for unified query path (identical results, debug metadata population) in tests/unit/test_query_debug_unified.py
+- [X] T034 [P] [US3] Write unit tests for unified query path (identical results, debug metadata population) in tests/unit/test_query_debug_unified.py
 
 ### Implementation for User Story 3
 
-- [ ] T035 [US3] Add `include_debug: bool = False` parameter to `query()` method in src/kragd/service.py
-- [ ] T036 [US3] Merge `debug_query()` retrieval/synthesis logic into `query()`, make `debug_query()` a thin wrapper calling `self.query(..., include_debug=True)` in src/kragd/service.py
-- [ ] T037 [US3] Update debug router to call `service.query(include_debug=True)` in src/kragd/routers/debug.py
+- [X] T035 [US3] Add `include_debug: bool = False` parameter to `query()` method in src/kragd/service.py
+- [X] T036 [US3] Merge `debug_query()` retrieval/synthesis logic into `query()`, make `debug_query()` a thin wrapper calling `self.query(..., include_debug=True)` in src/kragd/service.py
+- [X] T037 [US3] Update debug router to call `service.query(include_debug=True)` in src/kragd/routers/debug.py
 
 **Checkpoint**: Single code path for query and debug-query. Identical results guaranteed. Debug metadata populated only when requested.
 
