@@ -165,9 +165,7 @@ class KragService:
         from krag.storage.qdrant_impl import QdrantVectorStore
 
         shared_client = (
-            self.collection_manager._client
-            if self.collection_manager is not None
-            else None
+            self.collection_manager._client if self.collection_manager is not None else None
         )
         self.vector_store = QdrantVectorStore(
             collection_name=self.config.collection_name,

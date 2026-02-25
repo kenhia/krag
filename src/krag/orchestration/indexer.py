@@ -552,8 +552,7 @@ class IndexingOrchestrator:
                     pass
             vec_value: Any = (
                 {vector_name: embedding}
-                if self.embedding_orchestrator.is_multi_model
-                and self.collection_manager is None
+                if self.embedding_orchestrator.is_multi_model and self.collection_manager is None
                 else embedding
             )
             vectors.append(

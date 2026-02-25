@@ -4,7 +4,7 @@ T007: Tests written before implementation (TDD Red phase).
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -254,7 +254,7 @@ class TestDebugQueryCritic:
     def test_debug_query_critic_uses_code_slot_when_mode_says_code(
         self, MockRetriever: MagicMock
     ) -> None:
-        """When mode.llm_slot='code', critic uses the code LLM (not text)."""        
+        """When mode.llm_slot='code', critic uses the code LLM (not text)."""
         from krag.models.configuration import ModeConfiguration
         from kragd.schemas import DebugQueryRequest
 

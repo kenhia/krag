@@ -32,3 +32,10 @@
 ## Notes
 
 All items pass. No markers requiring clarification remain. Spec is ready for `/speckit.plan`.
+
+Spec updated 2026-02-23 with 5 additional user stories (US6–US10) discovered during deep codebase audit:
+- US6: Concurrency safety (P1 — race conditions on shared query engine state)
+- US7: Dead code/dependency removal (P2 — llama-index, health.py, tomli, duplicate defs)
+- US8: Exception architecture (P2 — string-matching dispatch, silent swallows, hierarchy gaps)
+- US9: CLI consistency (P2 — broken find_and_load, missing --mode, inconsistent flags)
+- US10: Plugin registry hardening (P3 — extension map auto-build, inspect.signature removal)

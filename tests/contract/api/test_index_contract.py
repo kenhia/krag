@@ -55,8 +55,14 @@ def test_client() -> TestClient:
 
         # Default index_status response
         mock_service.get_index_status.return_value = _make_index_response(
-            status="none", job_id="none", files_scanned=0, files_processed=0,
-            files_skipped=0, files_errored=0, chunks_created=0, vectors_stored=0,
+            status="none",
+            job_id="none",
+            files_scanned=0,
+            files_processed=0,
+            files_skipped=0,
+            files_errored=0,
+            chunks_created=0,
+            vectors_stored=0,
             duration_seconds=0.0,
         )
 

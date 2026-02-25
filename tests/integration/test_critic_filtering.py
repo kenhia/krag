@@ -52,7 +52,6 @@ class TestCriticFilteringIntegration:
         mock_emb = MagicMock()
         mock_emb.generate_embedding.return_value = [0.1] * 384
 
-
         chunks = [
             _make_result(
                 content="Relevant chunk about embeddings and vector search methods", rank=1
