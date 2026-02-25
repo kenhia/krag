@@ -366,6 +366,9 @@ class Configuration(BaseSettings):
         default=64, gt=0, description="Batch size for embedding generation"
     )
     embedding_device: str = Field(default="cpu", description="Device to use (cpu, cuda, mps)")
+    embedding_code_model: str | None = Field(
+        default=None, description="Optional code-specific embedding model name"
+    )
 
     # Chunking
     chunk_size: int = Field(default=384, gt=0, description="Target chunk size in tokens")

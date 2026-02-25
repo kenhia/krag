@@ -120,6 +120,12 @@ class ConfigManager:
             if "device" in emb_section:
                 config_dict["embedding_device"] = emb_section["device"]
 
+        # [embedding_code] section
+        if "embedding_code" in toml_data:
+            emb_code_section = toml_data["embedding_code"]
+            if "model" in emb_code_section:
+                config_dict["embedding_code_model"] = emb_code_section["model"]
+
         # [chunking] section
         if "chunking" in toml_data:
             chunk_section = toml_data["chunking"]

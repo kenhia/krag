@@ -150,6 +150,11 @@ class KragService:
         self.embedding_orchestrator = EmbeddingOrchestrator(
             default_model=self.config.embedding_model,
             device=self.config.embedding_device,
+            additional_models=(
+                {"code": self.config.embedding_code_model}
+                if self.config.embedding_code_model
+                else None
+            ),
         )
 
         # Register plugin-declared embedding models (e.g. code plugin)

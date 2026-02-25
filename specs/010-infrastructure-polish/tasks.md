@@ -209,13 +209,13 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T044 [P] [US4] Write unit tests for `[embedding_code]` config parsing and field validation in tests/unit/test_embedding_code_config.py
+- [X] T044 [P] [US4] Write unit tests for `[embedding_code]` config parsing and field validation in tests/unit/test_embedding_code_config.py
 
 ### Implementation for User Story 4
 
-- [ ] T045 [US4] Add `embedding_code_model: str | None = None` field to Configuration model in src/krag/models/configuration.py
-- [ ] T046 [US4] Parse `[embedding_code]` TOML section in `_load_toml()` in src/krag/config/settings.py
-- [ ] T047 [US4] Wire `embedding_code_model` into `EmbeddingOrchestrator.additional_models` at construction sites in src/krag/cli/pipeline.py, src/kragd/service.py, and src/krag/orchestration/indexer.py
+- [X] T045 [US4] Add `embedding_code_model: str | None = None` field to Configuration model in src/krag/models/configuration.py
+- [X] T046 [US4] Parse `[embedding_code]` TOML section in `_load_toml()` in src/krag/config/settings.py
+- [X] T047 [US4] Wire `embedding_code_model` into `EmbeddingOrchestrator.additional_models` at construction sites in src/krag/cli/pipeline.py, src/kragd/service.py, and src/krag/orchestration/indexer.py
 
 **Checkpoint**: Code embedding configurable in core config. Plugin precedence preserved. Single-model backward compatibility maintained.
 

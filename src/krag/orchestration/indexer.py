@@ -133,8 +133,13 @@ class IndexingOrchestrator:
         self.chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
         logger.info(f"Loading embedding model: {embedding_model}")
+        additional_models: dict[str, str] | None = None
+        if self.config is not None and self.config.embedding_code_model:
+            additional_models = {"code": self.config.embedding_code_model}
         self.embedding_orchestrator = EmbeddingOrchestrator(
-            default_model=embedding_model, device=device
+            default_model=embedding_model,
+            device=device,
+            additional_models=additional_models,
         )
         # Keep a reference to the default generator for backward-compat PluginContext
         self.embedding_generator = self.embedding_orchestrator._models["text"]
