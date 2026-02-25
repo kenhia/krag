@@ -909,7 +909,7 @@ class KragService:
         Clears _indexing flag when done (success or failure).
         """
 
-        from kragd.schemas import IndexError as IndexErr
+        from kragd.schemas import IndexingFileError
 
         t0 = time.monotonic()
 
@@ -966,7 +966,7 @@ class KragService:
             duration = time.monotonic() - t0
 
             errors = [
-                IndexErr(
+                IndexingFileError(
                     file_path=str(e.file_path),
                     error_type=e.error_type,
                     error_message=e.error_message,
@@ -1014,7 +1014,7 @@ class KragService:
                 duration_seconds=round(time.monotonic() - t0, 2),
                 dry_run=request.dry_run,
                 errors=[
-                    IndexErr(
+                    IndexingFileError(
                         file_path="<system>",
                         error_type=type(exc).__name__,
                         error_message=str(exc),

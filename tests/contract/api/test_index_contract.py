@@ -168,12 +168,12 @@ class TestIndexContract:
 
     def test_index_with_errors_in_response(self, test_client: TestClient) -> None:
         """IndexResponse with file errors."""
-        from kragd.schemas import IndexError as IndexErr
+        from kragd.schemas import IndexingFileError
 
         test_client.app.state.service.index.return_value = _make_index_response(
             files_errored=1,
             errors=[
-                IndexErr(
+                IndexingFileError(
                     file_path="/home/user/bad.py",
                     error_type="UnicodeDecodeError",
                     error_message="codec can't decode byte 0xff",

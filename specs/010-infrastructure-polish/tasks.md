@@ -101,11 +101,11 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T021 [P] [US2] Write unit tests for index-status ordering (running vs cached) in tests/unit/test_index_status_accuracy.py
+- [X] T021 [P] [US2] Write unit tests for index-status ordering (running vs cached) in tests/unit/test_index_status_accuracy.py
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] Reorder `get_index_status()` to check `self._indexing` before `self._index_job_cache` in src/kragd/service.py (~L1038–1082)
+- [X] T022 [US2] Reorder `get_index_status()` to check `self._indexing` before `self._index_job_cache` in src/kragd/service.py (~L1038–1082)
 
 **Checkpoint**: `index-status` returns `status: running` within 1 second of a new indexing job starting.
 

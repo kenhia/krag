@@ -148,7 +148,6 @@ class IndexingOrchestrator:
             logger.info("Initializing plugin system")
             self.plugin_registry = PluginRegistry(plugin_config)
             self.plugin_registry.discover_plugins()
-            self.plugin_registry._build_extension_map()
 
             # Initialize failure collector first (needed for context)
             self.failure_collector = IndexingFailureCollector()

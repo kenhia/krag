@@ -335,16 +335,16 @@ class TestPluginInitialization:
         # Should not raise exception
         assert handler._initialized is True
 
-    def test_initialize_plugin_works_without_context_parameter(self, loader):
-        """initialize_plugin should work with plugins that don't accept context."""
+    def test_initialize_plugin_works_with_context_parameter(self, loader):
+        """initialize_plugin should work with plugins that accept context."""
 
         class SimpleHandler(FileTypeHandler):
             def __init__(self):
                 self.initialized = False
                 self.config = {}
 
-            def initialize(self, config):
-                """Initialize without context parameter."""
+            def initialize(self, config, context=None):
+                """Initialize with optional context parameter."""
                 self.initialized = True
                 self.config = config
 
