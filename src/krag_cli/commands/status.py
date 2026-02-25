@@ -15,7 +15,7 @@ console = Console()
 def status_command(
     host: str | None = typer.Option(None, "--host", help="kragd host"),
     port: int | None = typer.Option(None, "--port", help="kragd port"),
-    json_output: bool = typer.Option(False, "--json", help="Output raw JSON"),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
 ) -> None:
     """Show kragd service status with model info, VRAM, and uptime."""
     import json
@@ -32,7 +32,7 @@ def status_command(
     try:
         data = client.status()
 
-        if json_output:
+        if output_json:
             console.print(json.dumps(data, indent=2))
             return
 

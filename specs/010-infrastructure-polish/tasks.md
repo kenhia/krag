@@ -121,14 +121,14 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T023 [P] [US10] Write unit tests for auto extension map build after discover_plugins() in tests/unit/test_plugin_registry.py
+- [X] T023 [P] [US10] Write unit tests for auto extension map build after discover_plugins() in tests/unit/test_plugin_registry.py
 
 ### Implementation for User Story 10
 
-- [ ] T024 [US10] Auto-call `_build_extension_map()` at end of `discover_plugins()` in src/krag/plugins/registry.py
-- [ ] T025 [US10] Remove explicit `_build_extension_map()` call from caller in src/krag/orchestration/indexer.py (~L151)
-- [ ] T026 [US10] Remove `inspect.signature` guard from `initialize_plugin()` in src/krag/plugins/loader.py (~L184–191)
-- [ ] T027 [US10] Rename `IndexError` Pydantic model to `IndexingFileError` in src/kragd/schemas.py and update all references in src/kragd/service.py
+- [X] T024 [US10] Auto-call `_build_extension_map()` at end of `discover_plugins()` in src/krag/plugins/registry.py
+- [X] T025 [US10] Remove explicit `_build_extension_map()` call from caller in src/krag/orchestration/indexer.py (~L151)
+- [X] T026 [US10] Remove `inspect.signature` guard from `initialize_plugin()` in src/krag/plugins/loader.py (~L184–191)
+- [X] T027 [US10] Rename `IndexError` Pydantic model to `IndexingFileError` in src/kragd/schemas.py and update all references in src/kragd/service.py
 
 **Checkpoint**: Plugin registry API is self-contained. Extension map builds automatically. No builtin shadowing.
 
@@ -142,12 +142,12 @@
 
 ### Implementation for User Story 9
 
-- [ ] T028 [US9] Add `find_and_load()` class method to ConfigManager in src/krag/config/settings.py (wraps find_config() + load())
-- [ ] T029 [US9] Fix path alias resolution caller in src/krag_cli/commands/query.py (~L101) to use find_and_load()
-- [ ] T030 [US9] Fix mode discovery caller in src/krag/cli/modes.py (~L38) to use find_and_load()
-- [ ] T031 [US9] Add `--mode` option to `debug_query_command` in src/krag_cli/commands/debug.py
-- [ ] T032 [US9] Change `[red]Fatal:[/red]` to `[red]Error:[/red]` in src/krag_cli/commands/index.py (~L103)
-- [ ] T033 [P] [US9] Standardize `--json` flag naming (use `output_json: bool = typer.Option(False, "--json")`) across status, debug, and index CLI commands
+- [X] T028 [US9] Add `find_and_load()` class method to ConfigManager in src/krag/config/settings.py (wraps find_config() + load())
+- [X] T029 [US9] Fix path alias resolution caller in src/krag_cli/commands/query.py (~L101) to use find_and_load()
+- [X] T030 [US9] Fix mode discovery caller in src/krag/cli/modes.py (~L38) to use find_and_load()
+- [X] T031 [US9] Add `--mode` option to `debug_query_command` in src/krag_cli/commands/debug.py
+- [X] T032 [US9] Change `[red]Fatal:[/red]` to `[red]Error:[/red]` in src/krag_cli/commands/index.py (~L103)
+- [X] T033 [P] [US9] Standardize `--json` flag naming (use `output_json: bool = typer.Option(False, "--json")`) across status, debug, and index CLI commands
 
 **Checkpoint**: Path aliases functional, `--mode` available on debug query, error messages uniform.
 

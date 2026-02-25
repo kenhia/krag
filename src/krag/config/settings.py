@@ -9,6 +9,7 @@ from typing import Any
 import tomli_w  # For writing TOML
 import yaml
 
+from krag.config.xdg import get_krag_config_dir
 from krag.models.configuration import (
     Configuration,
     PluginConfiguration,
@@ -18,6 +19,31 @@ from krag.models.configuration import (
 
 class ConfigManager:
     """Manages loading, creating, and validating configuration."""
+
+    @classmethod
+    def find_and_load(cls) -> Configuration:
+        """Locate a config file and load it.
+
+        Searches in order: ``krag.toml`` (cwd), then the XDG config
+        directory for ``config.toml`` / ``config.yaml``.
+
+        Returns:
+            Loaded :class:`Configuration`.
+
+        Raises:
+            FileNotFoundError: If no configuration file is found.
+        """
+        candidates = [
+            Path("krag.toml"),
+            get_krag_config_dir() / "config.toml",
+            get_krag_config_dir() / "config.yaml",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return cls.load(candidate)
+        raise FileNotFoundError(
+            "No krag configuration file found. Searched: " + ", ".join(str(c) for c in candidates)
+        )
 
     @staticmethod
     def load(config_path: Path) -> Configuration:
