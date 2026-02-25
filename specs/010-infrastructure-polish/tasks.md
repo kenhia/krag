@@ -229,10 +229,10 @@
 
 ### Implementation for User Story 5
 
-- [ ] T048 [P] [US5] Add startup/ready/shutdown log banners to kragd lifecycle in src/kragd/lifecycle.py
-- [ ] T049 [P] [US5] Implement `--rotate-logs` flag for kragd in src/kragd/__main__.py
-- [ ] T050 [US5] Add rich markdown rendering for query responses in src/krag_cli/commands/query.py (using existing `rich` dependency)
-- [ ] T051 [US5] Suppress rich formatting when stdout is not a TTY (no ANSI codes in piped output) in src/krag_cli/main.py
+- [X] T048 [P] [US5] Add startup/ready/shutdown log banners to kragd lifecycle in src/kragd/lifecycle.py
+- [X] T049 [P] [US5] Implement `--rotate-logs` flag for kragd in src/kragd/__main__.py
+- [X] T050 [US5] Add rich markdown rendering for query responses in src/krag_cli/commands/query.py (using existing `rich` dependency)
+- [X] T051 [US5] Suppress rich formatting when stdout is not a TTY (no ANSI codes in piped output) in src/krag_cli/main.py
 
 **Checkpoint**: Lifecycle events visible in log. Log rotation works. Markdown renders with formatting in interactive terminals.
 

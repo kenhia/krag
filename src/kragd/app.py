@@ -154,4 +154,12 @@ def create_app_from_env() -> FastAPI:
     # Set up file + console logging so all krag/kragd loggers write to krag.log
     setup_logging(config=config)
 
+    # Force log rotation if requested via --rotate-logs
+    if os.environ.pop("KRAGD_ROTATE_LOGS", None):
+        import logging as _logging
+
+        for handler in _logging.getLogger().handlers:
+            if hasattr(handler, "doRollover"):
+                handler.doRollover()
+
     return create_app(config)

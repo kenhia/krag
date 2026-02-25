@@ -98,6 +98,7 @@ class KragService:
 
     async def start(self) -> None:
         """Initialize all heavyweight components and write PID file."""
+        logger.info("══ KRAGD STARTING ══")
         self._init_embeddings()
         self._init_collection_manager()
         self._init_vector_store()
@@ -114,11 +115,13 @@ class KragService:
 
         self._pid_path = get_pid_path()
         write_pid(self._pid_path)
+        logger.info("══ KRAGD READY ══")
 
     async def shutdown(self) -> None:
         """Release all resources and remove PID file. Safe to call multiple times."""
         if not self._started:
             return
+        logger.info("══ KRAGD SHUTTING DOWN ══")
         # Cancel idle timer before closing pool
         if self.lifecycle_manager is not None:
             self.lifecycle_manager._cancel_timer()
