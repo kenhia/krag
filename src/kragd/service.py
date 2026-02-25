@@ -73,14 +73,18 @@ class KragService:
     # ── guards ──────────────────────────────────
 
     def _require_started(self) -> None:
-        """Raise RuntimeError if service is not started."""
+        """Raise ServiceNotReadyError if service is not started."""
         if not self._started:
-            raise RuntimeError("Service not started — call start() first")
+            from krag.models.exceptions import ServiceNotReadyError
+
+            raise ServiceNotReadyError("Service not started — call start() first")
 
     def _require_not_indexing(self) -> None:
-        """Raise RuntimeError if indexing is currently in progress."""
+        """Raise IndexingInProgressError if indexing is currently in progress."""
         if self._indexing:
-            raise RuntimeError(
+            from krag.models.exceptions import IndexingInProgressError
+
+            raise IndexingInProgressError(
                 "Indexing is in progress — queries are unavailable until indexing completes. "
                 "Use 'krag index-status' to check progress."
             )
@@ -344,7 +348,11 @@ class KragService:
         self._require_started()
 
         if self.lexicon_store is None:
-            raise RuntimeError("No lexicon configured — set lexicon_path in configuration")
+            from krag.models.exceptions import ResourceNotConfiguredError
+
+            raise ResourceNotConfiguredError(
+                "lexicon", "No lexicon configured — set lexicon_path in configuration"
+            )
 
         try:
             count = self.lexicon_store.reload()
@@ -358,7 +366,9 @@ class KragService:
             return {"entries": count, "status": "reloaded"}
         except Exception as exc:
             logger.error("Failed to reload lexicon: %s", exc, exc_info=True)
-            raise RuntimeError(f"Failed to reload lexicon: {exc}") from exc
+            from krag.models.exceptions import KragError
+
+            raise KragError(f"Failed to reload lexicon: {exc}") from exc
 
     # ── public API ──────────────────────────────
 
@@ -368,7 +378,11 @@ class KragService:
         self._require_not_indexing()
 
         if self.query_engine is None:
-            raise RuntimeError("No LLM model configured — cannot synthesize answers")
+            from krag.models.exceptions import ResourceNotConfiguredError
+
+            raise ResourceNotConfiguredError(
+                "LLM", "No LLM model configured — cannot synthesize answers"
+            )
 
         # Resolve mode — mode settings provide defaults, explicit params override
         mode_config = self._resolve_mode(request.mode)
@@ -500,7 +514,11 @@ class KragService:
         self._require_not_indexing()
 
         if self.query_engine is None:
-            raise RuntimeError("No LLM model configured — cannot synthesize answers")
+            from krag.models.exceptions import ResourceNotConfiguredError
+
+            raise ResourceNotConfiguredError(
+                "LLM", "No LLM model configured — cannot synthesize answers"
+            )
 
         # Resolve mode
         mode_config = self._resolve_mode(request.mode)
@@ -682,7 +700,10 @@ class KragService:
                         if isinstance(vectors_cfg, dict):
                             vector_spaces = list(vectors_cfg.keys())
                     except Exception:
-                        pass
+                        logger.warning(
+                            "Failed to introspect vector spaces from Qdrant",
+                            exc_info=True,
+                        )
                 if not vector_spaces:
                     vector_spaces = ["default"]
                 for space in vector_spaces:
@@ -735,9 +756,15 @@ class KragService:
         self._require_started()
 
         if self.vector_store is None:
-            raise RuntimeError("Vector store not initialized")
+            from krag.models.exceptions import ResourceNotConfiguredError
+
+            raise ResourceNotConfiguredError("vector_store", "Vector store not initialized")
         if self.embedding_generator is None:
-            raise RuntimeError("Embedding generator not initialized")
+            from krag.models.exceptions import ResourceNotConfiguredError
+
+            raise ResourceNotConfiguredError(
+                "embedding_generator", "Embedding generator not initialized"
+            )
 
         # Generate query embedding using the appropriate model for the space
         if request.vector_space and self.embedding_orchestrator is not None:
@@ -837,7 +864,9 @@ class KragService:
 
         with self._indexing_lock:
             if self._indexing:
-                raise RuntimeError(
+                from krag.models.exceptions import IndexingInProgressError
+
+                raise IndexingInProgressError(
                     "Indexing is already in progress — use 'krag index-status' to check progress"
                 )
             self._indexing = True
@@ -1128,7 +1157,7 @@ class KragService:
                 # get_stats() returns a dict with 'count'/'vectors_count'
                 total_vectors = info.get("vectors_count", 0) or info.get("count", 0) or 0
             except Exception:
-                pass
+                logger.warning("Failed to get vector store stats", exc_info=True)
 
             # Extract named vector spaces from the raw Qdrant collection config
             try:
@@ -1143,7 +1172,10 @@ class KragService:
                 if isinstance(vectors_cfg, dict):
                     named_spaces = list(vectors_cfg.keys())
             except Exception:
-                pass
+                logger.warning(
+                    "Failed to introspect named vector spaces from Qdrant",
+                    exc_info=True,
+                )
 
         # VRAM info
         vram = None
@@ -1162,7 +1194,7 @@ class KragService:
                     free_mb=int(vram_free / 1024 / 1024) if vram_free else 0,
                 )
         except Exception:
-            pass
+            logger.debug("GPU/VRAM info unavailable", exc_info=True)
 
         # Per-collection stats
         collections: dict[str, CollectionStatus] = {}
@@ -1211,4 +1243,5 @@ def _get_version() -> str:
 
         return version("krag")
     except Exception:
+        logger.debug("Could not determine krag package version", exc_info=True)
         return "0.0.0-dev"

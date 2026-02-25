@@ -7,8 +7,10 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from krag.models.exceptions import KragError
 
-class EvalLoadError(Exception):
+
+class EvalLoadError(KragError):
     """Error raised when evaluation file cannot be loaded or is invalid."""
 
 

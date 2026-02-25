@@ -549,7 +549,12 @@ class IndexingOrchestrator:
                     if code_meta:
                         payload.update(code_meta)
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Failed to get chunk metadata for %s chunk %d",
+                        chunk.source_file,
+                        chunk.chunk_index,
+                        exc_info=True,
+                    )
             vec_value: Any = (
                 {vector_name: embedding}
                 if self.embedding_orchestrator.is_multi_model and self.collection_manager is None

@@ -39,37 +39,41 @@ class TestKragServiceStartedGuard:
     """Test that methods raise before start() is called."""
 
     def test_query_before_start_raises(self) -> None:
-        """Calling query() before start() raises RuntimeError."""
+        """Calling query() before start() raises ServiceNotReadyError."""
+        from krag.models.exceptions import ServiceNotReadyError
         from kragd.schemas import QueryRequest
         from kragd.service import KragService
 
         service = KragService(_make_config())
-        with pytest.raises(RuntimeError, match="not started"):
+        with pytest.raises(ServiceNotReadyError, match="not started"):
             service.query(QueryRequest(query="test"))
 
     def test_retrieve_before_start_raises(self) -> None:
-        """Calling retrieve() before start() raises RuntimeError."""
+        """Calling retrieve() before start() raises ServiceNotReadyError."""
+        from krag.models.exceptions import ServiceNotReadyError
         from kragd.schemas import RetrieveRequest
         from kragd.service import KragService
 
         service = KragService(_make_config())
-        with pytest.raises(RuntimeError, match="not started"):
+        with pytest.raises(ServiceNotReadyError, match="not started"):
             service.retrieve(RetrieveRequest(query="test"))
 
     def test_get_status_before_start_raises(self) -> None:
-        """Calling get_status() before start() raises RuntimeError."""
+        """Calling get_status() before start() raises ServiceNotReadyError."""
+        from krag.models.exceptions import ServiceNotReadyError
         from kragd.service import KragService
 
         service = KragService(_make_config())
-        with pytest.raises(RuntimeError, match="not started"):
+        with pytest.raises(ServiceNotReadyError, match="not started"):
             service.get_status()
 
     def test_get_health_before_start_raises(self) -> None:
-        """Calling get_health() before start() raises RuntimeError."""
+        """Calling get_health() before start() raises ServiceNotReadyError."""
+        from krag.models.exceptions import ServiceNotReadyError
         from kragd.service import KragService
 
         service = KragService(_make_config())
-        with pytest.raises(RuntimeError, match="not started"):
+        with pytest.raises(ServiceNotReadyError, match="not started"):
             service.get_health()
 
 
