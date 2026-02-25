@@ -66,6 +66,11 @@ class KragService:
         self._indexing: bool = False
         self._indexing_lock = threading.Lock()
 
+        # Mode hot-reload TTL (seconds) to avoid reloading on every request
+        self._mode_reload_interval: float = 5.0
+        self._mode_last_reload: float = 0.0
+        self._mode_lock = threading.Lock()
+
         # Lifecycle state
         self._started: bool = False
         self._start_time: float | None = None
@@ -292,15 +297,24 @@ class KragService:
     def _resolve_mode(self, mode_name: str | None) -> ModeConfiguration | None:
         """Resolve a mode name to its ModeConfiguration, or None.
 
-        User modes are reloaded from disk on each call so that edits to
-        TOML files take effect without restarting kragd.
+        User modes are reloaded from disk periodically (every
+        ``_mode_reload_interval`` seconds) so that edits to TOML files
+        take effect without restarting kragd, while avoiding redundant
+        filesystem reads on every request.
         """
         if mode_name is None or self.mode_registry is None:
             return None
 
-        # Hot-reload user modes so file edits take effect immediately
+        # TTL-gated hot-reload: only touch disk when the interval expires
         if self.config.modes_dir:
-            self.mode_registry.load_user_modes(self.config.modes_dir)
+            now = time.monotonic()
+            if now - self._mode_last_reload > self._mode_reload_interval:
+                if self._mode_lock.acquire(blocking=False):
+                    try:
+                        self.mode_registry.load_user_modes(self.config.modes_dir)
+                        self._mode_last_reload = now
+                    finally:
+                        self._mode_lock.release()
 
         return self.mode_registry.get(mode_name)
 
@@ -826,7 +840,8 @@ class KragService:
             dry_run=request.dry_run,
             errors=[],
         )
-        self._last_index_job = running_response
+        with self._indexing_lock:
+            self._last_index_job = running_response
 
         # Start background thread
         thread = threading.Thread(
@@ -929,36 +944,38 @@ class KragService:
                 collections=self._get_collection_counts(),
             )
 
-            self._last_index_job = response
-            # Add to cache — drop oldest delivered entries if over limit
-            self._index_job_cache.append(response)
-            if len(self._index_job_cache) > self._max_index_cache:
-                self._index_job_cache = self._index_job_cache[-self._max_index_cache :]
+            with self._indexing_lock:
+                self._last_index_job = response
+                # Add to cache — drop oldest delivered entries if over limit
+                self._index_job_cache.append(response)
+                if len(self._index_job_cache) > self._max_index_cache:
+                    self._index_job_cache = self._index_job_cache[-self._max_index_cache :]
         except Exception as exc:
             logger.error("Indexing failed: %s", exc, exc_info=True)
-            self._last_index_job = IndexResponse(
-                job_id=job_id,
-                status="failed",
-                mode=request.mode,
-                files_scanned=0,
-                files_processed=0,
-                files_skipped=0,
-                files_skipped_unchanged=0,
-                files_skipped_other=0,
-                files_errored=1,
-                chunks_created=0,
-                vectors_stored=0,
-                duration_seconds=round(time.monotonic() - t0, 2),
-                dry_run=request.dry_run,
-                errors=[
-                    IndexingFileError(
-                        file_path="<system>",
-                        error_type=type(exc).__name__,
-                        error_message=str(exc),
-                    )
-                ],
-            )
-            self._index_job_cache.append(self._last_index_job)
+            with self._indexing_lock:
+                self._last_index_job = IndexResponse(
+                    job_id=job_id,
+                    status="failed",
+                    mode=request.mode,
+                    files_scanned=0,
+                    files_processed=0,
+                    files_skipped=0,
+                    files_skipped_unchanged=0,
+                    files_skipped_other=0,
+                    files_errored=1,
+                    chunks_created=0,
+                    vectors_stored=0,
+                    duration_seconds=round(time.monotonic() - t0, 2),
+                    dry_run=request.dry_run,
+                    errors=[
+                        IndexingFileError(
+                            file_path="<system>",
+                            error_type=type(exc).__name__,
+                            error_message=str(exc),
+                        )
+                    ],
+                )
+                self._index_job_cache.append(self._last_index_job)
         finally:
             orchestrator.close()
 
@@ -1023,28 +1040,30 @@ class KragService:
                 errors=[],
             )
 
-        if not self._index_job_cache:
-            return IndexResponse(
-                job_id="none",
-                status="none",
-                mode="incremental",
-                files_scanned=0,
-                files_processed=0,
-                files_skipped=0,
-                files_skipped_unchanged=0,
-                files_skipped_other=0,
-                files_errored=0,
-                chunks_created=0,
-                vectors_stored=0,
-                duration_seconds=0.0,
-                dry_run=False,
-                errors=[],
-            )
+        with self._indexing_lock:
+            if not self._index_job_cache:
+                return IndexResponse(
+                    job_id="none",
+                    status="none",
+                    mode="incremental",
+                    files_scanned=0,
+                    files_processed=0,
+                    files_skipped=0,
+                    files_skipped_unchanged=0,
+                    files_skipped_other=0,
+                    files_errored=0,
+                    chunks_created=0,
+                    vectors_stored=0,
+                    duration_seconds=0.0,
+                    dry_run=False,
+                    errors=[],
+                )
 
-        # Return all cached results, then clear all but the most recent
-        results = list(self._index_job_cache)
-        # Keep only the most recent in cache
-        self._index_job_cache = self._index_job_cache[-1:]
+            # Return all cached results, then clear all but the most recent
+            results = list(self._index_job_cache)
+            # Keep only the most recent in cache
+            self._index_job_cache = self._index_job_cache[-1:]
+
         if len(results) == 1:
             return results[0]
         return results

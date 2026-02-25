@@ -185,15 +185,15 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T038 [P] [US6] Write unit tests for concurrent query isolation (multi-threaded, different modes) in tests/unit/test_concurrency_safety.py
+- [X] T038 [P] [US6] Write unit tests for concurrent query isolation (multi-threaded, different modes) in tests/unit/test_concurrency_safety.py
 
 ### Implementation for User Story 6
 
-- [ ] T039 [US6] Add `llm_client` and `critic` keyword arguments to `QueryEngine.query()` (pass-as-parameter pattern) in src/krag/ synthesis module
-- [ ] T040 [US6] Update `query()` in service.py to construct per-request LLM client and RelevanceCritic, pass as parameters instead of mutating shared state in src/kragd/service.py
-- [ ] T041 [US6] Wrap `_index_job_cache` and `_last_index_job` reads/writes with `self._indexing_lock` in src/kragd/service.py
-- [ ] T042 [US6] Add mtime-based TTL cache (5s interval, `Lock.acquire(blocking=False)`) for mode hot-reload in `_resolve_mode()` in src/kragd/service.py
-- [ ] T043 [US6] Add `threading.Lock` to `IndexingFailureCollector` guarding all `_failures` access in src/krag/plugins/failures.py
+- [X] T039 [US6] Add `llm_client` and `critic` keyword arguments to `QueryEngine.query()` (pass-as-parameter pattern) in src/krag/ synthesis module
+- [X] T040 [US6] Update `query()` in service.py to construct per-request LLM client and RelevanceCritic, pass as parameters instead of mutating shared state in src/kragd/service.py
+- [X] T041 [US6] Wrap `_index_job_cache` and `_last_index_job` reads/writes with `self._indexing_lock` in src/kragd/service.py
+- [X] T042 [US6] Add mtime-based TTL cache (5s interval, `Lock.acquire(blocking=False)`) for mode hot-reload in `_resolve_mode()` in src/kragd/service.py
+- [X] T043 [US6] Add `threading.Lock` to `IndexingFailureCollector` guarding all `_failures` access in src/krag/plugins/failures.py
 
 **Checkpoint**: Concurrent queries are isolated. No shared-state mutation. Index cache, mode registry, and failure collector are thread-safe.
 

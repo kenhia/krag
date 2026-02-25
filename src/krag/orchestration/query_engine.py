@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Sentinel to distinguish "no critic argument passed" from "critic=None"
+_SENTINEL = object()
+
 
 @dataclass
 class QueryResponse:
@@ -99,17 +102,26 @@ class QueryEngine:
         self,
         query_text: str,
         top_k: int | None = None,
+        llm_client: LLMClient | None = None,
+        critic: RelevanceCritic | None = _SENTINEL,
     ) -> QueryResponse:
         """Execute complete query pipeline.
 
         Args:
             query_text: User's query string
             top_k: Override default top_k
+            llm_client: Per-request LLM client (defaults to self.llm_client)
+            critic: Per-request relevance critic (defaults to self.critic).
+                Pass ``None`` explicitly to disable critic.
 
         Returns:
             QueryResponse with answer, sources, and prompt
         """
         logger.info(f"Processing query: {query_text[:100]}...")
+
+        # Resolve per-request overrides (avoid mutating shared state)
+        effective_llm = llm_client if llm_client is not None else self.llm_client
+        effective_critic = self.critic if critic is _SENTINEL else critic
 
         # Validate query
         if not query_text or not query_text.strip():
@@ -133,16 +145,16 @@ class QueryEngine:
         chunks_pre_critic = len(results)
         chunks_post_critic = len(results)
 
-        if self.critic is not None and self.critic.enabled and results:
-            scored_chunks = self.critic.score_chunks(query_text, results)
+        if effective_critic is not None and effective_critic.enabled and results:
+            scored_chunks = effective_critic.score_chunks(query_text, results)
             critic_scores = [s.critic_score for s in scored_chunks]
-            filtered_results = self.critic.filter_chunks(scored_chunks)
+            filtered_results = effective_critic.filter_chunks(scored_chunks)
             chunks_post_critic = len(filtered_results)
             logger.info(
                 "Critic: %d/%d chunks passed (threshold %d)",
                 chunks_post_critic,
                 chunks_pre_critic,
-                self.critic.threshold,
+                effective_critic.threshold,
             )
             results = filtered_results
 
@@ -192,7 +204,7 @@ class QueryEngine:
 
         # Generate answer via chat completion
         logger.debug("Generating LLM response")
-        answer = self.llm_client.generate(messages=messages)
+        answer = effective_llm.generate(messages=messages)
         logger.info(f"Query completed, answer length: {len(answer)} characters")
 
         return QueryResponse(
