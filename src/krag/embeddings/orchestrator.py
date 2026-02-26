@@ -251,6 +251,15 @@ class EmbeddingOrchestrator:
                 return vname
         return None
 
+    def close(self) -> None:
+        """Unload all embedding models and free GPU memory."""
+        model_names = list(self._models.keys())
+        for vector_name in model_names:
+            generator = self._models.pop(vector_name)
+            generator.close()
+        self._model_names.clear()
+        logger.info("All embedding models unloaded")
+
     @property
     def dimension(self) -> int:
         """Return the common vector dimension for all models."""

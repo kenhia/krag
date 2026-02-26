@@ -248,6 +248,38 @@
 
 ---
 
+## Phase 13: US11 — Live Integration Test Suite (Priority: P2)
+
+**Goal**: Create an end-to-end test suite that runs against a live kragd instance, validating real-world behaviour that unit/contract tests cannot cover (filesystem PermissionErrors, VRAM lifecycle, cross-directory index integrity).
+
+**Independent Test**: Start kragd, run `uv run pytest -m live --no-cov -v`, confirm all 36 tests pass.
+
+### Implementation for User Story 11
+
+- [X] T055 [US11] Add `live` pytest marker to pyproject.toml and exclude from default pytest runs with `-m 'not live'` in addopts
+- [X] T056 [US11] Create tests/live/__init__.py
+- [X] T057 [US11] Create tests/live/conftest.py with session-scoped fixtures (client, directories, poll_index_complete helper, env var overrides)
+- [X] T058 [US11] Create tests/live/test_live_kragd.py with 36 tests across 9 ordered phases:
+  - Phase 0: Service baseline (health, status, modes, lexicon)
+  - Phase 1: Index small directory (trigger, wait, verify counts)
+  - Phase 2: Query after small index (retrieve, query, debug endpoints)
+  - Phase 3: Index large directory (vector count growth, cross-dir deletion check)
+  - Phase 4: Query after large index (LLM availability, retrieval, modes, small-dir preservation)
+  - Phase 5: Debug endpoints (qdrant filters, code space, mode detail)
+  - Phase 6: Full re-index (non-incremental)
+  - Phase 7: Dry-run index
+  - Phase 8: Error handling (empty query, invalid mode, nonexistent directory)
+
+### Bug Fixes Discovered via Live Tests
+
+- [X] T059 [US11] Fix scanner PermissionError propagation: move is_symlink/is_dir/exists/is_file inside per-item try/except in src/krag/discovery/scanner.py
+- [X] T060 [US11] Add ValueError exception handler (422) to src/kragd/app.py for invalid mode names
+- [X] T061 [US11] Make test_small_dir_files_still_retrievable resilient with multi-approach fallback strategy
+
+**Checkpoint**: Live test suite passes against running kragd. Scanner handles PermissionError gracefully. ValueError returns 422 not 500.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -264,6 +296,7 @@
 - **US4 (Phase 10)**: Depends on US10 — builds on plugin registry fixes
 - **US5 (Phase 11)**: No dependencies on other stories — lowest priority, can be done anytime
 - **Polish (Phase 12)**: Depends on all desired user stories being complete
+- **Live Tests (Phase 13)**: Depends on Polish — validates end-to-end after all implementation is complete
 
 ### User Story Dependencies
 
@@ -356,6 +389,7 @@ Task: T020 "Add stale-entry pruning to _save_metadata()"
 8. US4 → Code embedding in core → No plugin needed for code search
 9. US5 → Operational polish → Production-ready logging and output
 10. Each story adds value without breaking previous stories
+11. US11 → Live integration tests → End-to-end validation against running kragd
 
 ---
 

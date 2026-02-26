@@ -199,3 +199,53 @@ class TestIncrementalIndexing:
             f"Incremental indexing should be much faster than full re-index. "
             f"Full: {full_duration:.2f}s, Incremental: {incremental_duration:.2f}s"
         )
+
+    def test_incremental_index_different_directory_does_not_delete_other_dirs(
+        self, tmp_path: Path
+    ):
+        """Indexing directory B must not delete vectors previously indexed from directory A.
+
+        Regression test: before the fix, categorize_changes() compared the
+        newly-scanned files against ALL previously indexed metadata regardless
+        of directory, causing every file outside the current scan directory to
+        be classified as 'deleted'.
+        """
+        dir_a = tmp_path / "project_a"
+        dir_b = tmp_path / "project_b"
+        dir_a.mkdir()
+        dir_b.mkdir()
+
+        (dir_a / "a1.txt").write_text("Content from project A file 1")
+        (dir_a / "a2.txt").write_text("Content from project A file 2")
+        (dir_b / "b1.txt").write_text("Content from project B file 1")
+
+        storage = tmp_path / "storage"
+
+        # Index directory A
+        config_a = Configuration(
+            directory_paths=[dir_a],
+            vector_store_path=storage,
+            chunk_size=128,
+            chunk_overlap=20,
+        )
+        orch_a = IndexingOrchestrator(config_a)
+        job_a = orch_a.index_full()
+        assert job_a.files_processed == 2
+        # Close the Qdrant client so dir B can open the same storage
+        orch_a.vector_store.client.close()
+
+        # Now index directory B (different directory)
+        config_b = Configuration(
+            directory_paths=[dir_b],
+            vector_store_path=storage,
+            chunk_size=128,
+            chunk_overlap=20,
+        )
+        orch_b = IndexingOrchestrator(config_b)
+        job_b = orch_b.index_incremental()
+
+        # B should find 1 new file
+        assert job_b.files_added == 1
+        # B must NOT mark the 2 files from dir A as deleted
+        assert job_b.files_deleted == 0
+        orch_b.vector_store.client.close()

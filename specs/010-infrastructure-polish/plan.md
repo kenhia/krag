@@ -5,7 +5,7 @@
 
 ## Summary
 
-This sprint addresses 10 areas of infrastructure debt: two correctness bugs (incremental indexing metadata loss, stale index-status), one architectural unification (query/debug-query paths), one feature migration (code embedding into core), operational UX improvements, concurrency safety for the query engine, dead code/dependency cleanup, exception architecture overhaul, CLI consistency fixes, and plugin registry hardening. No new external dependencies are required — all work uses the existing Python 3.11+ / FastAPI / Qdrant / Rich / Typer stack.
+This sprint addresses 10 areas of infrastructure debt: two correctness bugs (incremental indexing metadata loss, stale index-status), one architectural unification (query/debug-query paths), one feature migration (code embedding into core), operational UX improvements, concurrency safety for the query engine, dead code/dependency cleanup, exception architecture overhaul, CLI consistency fixes, and plugin registry hardening. Additionally, a live integration test suite was added to validate kragd end-to-end against a running instance, catching real-world issues (filesystem PermissionError propagation, VRAM exhaustion, cross-directory index deletion) that unit tests cannot detect. No new external dependencies are required — all work uses the existing Python 3.11+ / FastAPI / Qdrant / Rich / Typer stack.
 
 ## Technical Context
 
@@ -101,9 +101,14 @@ tests/
 │   └── test_api_error_codes.py       # US8: HTTP status codes from domain exceptions
 └── integration/
     └── test_metadata_roundtrip.py    # US1: end-to-end metadata merge with vector store
+
+tests/live/                              # US11: Live integration tests (against running kragd)
+├── __init__.py
+├── conftest.py                          # Session fixtures: client, directories, poll helpers
+└── test_live_kragd.py                   # 36 tests across 9 ordered phases
 ```
 
-**Structure Decision**: Existing single-project layout (`src/krag`, `src/kragd`, `src/krag_cli`) with `tests/{unit,contract,integration}` — no structural changes needed.
+**Structure Decision**: Existing single-project layout (`src/krag`, `src/kragd`, `src/krag_cli`) with `tests/{unit,contract,integration}` — no structural changes needed. Live tests added under `tests/live/` with `@pytest.mark.live` marker, excluded from default pytest runs.
 
 ## Complexity Tracking
 

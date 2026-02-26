@@ -19,6 +19,7 @@ Items in scope:
 8. Exception handling and error architecture improvements
 9. CLI consistency and broken feature fixes
 10. Plugin registry API hardening
+11. Live integration test suite against running kragd instance
 
 ---
 
@@ -194,6 +195,24 @@ A developer using the plugin registry does not need to know to call private meth
 
 ---
 
+### User Story 11 — Live integration tests validate kragd end-to-end against a running instance (Priority: P2)
+
+A developer making changes to krag can run a live integration test suite against a running kragd instance to validate that indexing, querying, debug endpoints, error handling, and cross-directory integrity all work correctly in a real environment — not just in mocked unit tests.
+
+**Why this priority**: Unit and contract tests validate individual components in isolation, but cannot catch issues that arise from real filesystem scanning (e.g., PermissionError on restricted directories terminating rglob), real embedding model lifecycle (e.g., VRAM exhaustion after indexing), or real HTTP request handling under actual service conditions. A live test suite provides confidence that the system works end-to-end.
+
+**Independent Test**: Start kragd, run `uv run pytest -m live --no-cov -v`, confirm all tests pass against the running instance. Tests cover service health, indexing (small and large directories), querying (retrieval, modes, debug), cross-directory preservation, re-indexing, dry-run, and error handling.
+
+**Acceptance Scenarios**:
+
+1. **Given** a running kragd instance, **When** `pytest -m live` is executed, **Then** all live tests run against the instance and report pass/fail status.
+2. **Given** no running kragd instance, **When** `pytest -m live` is executed, **Then** all live tests are skipped with a clear message.
+3. **Given** a small directory is indexed followed by a large parent directory, **When** the live tests query for small-directory content, **Then** the content is still retrievable (no cross-directory deletion).
+4. **Given** the live tests run as part of the standard `pytest` invocation (without `-m live`), **Then** they are automatically deselected by the default marker filter.
+5. **Given** new kragd endpoints or significant behaviour changes are implemented, **Then** corresponding live tests are added to maintain coverage of real-world scenarios.
+
+---
+
 ### Edge Cases
 
 - Indexing directory changes from `/dir/a` to `/dir/b` (non-overlapping): previously indexed files in `/dir/a` must be correctly identified as deleted.
@@ -279,6 +298,14 @@ A developer using the plugin registry does not need to know to call private meth
 - **FR-034**: `discover_plugins()` MUST automatically build the extension map as its final step; callers MUST NOT need to call `_build_extension_map()` separately.
 - **FR-035**: The `inspect.signature` guard in `initialize_plugin()` MUST be removed; the base class contract guarantees the `context` parameter.
 - **FR-036**: The `IndexError` Pydantic model in `schemas.py` MUST be renamed to avoid shadowing Python's builtin `IndexError`.
+
+**Live integration tests (US11)**
+
+- **FR-037**: A `tests/live/` directory MUST contain integration tests that run against a live kragd instance, gated by a `@pytest.mark.live` marker.
+- **FR-038**: Live tests MUST be excluded from the default `pytest` invocation via `-m 'not live'` in `pyproject.toml` addopts.
+- **FR-039**: Live tests MUST skip gracefully (not fail) when no kragd instance is reachable.
+- **FR-040**: Live tests MUST cover: service health, indexing (small and large directories), query retrieval, debug endpoints, cross-directory index preservation, re-indexing, dry-run indexing, and error handling (empty query, invalid mode, nonexistent directory).
+- **FR-041**: When new kragd endpoints or significant behaviour changes are added, corresponding live tests MUST be added to maintain end-to-end coverage.
 
 ### Assumptions
 

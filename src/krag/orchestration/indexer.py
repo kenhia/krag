@@ -246,7 +246,14 @@ class IndexingOrchestrator:
         self._load_metadata()
 
     def close(self) -> None:
-        """Close resources and release locks."""
+        """Close resources, release locks, and free GPU memory."""
+        # Always release embedding models to free VRAM — these are owned by
+        # this orchestrator instance regardless of whether the vector store
+        # was injected.
+        if hasattr(self, "embedding_orchestrator") and self.embedding_orchestrator is not None:
+            logger.info("Releasing embedding models to free VRAM")
+            self.embedding_orchestrator.close()
+
         if hasattr(self, "_owns_vector_store") and not self._owns_vector_store:
             logger.debug("Skipping vector store close (injected, not owned)")
             return
@@ -832,7 +839,19 @@ class IndexingOrchestrator:
         # Stage 2: Categorize changes using ChangeDetector
         # Extract just the file paths for change detection
         all_file_paths = [fm.file_path for fm in all_file_metadata]
-        changes_dict = self.change_detector.categorize_changes(all_file_paths, self.indexed_files)
+
+        # Scope previously-indexed metadata to only files under the
+        # directories being indexed.  Without this, files from earlier
+        # indexing runs in *other* directories would be treated as
+        # "deleted" and purged from the vector store.
+        resolved_dirs = [d.resolve() for d in self.directory_paths]
+        scoped_metadata = {
+            k: v
+            for k, v in self.indexed_files.items()
+            if any(Path(k).is_relative_to(d) for d in resolved_dirs)
+        }
+
+        changes_dict = self.change_detector.categorize_changes(all_file_paths, scoped_metadata)
 
         # Extract categorized changes
         new_changes = changes_dict["new"]

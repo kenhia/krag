@@ -77,7 +77,10 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=src/krag --cov=src/kragd --cov=src/krag_cli --cov-report=html --cov-report=term"
+addopts = "-v --cov=src/krag --cov=src/kragd --cov=src/krag_cli --cov-report=html --cov-report=term -m 'not live'"
+markers = [
+    "live: tests that require a running kragd service (deselected by default, run with -m live)",
+]
 
 [tool.mypy]
 python_version = "3.11"

@@ -771,27 +771,61 @@ class KragService:
                 )
 
         # Direct Qdrant search (bypass Retriever)
+        # When collection_manager is available, search typed collections
+        # (where data is actually stored) instead of the primary collection
+        # which may be empty in multi-collection mode.
 
-        search_kwargs: dict = {
-            "collection_name": self.config.collection_name,
-            "query": query_vector,
-            "limit": request.top_k,
-            "with_payload": request.with_payload,
-            "score_threshold": request.score_threshold,
-        }
+        all_points: list = []
+        if self.collection_manager is not None:
+            for store_obj in self.collection_manager.get_all_stores():
+                coll_kwargs: dict = {
+                    "collection_name": store_obj.collection_name,
+                    "query": query_vector,
+                    "limit": request.top_k,
+                    "with_payload": request.with_payload,
+                    "score_threshold": request.score_threshold,
+                }
+                if request.vector_space and store_obj.vector_store.is_named_vectors:
+                    coll_kwargs["using"] = request.vector_space
+                elif store_obj.vector_store.is_named_vectors:
+                    coll_kwargs["using"] = "text"
+                if qdrant_filter:
+                    coll_kwargs["query_filter"] = qdrant_filter
+                try:
+                    raw = store_obj.vector_store.client.query_points(**coll_kwargs)
+                    all_points.extend(raw.points)
+                except Exception:
+                    logger.debug(
+                        "debug_qdrant: skipping collection '%s' (%s)",
+                        store_obj.name,
+                        store_obj.collection_name,
+                        exc_info=True,
+                    )
+            # Sort by score descending across all collections, take top_k
+            all_points.sort(key=lambda p: p.score, reverse=True)
+            all_points = all_points[: request.top_k]
+        else:
+            search_kwargs: dict = {
+                "collection_name": self.config.collection_name,
+                "query": query_vector,
+                "limit": request.top_k,
+                "with_payload": request.with_payload,
+                "score_threshold": request.score_threshold,
+            }
 
-        if request.vector_space:
-            search_kwargs["using"] = request.vector_space
-        elif self.vector_store.is_named_vectors:
-            search_kwargs["using"] = "text"
+            if request.vector_space:
+                search_kwargs["using"] = request.vector_space
+            elif self.vector_store.is_named_vectors:
+                search_kwargs["using"] = "text"
 
-        if qdrant_filter:
-            search_kwargs["query_filter"] = qdrant_filter
+            if qdrant_filter:
+                search_kwargs["query_filter"] = qdrant_filter
 
-        raw_results = self.vector_store.client.query_points(**search_kwargs)
+            raw_results = self.vector_store.client.query_points(**search_kwargs)
+            all_points = list(raw_results.points)
 
         results = []
-        for point in raw_results.points:
+        for point in all_points:
             payload = point.payload or {}
             results.append(
                 QdrantSearchResult(

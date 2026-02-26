@@ -134,6 +134,23 @@ class EmbeddingGenerator:
         """
         return self.dimension
 
+    def close(self) -> None:
+        """Unload the model and free GPU memory."""
+        if hasattr(self, "model") and self.model is not None:
+            logger.info(f"Unloading embedding model: {self.model_name}")
+            del self.model
+            self.model = None  # type: ignore[assignment]
+
+            # Release CUDA memory if applicable
+            if self.device != "cpu":
+                try:
+                    import torch
+
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except ImportError:
+                    pass
+
     def get_model_info(self) -> dict[str, Any]:
         """Get information about the loaded model.
 

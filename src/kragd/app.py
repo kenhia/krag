@@ -72,6 +72,10 @@ def create_app(config: Configuration) -> FastAPI:
     app.include_router(lexicon.router)
 
     # Translate domain exceptions into appropriate HTTP responses
+    @app.exception_handler(ValueError)
+    async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
     @app.exception_handler(ServiceNotReadyError)
     async def service_not_ready_handler(
         request: Request, exc: ServiceNotReadyError
