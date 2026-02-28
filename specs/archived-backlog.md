@@ -74,3 +74,11 @@ ownership (claims `.md` files under configured vault paths), mixed-content routi
 prefixes, custom retrieval mode, and Obsidian-specific lexicon entries.
 
 See `specs/011-obsidian-plugin/spec.md` for full specification.
+
+### Little tweaks (completed during sprint 011)
+
+- Invalid `--mode` now shows a clean error listing available modes instead of a stack trace.
+- Storage logging now emits periodic progress every ~30 seconds during large indexing runs
+  instead of only logging at start and completion.
+- Extension conflict warning silenced for `claims_file()` plugins (obsidian declaring
+  `.md`/`.markdown` no longer spams WARNING on every indexing run).
