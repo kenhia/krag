@@ -312,3 +312,132 @@ class TestVirtualPath:
         assert r1 is not None and r2 is not None
         assert r1[1] == "obsidian://alpha/note.md"
         assert r2[1] == "obsidian://beta/note.md"
+
+
+# ---------------------------------------------------------------------------
+# T070 — lexicon.json contains all required terms
+# ---------------------------------------------------------------------------
+
+
+class TestLexiconContents:
+    """Verify bundled lexicon.json has the required Obsidian terms (FR-027)."""
+
+    REQUIRED_TERMS = [
+        "backlink",
+        "daily note",
+        "canvas",
+        "dataview",
+        "template",
+        "frontmatter",
+        "wikilink",
+        "MOC",
+        "tag",
+        "vault",
+    ]
+
+    def test_lexicon_file_exists(self) -> None:
+        """lexicon.json must be bundled inside the plugin package."""
+        import krag_plugin_obsidian
+
+        pkg_dir = Path(krag_plugin_obsidian.__file__).parent
+        lexicon_path = pkg_dir / "lexicon.json"
+        assert lexicon_path.is_file(), f"Missing {lexicon_path}"
+
+    def test_contains_required_terms(self) -> None:
+        """lexicon.json must contain all 10 required terms."""
+        import json
+
+        import krag_plugin_obsidian
+
+        pkg_dir = Path(krag_plugin_obsidian.__file__).parent
+        data = json.loads((pkg_dir / "lexicon.json").read_text(encoding="utf-8"))
+        for term in self.REQUIRED_TERMS:
+            assert term in data, f"Missing required term: {term}"
+            assert isinstance(data[term], str), f"Definition for '{term}' must be a string"
+            assert len(data[term]) > 0, f"Definition for '{term}' must be non-empty"
+
+    def test_has_at_least_10_terms(self) -> None:
+        """lexicon.json must have at least 10 entries."""
+        import json
+
+        import krag_plugin_obsidian
+
+        pkg_dir = Path(krag_plugin_obsidian.__file__).parent
+        data = json.loads((pkg_dir / "lexicon.json").read_text(encoding="utf-8"))
+        assert len(data) >= 10
+
+
+# ---------------------------------------------------------------------------
+# T071 — initialize() merges lexicon entries into LexiconStore
+# ---------------------------------------------------------------------------
+
+
+class TestLexiconMerge:
+    """initialize() calls merge_entries() on the context's lexicon store."""
+
+    def test_merges_into_lexicon_store(self, tmp_vault: Path) -> None:
+        """Lexicon entries are merged when context provides a lexicon_store."""
+        from krag.lexicon.lexicon_store import LexiconStore
+
+        store = LexiconStore()
+        context = type("Ctx", (), {"lexicon_store": store})()
+
+        h = ObsidianFileTypeHandler()
+        h.initialize({"vaults": {"v": str(tmp_vault)}}, context=context)
+
+        # Should have merged the 10 Obsidian terms
+        assert len(store.entries) >= 10
+        assert "backlink" in store.entries
+        assert "vault" in store.entries
+
+    def test_merges_without_context(self, tmp_vault: Path) -> None:
+        """initialize() succeeds silently when no context is provided."""
+        h = ObsidianFileTypeHandler()
+        h.initialize({"vaults": {"v": str(tmp_vault)}}, context=None)
+        # Should not raise
+        assert len(h.vault_paths) == 1
+
+
+# ---------------------------------------------------------------------------
+# T072 — merge does not overwrite user-defined terms
+# ---------------------------------------------------------------------------
+
+
+class TestLexiconNoOverwrite:
+    """User-defined terms are preserved during merge."""
+
+    def test_user_term_preserved(self, tmp_vault: Path) -> None:
+        """An existing user-defined term is NOT overwritten by plugin merge."""
+        from krag.lexicon.lexicon_store import LexiconStore
+
+        store = LexiconStore()
+        # Pre-load a user-defined "vault" term
+        store.entries["vault"] = "User's custom definition of vault"
+        store._compile_patterns()
+
+        context = type("Ctx", (), {"lexicon_store": store})()
+
+        h = ObsidianFileTypeHandler()
+        h.initialize({"vaults": {"v": str(tmp_vault)}}, context=context)
+
+        # User definition should still be there
+        assert store.entries["vault"] == "User's custom definition of vault"
+
+    def test_new_terms_still_added(self, tmp_vault: Path) -> None:
+        """Terms not already in the store are added during merge."""
+        from krag.lexicon.lexicon_store import LexiconStore
+
+        store = LexiconStore()
+        # Pre-load only "vault"
+        store.entries["vault"] = "User vault def"
+        store._compile_patterns()
+
+        context = type("Ctx", (), {"lexicon_store": store})()
+
+        h = ObsidianFileTypeHandler()
+        h.initialize({"vaults": {"v": str(tmp_vault)}}, context=context)
+
+        # "vault" preserved, but other Obsidian terms added
+        assert store.entries["vault"] == "User vault def"
+        assert "backlink" in store.entries
+        assert "wikilink" in store.entries

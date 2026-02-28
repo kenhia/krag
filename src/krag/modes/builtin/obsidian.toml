@@ -1,0 +1,21 @@
+[mode]
+name = "obsidian"
+description = "Optimized for Obsidian vault content queries"
+
+[collections]
+docs = 1.0
+code = 0.7
+
+[llm]
+slot = "text"
+
+[prompt]
+preset = "balanced"
+
+[retrieval]
+top_k = 8
+similarity_threshold = 0.15
+
+[critic]
+enabled = true
+threshold = 3

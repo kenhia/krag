@@ -177,15 +177,15 @@
 
 ### Tests for User Story 5
 
-- [ ] T064 [P] [US5] Test obsidian.toml loads as valid ModeConfiguration via ModeLoader in tests/unit/test_obsidian_mode.py
-- [ ] T065 [P] [US5] Test obsidian mode has correct collection weights (docs=1.0, code=0.7) in tests/unit/test_obsidian_mode.py
-- [ ] T066 [P] [US5] Test obsidian mode has critic enabled with threshold 3 in tests/unit/test_obsidian_mode.py
-- [ ] T067 [P] [US5] Test obsidian mode uses balanced prompt preset in tests/unit/test_obsidian_mode.py
+- [x] T064 [P] [US5] Test obsidian.toml loads as valid ModeConfiguration via ModeLoader in tests/unit/test_obsidian_mode.py
+- [x] T065 [P] [US5] Test obsidian mode has correct collection weights (docs=1.0, code=0.7) in tests/unit/test_obsidian_mode.py
+- [x] T066 [P] [US5] Test obsidian mode has critic enabled with threshold 3 in tests/unit/test_obsidian_mode.py
+- [x] T067 [P] [US5] Test obsidian mode uses balanced prompt preset in tests/unit/test_obsidian_mode.py
 
 ### Implementation for User Story 5
 
-- [ ] T068 [US5] Create obsidian.toml retrieval mode definition at src/krag/modes/builtin/obsidian.toml
-- [ ] T069 [US5] Run pre-commit validation: ruff format, ruff check --fix, pytest
+- [x] T068 [US5] Create obsidian.toml retrieval mode definition at src/krag/modes/builtin/obsidian.toml
+- [x] T069 [US5] Run pre-commit validation: ruff format, ruff check --fix, pytest
 
 **Checkpoint**: Users can query with --mode obsidian to get vault-optimized retrieval. Mode auto-discovered by ModeLoader.
 
@@ -199,15 +199,15 @@
 
 ### Tests for User Story 6
 
-- [ ] T070 [P] [US6] Test lexicon.json contains all required terms (backlink, daily note, canvas, etc.) in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T071 [P] [US6] Test initialize() merges lexicon entries into LexiconStore in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T072 [P] [US6] Test merge does not overwrite user-defined terms in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T070 [P] [US6] Test lexicon.json contains all required terms (backlink, daily note, canvas, etc.) in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T071 [P] [US6] Test initialize() merges lexicon entries into LexiconStore in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T072 [P] [US6] Test merge does not overwrite user-defined terms in examples/krag-plugin-obsidian/tests/test_handler.py
 
 ### Implementation for User Story 6
 
-- [ ] T073 [US6] Create lexicon.json with 10 Obsidian terms and definitions at examples/krag-plugin-obsidian/src/krag_plugin_obsidian/lexicon.json
-- [ ] T074 [US6] Add lexicon loading and merge_entries() call in initialize() at examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T075 [US6] Run pre-commit validation: ruff format, ruff check --fix, pytest
+- [x] T073 [US6] Create lexicon.json with 10 Obsidian terms and definitions at examples/krag-plugin-obsidian/src/krag_plugin_obsidian/lexicon.json
+- [x] T074 [US6] Add lexicon loading and merge_entries() call in initialize() at examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T075 [US6] Run pre-commit validation: ruff format, ruff check --fix, pytest
 
 **Checkpoint**: Obsidian terms available in lexicon after plugin initialization. User-defined terms not overwritten.
 

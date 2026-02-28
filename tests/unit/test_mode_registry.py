@@ -97,14 +97,14 @@ class TestModeRegistryBuiltins:
     """Test loading the built-in modes from disk."""
 
     def test_load_builtins(self) -> None:
-        """Built-in directory contains default, code, docs."""
+        """Built-in directory contains default, code, docs, obsidian."""
         from krag.modes.mode_registry import ModeRegistry
 
         registry = ModeRegistry()
         registry.load_builtins()
 
         names = {m.name for m in registry.list_modes()}
-        assert names == {"default", "code", "docs"}
+        assert names == {"default", "code", "docs", "obsidian"}
 
     def test_builtin_default_mode(self) -> None:
         """The 'default' mode uses all 4 collections at weight 1.0."""
