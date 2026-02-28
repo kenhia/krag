@@ -1,0 +1,12 @@
+{
+  "backlink": "A link from one note to another note, creating bidirectional navigation between related concepts",
+  "daily note": "A dated note automatically created for journaling, daily logs, or capturing ephemeral thoughts",
+  "canvas": "An Obsidian visual workspace for arranging and connecting notes spatially on an infinite board",
+  "dataview": "An Obsidian community plugin for querying notes as a database using inline metadata and frontmatter fields",
+  "template": "A reusable note structure applied when creating new notes to ensure consistent formatting",
+  "frontmatter": "YAML metadata block at the top of a markdown note enclosed between triple-dash delimiters",
+  "wikilink": "A double-bracket link [[like this]] used to connect notes within an Obsidian vault",
+  "MOC": "Map of Content — an index note that organizes links to related notes by topic or theme",
+  "tag": "A hash-prefixed label (#tag) used to categorize, filter, and discover notes across a vault",
+  "vault": "A root folder containing Obsidian notes, configuration, themes, and community plugins"
+}

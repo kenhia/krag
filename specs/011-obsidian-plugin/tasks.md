@@ -65,29 +65,29 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T020 [P] [US1] Test ObsidianConfig Pydantic schema validates vault mappings in examples/krag-plugin-obsidian/tests/test_config.py
-- [ ] T021 [P] [US1] Test ObsidianConfig rejects invalid vault entries (non-string, empty) in examples/krag-plugin-obsidian/tests/test_config.py
-- [ ] T022 [P] [US1] Test handler.initialize() resolves vault paths, warns on missing in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T023 [P] [US1] Test handler.claims_file() returns True for files under vault paths in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T024 [P] [US1] Test handler.claims_file() returns False for files outside vault paths in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T025 [P] [US1] Test handler.claims_file() returns False when no vaults configured in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T026 [P] [US1] Test handler.extract_text() reads .md file content and strips frontmatter in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T027 [P] [US1] Test handler.extract_metadata() returns frontmatter fields in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T028 [P] [US1] Test handler.supported_extensions() returns [".md", ".markdown"] in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T029 [P] [US1] Test virtual path generation: filesystem path → obsidian://vault-name/relative-path in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T020 [P] [US1] Test ObsidianConfig Pydantic schema validates vault mappings in examples/krag-plugin-obsidian/tests/test_config.py
+- [x] T021 [P] [US1] Test ObsidianConfig rejects invalid vault entries (non-string, empty) in examples/krag-plugin-obsidian/tests/test_config.py
+- [x] T022 [P] [US1] Test handler.initialize() resolves vault paths, warns on missing in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T023 [P] [US1] Test handler.claims_file() returns True for files under vault paths in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T024 [P] [US1] Test handler.claims_file() returns False for files outside vault paths in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T025 [P] [US1] Test handler.claims_file() returns False when no vaults configured in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T026 [P] [US1] Test handler.extract_text() reads .md file content and strips frontmatter in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T027 [P] [US1] Test handler.extract_metadata() returns frontmatter fields in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T028 [P] [US1] Test handler.supported_extensions() returns [".md", ".markdown"] in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T029 [P] [US1] Test virtual path generation: filesystem path → obsidian://vault-name/relative-path in examples/krag-plugin-obsidian/tests/test_handler.py
 
 ### Implementation for User Story 1
 
-- [ ] T030 [US1] Create ObsidianConfig Pydantic model with vaults dict validation in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/config.py
-- [ ] T031 [US1] Implement ObsidianFileTypeHandler with name, version, required_api_version, supported_extensions in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T032 [US1] Implement initialize() — parse vaults config, resolve paths, warn on missing, set up vault_paths dict in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T033 [US1] Implement claims_file() — check if file is under any configured vault path in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T034 [US1] Implement config_schema() returning ObsidianConfig in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T035 [US1] Implement extract_text() — read .md file, parse frontmatter, return body text in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T036 [US1] Implement extract_metadata() — parse YAML frontmatter, return as dict in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T037 [US1] Implement _resolve_vault() helper — find which vault a file belongs to and compute virtual path in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T038 [US1] Implement get_chunking_strategy() returning custom ObsidianChunker with vault config in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T039 [US1] Run pre-commit validation: ruff format, ruff check --fix, pytest
+- [x] T030 [US1] Create ObsidianConfig Pydantic model with vaults dict validation in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/config.py
+- [x] T031 [US1] Implement ObsidianFileTypeHandler with name, version, required_api_version, supported_extensions in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T032 [US1] Implement initialize() — parse vaults config, resolve paths, warn on missing, set up vault_paths dict in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T033 [US1] Implement claims_file() — check if file is under any configured vault path in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T034 [US1] Implement config_schema() returning ObsidianConfig in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T035 [US1] Implement extract_text() — read .md file, parse frontmatter, return body text in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T036 [US1] Implement extract_metadata() — parse YAML frontmatter, return as dict in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T037 [US1] Implement _resolve_vault() helper — find which vault a file belongs to and compute virtual path in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T038 [US1] Implement get_chunking_strategy() returning custom ObsidianChunker with vault config in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T039 [US1] Run pre-commit validation: ruff format, ruff check --fix, pytest
 
 **Checkpoint**: Obsidian plugin can be installed, configured with vault paths, claims .md files under those paths, extracts text, and produces chunks with virtual obsidian:// paths. Basic vault indexing works end-to-end.
 
