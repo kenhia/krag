@@ -25,6 +25,33 @@ from krag.storage.qdrant_impl import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
 
+
+def _route_vectors_by_chunk(
+    vectors: list[dict[str, Any]],
+    fallback_collection: str,
+) -> dict[str, list[dict[str, Any]]]:
+    """Route vectors to collections using per-chunk target_collection metadata.
+
+    If a vector's payload contains ``target_collection``, it is routed to that
+    collection and the field is removed from the payload (routing hint only).
+    Vectors without the field are routed to *fallback_collection*.
+
+    Args:
+        vectors: List of vector dicts with ``payload`` sub-dicts.
+        fallback_collection: Collection name for vectors without target_collection.
+
+    Returns:
+        Mapping of collection name → list of vector dicts.
+    """
+    routed: dict[str, list[dict[str, Any]]] = {}
+    for vec in vectors:
+        coll = vec.get("payload", {}).pop("target_collection", None)
+        if coll is None:
+            coll = fallback_collection
+        routed.setdefault(coll, []).append(vec)
+    return routed
+
+
 # Type alias: (collection_name, vectors) tuple for multi-collection routing
 _RoutedVectors = tuple[str, list[dict[str, Any]]]
 
@@ -726,10 +753,21 @@ class IndexingOrchestrator:
 
                 # Route vectors to the correct collection (or single store)
                 if self.collection_manager is not None:
-                    collection = self.collection_manager.route_file(
-                        file_metadata.file_path, plugin_name=plugin_name
+                    has_chunk_routing = any(
+                        v.get("payload", {}).get("target_collection") for v in result.vectors
                     )
-                    routed_vectors.setdefault(collection, []).extend(result.vectors)
+                    if has_chunk_routing:
+                        fallback = self.collection_manager.route_file(
+                            file_metadata.file_path, plugin_name=plugin_name
+                        )
+                        chunk_routed = _route_vectors_by_chunk(result.vectors, fallback)
+                        for coll, vecs in chunk_routed.items():
+                            routed_vectors.setdefault(coll, []).extend(vecs)
+                    else:
+                        collection = self.collection_manager.route_file(
+                            file_metadata.file_path, plugin_name=plugin_name
+                        )
+                        routed_vectors.setdefault(collection, []).extend(result.vectors)
                 else:
                     all_vectors.extend(result.vectors)
 
@@ -965,10 +1003,21 @@ class IndexingOrchestrator:
 
                 # Route vectors to the correct collection (or single store)
                 if self.collection_manager is not None:
-                    collection = self.collection_manager.route_file(
-                        file_metadata.file_path, plugin_name=plugin_name
+                    has_chunk_routing = any(
+                        v.get("payload", {}).get("target_collection") for v in result.vectors
                     )
-                    routed_vectors.setdefault(collection, []).extend(result.vectors)
+                    if has_chunk_routing:
+                        fallback = self.collection_manager.route_file(
+                            file_metadata.file_path, plugin_name=plugin_name
+                        )
+                        chunk_routed = _route_vectors_by_chunk(result.vectors, fallback)
+                        for coll, vecs in chunk_routed.items():
+                            routed_vectors.setdefault(coll, []).extend(vecs)
+                    else:
+                        collection = self.collection_manager.route_file(
+                            file_metadata.file_path, plugin_name=plugin_name
+                        )
+                        routed_vectors.setdefault(collection, []).extend(result.vectors)
                 else:
                     all_vectors.extend(result.vectors)
 

@@ -259,6 +259,28 @@ class FileTypeHandler(ABC):
         """
         pass
 
+    def claims_file(self, file_path: Path) -> bool:
+        """Claim ownership of a file by path, regardless of extension.
+
+        Path-claiming plugins take priority over extension-based resolution
+        in PluginRegistry.get_handler_for_file(). Default returns False
+        (no path-based claiming).
+
+        Args:
+            file_path: Absolute path to the file.
+
+        Returns:
+            bool: True if this plugin claims exclusive ownership.
+
+        Note:
+            - Should be fast — use path prefix checks, not file I/O.
+            - Should not raise exceptions (return False on error).
+            - When True, this plugin handles the file instead of extension-based lookup.
+            - If file_path is not absolute, resolve it before comparison.
+              Return False for paths that cannot be resolved.
+        """
+        return False
+
     def can_handle_file(self, file_path: Path) -> bool:
         """Additional validation beyond file extension matching.
 

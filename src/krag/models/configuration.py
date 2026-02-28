@@ -200,6 +200,10 @@ class PluginMetadata(BaseModel):
         default=False, description="Whether plugin has been imported and instantiated"
     )
     load_error: str | None = Field(None, description="Error message if plugin failed to load")
+    has_claims_file: bool = Field(
+        default=False,
+        description="Whether plugin overrides claims_file() for path-based resolution",
+    )
 
     @field_validator("name")
     @classmethod

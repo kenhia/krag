@@ -122,6 +122,55 @@ class LexiconStore:
 
         return matches
 
+    def merge_entries(self, entries: dict[str, str], source: str = "plugin") -> int:
+        """Merge additional entries into the lexicon without replacing existing ones.
+
+        Entries are added to the existing glossary. Existing entries with the
+        same key are NOT overwritten (user-defined terms take priority).
+
+        Args:
+            entries: Term → definition mapping to merge.
+            source: Label for logging (e.g., plugin name).
+
+        Returns:
+            Number of new entries added (excludes duplicates).
+        """
+        if not entries:
+            return 0
+
+        added = 0
+        for term, definition in entries.items():
+            if not isinstance(definition, str):
+                logger.warning(
+                    "Skipping lexicon entry '%s' from %s: value must be string, got %s",
+                    term,
+                    source,
+                    type(definition).__name__,
+                )
+                continue
+
+            if term in self.entries:
+                logger.debug(
+                    "Lexicon entry '%s' already exists, keeping existing (source: %s)",
+                    term,
+                    source,
+                )
+                continue
+
+            self.entries[term] = definition
+            added += 1
+
+        if added:
+            self._compile_patterns()
+            logger.info(
+                "Merged %d new lexicon entries from %s (%d skipped)",
+                added,
+                source,
+                len(entries) - added,
+            )
+
+        return added
+
     def _compile_patterns(self) -> None:
         """Pre-compile word-boundary regex patterns for each term.
 

@@ -1,0 +1,47 @@
+[project]
+name = "krag-plugin-obsidian"
+version = "1.0.0"
+description = "krag plugin for Obsidian vault content with path-based ownership, mixed-content routing, and virtual obsidian:// path prefixes"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "krag Plugin Team", email = "plugins@krag.dev"}
+]
+keywords = ["krag", "plugin", "obsidian", "vault", "markdown"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    "krag",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.12.0",
+]
+
+[project.entry-points."krag.plugins"]
+obsidian = "krag_plugin_obsidian.handler:ObsidianFileTypeHandler"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"

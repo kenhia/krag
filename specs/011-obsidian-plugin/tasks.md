@@ -17,11 +17,11 @@
 
 **Purpose**: Project initialization, plugin package structure, and core architecture extensions
 
-- [ ] T001 Create plugin package directory structure per plan at examples/krag-plugin-obsidian/
-- [ ] T002 Create pyproject.toml with hatchling build, krag.plugins entry point, pyyaml dependency at examples/krag-plugin-obsidian/pyproject.toml
-- [ ] T003 [P] Create __init__.py with version and plugin metadata at examples/krag-plugin-obsidian/src/krag_plugin_obsidian/__init__.py
-- [ ] T004 [P] Create README.md with plugin description and usage at examples/krag-plugin-obsidian/README.md
-- [ ] T005 Install plugin in editable mode via `uv pip install -e examples/krag-plugin-obsidian`
+- [x] T001 Create plugin package directory structure per plan at examples/krag-plugin-obsidian/
+- [x] T002 Create pyproject.toml with hatchling build, krag.plugins entry point, pyyaml dependency at examples/krag-plugin-obsidian/pyproject.toml
+- [x] T003 [P] Create __init__.py with version and plugin metadata at examples/krag-plugin-obsidian/src/krag_plugin_obsidian/__init__.py
+- [x] T004 [P] Create README.md with plugin description and usage at examples/krag-plugin-obsidian/README.md
+- [x] T005 Install plugin in editable mode via `uv pip install -e examples/krag-plugin-obsidian`
 
 ---
 
@@ -33,23 +33,23 @@
 
 ### Tests for Foundational
 
-- [ ] T006 [P] Test claims_file() default returns False for all existing handlers in tests/unit/test_claims_file.py
-- [ ] T007 [P] Test _resolve_by_path_claim() returns None when no plugins have has_claims_file in tests/unit/test_registry_path_claim.py
-- [ ] T008 [P] Test get_handler_for_file() two-phase resolution: path-claim first, then extension fallback in tests/unit/test_registry_path_claim.py
-- [ ] T009 [P] Test per-chunk target_collection routing splits vectors to correct collections in tests/unit/test_chunk_routing.py
-- [ ] T010 [P] Test per-chunk routing fallback when target_collection absent uses route_file() in tests/unit/test_chunk_routing.py
-- [ ] T011 [P] Test merge_entries() adds new terms without overwriting existing in tests/unit/test_lexicon_merge.py
+- [x] T006 [P] Test claims_file() default returns False for all existing handlers in tests/unit/test_claims_file.py
+- [x] T007 [P] Test _resolve_by_path_claim() returns None when no plugins have has_claims_file in tests/unit/test_registry_path_claim.py
+- [x] T008 [P] Test get_handler_for_file() two-phase resolution: path-claim first, then extension fallback in tests/unit/test_registry_path_claim.py
+- [x] T009 [P] Test per-chunk target_collection routing splits vectors to correct collections in tests/unit/test_chunk_routing.py
+- [x] T010 [P] Test per-chunk routing fallback when target_collection absent uses route_file() in tests/unit/test_chunk_routing.py
+- [x] T011 [P] Test merge_entries() adds new terms without overwriting existing in tests/unit/test_lexicon_merge.py
 
 ### Implementation for Foundational
 
-- [ ] T012 Add claims_file(file_path: Path) -> bool method to FileTypeHandler ABC (default False) in src/krag/plugins/interfaces.py
-- [ ] T013 Add has_claims_file: bool = False field to PluginMetadata in src/krag/models/configuration.py
-- [ ] T014 Add _resolve_by_path_claim() method and modify get_handler_for_file() for two-phase resolution in src/krag/plugins/registry.py
-- [ ] T015 Set has_claims_file flag during discover_plugins() via method resolution check in src/krag/plugins/registry.py
-- [ ] T016 Add per-chunk target_collection routing logic in index_full() in src/krag/orchestration/indexer.py
-- [ ] T017 Add per-chunk target_collection routing logic in index_incremental() in src/krag/orchestration/indexer.py
-- [ ] T018 Add merge_entries(entries: dict[str, str], source: str) method to LexiconStore in src/krag/lexicon/lexicon_store.py
-- [ ] T019 Run pre-commit validation: ruff format, ruff check --fix, pytest
+- [x] T012 Add claims_file(file_path: Path) -> bool method to FileTypeHandler ABC (default False) in src/krag/plugins/interfaces.py
+- [x] T013 Add has_claims_file: bool = False field to PluginMetadata in src/krag/models/configuration.py
+- [x] T014 Add _resolve_by_path_claim() method and modify get_handler_for_file() for two-phase resolution in src/krag/plugins/registry.py
+- [x] T015 Set has_claims_file flag during discover_plugins() via method resolution check in src/krag/plugins/registry.py
+- [x] T016 Add per-chunk target_collection routing logic in index_full() in src/krag/orchestration/indexer.py
+- [x] T017 Add per-chunk target_collection routing logic in index_incremental() in src/krag/orchestration/indexer.py
+- [x] T018 Add merge_entries(entries: dict[str, str], source: str) method to LexiconStore in src/krag/lexicon/lexicon_store.py
+- [x] T019 Run pre-commit validation: ruff format, ruff check --fix, pytest
 
 **Checkpoint**: Foundation ready — path-based claiming, chunk-level routing, and lexicon merging infrastructure all in place. All existing tests still pass.
 
