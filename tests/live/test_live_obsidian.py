@@ -61,9 +61,9 @@ class Test00VaultIndexing:
         )
         assert resp["status"] in ("running", "completed")
 
-    def test_wait_for_index(self, client: KragClient) -> None:
+    def test_wait_for_index(self, client: KragClient, live_timeout: float) -> None:
         """Wait for vault indexing to complete."""
-        result = poll_index_complete(client, timeout=600)
+        result = poll_index_complete(client, timeout=live_timeout)
         assert result["status"] == "completed", f"Vault indexing failed: {result}"
         self.__class__._index_result = result
 
