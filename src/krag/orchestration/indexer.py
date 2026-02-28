@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -24,6 +25,33 @@ from krag.plugins.registry import PluginRegistry
 from krag.storage.qdrant_impl import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
+
+
+def _route_vectors_by_chunk(
+    vectors: list[dict[str, Any]],
+    fallback_collection: str,
+) -> dict[str, list[dict[str, Any]]]:
+    """Route vectors to collections using per-chunk target_collection metadata.
+
+    If a vector's payload contains ``target_collection``, it is routed to that
+    collection and the field is removed from the payload (routing hint only).
+    Vectors without the field are routed to *fallback_collection*.
+
+    Args:
+        vectors: List of vector dicts with ``payload`` sub-dicts.
+        fallback_collection: Collection name for vectors without target_collection.
+
+    Returns:
+        Mapping of collection name → list of vector dicts.
+    """
+    routed: dict[str, list[dict[str, Any]]] = {}
+    for vec in vectors:
+        coll = vec.get("payload", {}).pop("target_collection", None)
+        if coll is None:
+            coll = fallback_collection
+        routed.setdefault(coll, []).append(vec)
+    return routed
+
 
 # Type alias: (collection_name, vectors) tuple for multi-collection routing
 _RoutedVectors = tuple[str, list[dict[str, Any]]]
@@ -609,6 +637,7 @@ class IndexingOrchestrator:
 
         stored = 0
         batch_size = 100
+        _last_log = time.monotonic()
         for collection, vectors in routed_vectors.items():
             store = self.collection_manager.get_store(collection)
             try:
@@ -618,6 +647,16 @@ class IndexingOrchestrator:
                     stored += len(batch)
                     if progress_callback:
                         progress_callback(stored, total, f"Storing vectors ({collection})")
+                    _now = time.monotonic()
+                    if _now - _last_log >= 30:
+                        pct = stored / total * 100 if total else 0
+                        logger.info(
+                            "Storing vectors: %d/%d (%.0f%%)",
+                            stored,
+                            total,
+                            pct,
+                        )
+                        _last_log = _now
             except Exception as e:
                 logger.error(f"Error storing vectors to {collection}: {e}")
                 job.files_errored += 1
@@ -726,10 +765,21 @@ class IndexingOrchestrator:
 
                 # Route vectors to the correct collection (or single store)
                 if self.collection_manager is not None:
-                    collection = self.collection_manager.route_file(
-                        file_metadata.file_path, plugin_name=plugin_name
+                    has_chunk_routing = any(
+                        v.get("payload", {}).get("target_collection") for v in result.vectors
                     )
-                    routed_vectors.setdefault(collection, []).extend(result.vectors)
+                    if has_chunk_routing:
+                        fallback = self.collection_manager.route_file(
+                            file_metadata.file_path, plugin_name=plugin_name
+                        )
+                        chunk_routed = _route_vectors_by_chunk(result.vectors, fallback)
+                        for coll, vecs in chunk_routed.items():
+                            routed_vectors.setdefault(coll, []).extend(vecs)
+                    else:
+                        collection = self.collection_manager.route_file(
+                            file_metadata.file_path, plugin_name=plugin_name
+                        )
+                        routed_vectors.setdefault(collection, []).extend(result.vectors)
                 else:
                     all_vectors.extend(result.vectors)
 
@@ -762,25 +812,38 @@ class IndexingOrchestrator:
             # Multi-collection: upsert to each collection's store
             self._store_routed_vectors(routed_vectors, job, progress_callback)
         elif all_vectors:
-            logger.info(f"Storing {len(all_vectors)} vectors")
+            total_all = len(all_vectors)
+            logger.info("Storing %d vectors", total_all)
 
             try:
                 # Store in batches of 100
                 batch_size = 100
-                total_batches = (len(all_vectors) + batch_size - 1) // batch_size
+                total_batches = (total_all + batch_size - 1) // batch_size
+                stored_all = 0
+                _last_log = time.monotonic()
 
-                for batch_idx, i in enumerate(range(0, len(all_vectors), batch_size), 1):
+                for batch_idx, i in enumerate(range(0, total_all, batch_size), 1):
                     batch = all_vectors[i : i + batch_size]
                     self.vector_store.upsert(batch)
+                    stored_all += len(batch)
 
                     # Update progress after each batch
                     if progress_callback:
-                        vectors_stored = min(i + batch_size, len(all_vectors))
                         progress_callback(
-                            vectors_stored,
-                            len(all_vectors),
+                            stored_all,
+                            total_all,
                             f"Storing vectors ({batch_idx}/{total_batches} batches)",
                         )
+                    _now = time.monotonic()
+                    if _now - _last_log >= 30:
+                        pct = stored_all / total_all * 100 if total_all else 0
+                        logger.info(
+                            "Storing vectors: %d/%d (%.0f%%)",
+                            stored_all,
+                            total_all,
+                            pct,
+                        )
+                        _last_log = _now
 
             except Exception as e:
                 logger.error(f"Error storing vectors: {e}")
@@ -965,10 +1028,21 @@ class IndexingOrchestrator:
 
                 # Route vectors to the correct collection (or single store)
                 if self.collection_manager is not None:
-                    collection = self.collection_manager.route_file(
-                        file_metadata.file_path, plugin_name=plugin_name
+                    has_chunk_routing = any(
+                        v.get("payload", {}).get("target_collection") for v in result.vectors
                     )
-                    routed_vectors.setdefault(collection, []).extend(result.vectors)
+                    if has_chunk_routing:
+                        fallback = self.collection_manager.route_file(
+                            file_metadata.file_path, plugin_name=plugin_name
+                        )
+                        chunk_routed = _route_vectors_by_chunk(result.vectors, fallback)
+                        for coll, vecs in chunk_routed.items():
+                            routed_vectors.setdefault(coll, []).extend(vecs)
+                    else:
+                        collection = self.collection_manager.route_file(
+                            file_metadata.file_path, plugin_name=plugin_name
+                        )
+                        routed_vectors.setdefault(collection, []).extend(result.vectors)
                 else:
                     all_vectors.extend(result.vectors)
 
@@ -999,25 +1073,38 @@ class IndexingOrchestrator:
         if self.collection_manager is not None and routed_vectors:
             self._store_routed_vectors(routed_vectors, job, progress_callback)
         elif all_vectors:
-            logger.info(f"Storing {len(all_vectors)} vectors")
+            total_all = len(all_vectors)
+            logger.info("Storing %d vectors", total_all)
 
             try:
                 # Store in batches of 100
                 batch_size = 100
-                total_batches = (len(all_vectors) + batch_size - 1) // batch_size
+                total_batches = (total_all + batch_size - 1) // batch_size
+                stored_all = 0
+                _last_log = time.monotonic()
 
-                for batch_idx, i in enumerate(range(0, len(all_vectors), batch_size), 1):
+                for batch_idx, i in enumerate(range(0, total_all, batch_size), 1):
                     batch = all_vectors[i : i + batch_size]
                     self.vector_store.upsert(batch)
+                    stored_all += len(batch)
 
                     # Update progress after each batch
                     if progress_callback:
-                        vectors_stored = min(i + batch_size, len(all_vectors))
                         progress_callback(
-                            vectors_stored,
-                            len(all_vectors),
+                            stored_all,
+                            total_all,
                             f"Storing vectors ({batch_idx}/{total_batches} batches)",
                         )
+                    _now = time.monotonic()
+                    if _now - _last_log >= 30:
+                        pct = stored_all / total_all * 100 if total_all else 0
+                        logger.info(
+                            "Storing vectors: %d/%d (%.0f%%)",
+                            stored_all,
+                            total_all,
+                            pct,
+                        )
+                        _last_log = _now
 
             except Exception as e:
                 logger.error(f"Error storing vectors: {e}")

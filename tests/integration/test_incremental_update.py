@@ -200,9 +200,7 @@ class TestIncrementalIndexing:
             f"Full: {full_duration:.2f}s, Incremental: {incremental_duration:.2f}s"
         )
 
-    def test_incremental_index_different_directory_does_not_delete_other_dirs(
-        self, tmp_path: Path
-    ):
+    def test_incremental_index_different_directory_does_not_delete_other_dirs(self, tmp_path: Path):
         """Indexing directory B must not delete vectors previously indexed from directory A.
 
         Regression test: before the fix, categorize_changes() compared the

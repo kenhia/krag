@@ -308,3 +308,46 @@ def test_explicit_paths_override_xdg(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert config.model_cache_path == Path("/krag/custom_models")
     assert config.corpus_cache_path == Path("/krag/custom_corpus")
     assert config.logs_path == Path("/krag/custom_logs")
+
+
+def test_plugin_settings_nested_toml_sections(tmp_path: Path) -> None:
+    """Regression: [plugins.obsidian.vaults] must be parsed into plugin_settings.
+
+    tomllib nests [plugins.obsidian.vaults] under toml_data["plugins"]["obsidian"]
+    NOT as a flat "plugins.obsidian" top-level key.  The old code iterated
+    toml_data.items() and missed all per-plugin configs, leaving every plugin
+    initialized with an empty config dict.
+    """
+    config_path = tmp_path / "config.toml"
+    corpus_dir = tmp_path / "docs"
+    corpus_dir.mkdir()
+
+    toml_data = {
+        "directories": {"paths": [str(corpus_dir)]},
+        "plugins": {
+            "enabled": ["markdown", "obsidian", "code"],
+            "disabled": [],
+            "code": {"code_chunk_size": 1024},
+            "obsidian": {
+                "vaults": {"gratch": "/home/user/obsidian/gratch", "work": "/data/vaults/work"}
+            },
+        },
+    }
+    with open(config_path, "wb") as f:
+        tomli_w.dump(toml_data, f)
+
+    config = ConfigManager.load(config_path)
+    ps = config.plugins.plugin_settings
+
+    # Both per-plugin sections must be present
+    assert "code" in ps, "code plugin settings not found in plugin_settings"
+    assert "obsidian" in ps, "obsidian plugin settings not found in plugin_settings"
+
+    # Content must match what was written
+    assert ps["code"]["code_chunk_size"] == 1024
+    assert ps["obsidian"]["vaults"]["gratch"] == "/home/user/obsidian/gratch"
+    assert ps["obsidian"]["vaults"]["work"] == "/data/vaults/work"
+
+    # enabled/disabled must NOT appear as plugin settings
+    assert "enabled" not in ps
+    assert "disabled" not in ps

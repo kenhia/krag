@@ -60,3 +60,25 @@ Things that can be pulled into any sprint (small tweaks/refinements)
   connections, "KRAGD READY". If we can catch that it's shutting down, then also "KRAGD SHUTTING DOWN". This will "bookmark" things in the logs making it easier to see when things happen.
 - Add a `--rotate-logs` switch for the `kragd` command to rotate the logs before startup...helpful when debugging.
 - Responses often contain markdown syntax, can we use markdown formatting from `rich`?
+
+---
+
+## Sprint 011 — Obsidian Vault Plugin
+
+**Priority**: Medium
+**Depends on**: Sprint 009 (retrieval modes, multi-collection Qdrant)
+
+A plugin specifically designed for indexing local Obsidian vault content. Path-based
+ownership (claims `.md` files under configured vault paths), mixed-content routing
+(fenced code blocks → `code` collection, prose → `docs`), virtual `obsidian://` path
+prefixes, custom retrieval mode, and Obsidian-specific lexicon entries.
+
+See `specs/011-obsidian-plugin/spec.md` for full specification.
+
+### Little tweaks (completed during sprint 011)
+
+- Invalid `--mode` now shows a clean error listing available modes instead of a stack trace.
+- Storage logging now emits periodic progress every ~30 seconds during large indexing runs
+  instead of only logging at start and completion.
+- Extension conflict warning silenced for `claims_file()` plugins (obsidian declaring
+  `.md`/`.markdown` no longer spams WARNING on every indexing run).

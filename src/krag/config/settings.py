@@ -217,12 +217,13 @@ class ConfigManager:
             if "disabled" in plugin_section:
                 plugin_config_dict["disabled_plugins"] = plugin_section["disabled"]
 
-            # Collect per-plugin settings from [plugins.<plugin_name>] sections
+            # Collect per-plugin settings from [plugins.<plugin_name>] subsections.
+            # tomllib parses [plugins.obsidian.vaults] as nested dicts under
+            # plugin_section, NOT as flat "plugins.obsidian" keys in toml_data.
             plugin_settings: dict[str, dict[str, Any]] = {}
-            for key, value in toml_data.items():
-                if key.startswith("plugins.") and isinstance(value, dict):
-                    plugin_name = key.split(".", 1)[1]
-                    plugin_settings[plugin_name] = value
+            for key, value in plugin_section.items():
+                if key not in ("enabled", "disabled") and isinstance(value, dict):
+                    plugin_settings[key] = value
 
             if plugin_settings:
                 plugin_config_dict["plugin_settings"] = plugin_settings

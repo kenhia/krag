@@ -120,6 +120,13 @@ class PluginRegistry:
                     )
 
                 # Create metadata from entry point
+                # T015: Detect if plugin overrides claims_file()
+                has_claims_file = False
+                if load_error is None:
+                    handler_cls = type(handler)
+                    if hasattr(handler_cls, "claims_file"):
+                        has_claims_file = handler_cls.claims_file is not FileTypeHandler.claims_file
+
                 metadata = PluginMetadata(
                     name=plugin_name,
                     version=version,
@@ -130,6 +137,7 @@ class PluginRegistry:
                     required_api_version=required_api_version,
                     is_enabled=self._is_plugin_enabled(plugin_name),
                     load_error=load_error,
+                    has_claims_file=has_claims_file,
                 )
 
                 self._discovered[plugin_name] = metadata
@@ -190,10 +198,24 @@ class PluginRegistry:
                     self._extension_map[ext_lower] = plugin_name
                     logger.debug(f"Mapped extension {ext_lower} to plugin {plugin_name}")
                 else:
-                    logger.warning(
-                        f"Extension {ext_lower} conflict: {plugin_name} ignored "
-                        f"(already mapped to {self._extension_map[ext_lower]})"
-                    )
+                    if metadata.has_claims_file:
+                        # Plugin uses claims_file() for path-based routing and does not
+                        # depend on the extension map, so this is not a real conflict.
+                        logger.debug(
+                            "Extension %s: %s uses claims_file() routing "
+                            "(extension map entry belongs to %s)",
+                            ext_lower,
+                            plugin_name,
+                            self._extension_map[ext_lower],
+                        )
+                    else:
+                        logger.warning(
+                            "Extension %s conflict: %s ignored "
+                            "(already mapped to %s)",
+                            ext_lower,
+                            plugin_name,
+                            self._extension_map[ext_lower],
+                        )
 
     def list_plugins(self, filter_status: str | None = None) -> list[PluginMetadata]:
         """List plugins with optional status filtering.
@@ -458,8 +480,9 @@ class PluginRegistry:
     ) -> FileTypeHandler | None:
         """Get handler for a specific file.
 
-        Resolves handler via file extension, then calls plugin's can_handle_file()
-        for additional validation (e.g., magic bytes check).
+        Two-phase resolution:
+          Phase 1: Check path-claiming plugins (via claims_file()).
+          Phase 2: Fall back to extension-based lookup + can_handle_file().
 
         Args:
             file_path: Path to file needing handler
@@ -473,13 +496,17 @@ class PluginRegistry:
             >>> if handler:
             ...     text = handler.extract_text(file_path)
         """
-        # Get extension
+        # Phase 1: Path-claiming plugins
+        claimed = self._resolve_by_path_claim(file_path, context)
+        if claimed is not None:
+            return claimed
+
+        # Phase 2: Extension-based fallback
         ext = file_path.suffix.lower()
         if not ext:
             logger.debug(f"File has no extension: {file_path}")
             return None
 
-        # Get handler for extension
         handler = self.get_handler_for_extension(ext, context)
         if handler is None:
             return None
@@ -494,6 +521,42 @@ class PluginRegistry:
             return None
 
         return handler
+
+    def _resolve_by_path_claim(
+        self, file_path: Path, context: PluginContext | None = None
+    ) -> FileTypeHandler | None:
+        """Check path-claiming plugins for a file match.
+
+        Only iterates plugins whose metadata has has_claims_file=True.
+        Returns the first plugin that claims the file, or None.
+
+        Args:
+            file_path: Path to the file to check.
+            context: Plugin context for lazy loading if needed.
+
+        Returns:
+            FileTypeHandler | None: The claiming handler, or None.
+        """
+        for name, meta in self._discovered.items():
+            if not meta.has_claims_file or not meta.is_enabled:
+                continue
+
+            # Ensure plugin is loaded
+            handler = self._loaded.get(name)
+            if handler is None:
+                handler = self.load_plugin(name, context)
+            if handler is None:
+                continue
+
+            try:
+                if handler.claims_file(file_path):
+                    logger.debug(f"Plugin '{name}' claims file via path: {file_path}")
+                    return handler
+            except Exception as e:
+                logger.warning(f"Error in claims_file for '{name}': {e}")
+                continue
+
+        return None
 
     def validate_plugins(self) -> list[str]:
         """Validate discovered plugins for API compatibility and dependencies.
