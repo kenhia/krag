@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -636,6 +637,7 @@ class IndexingOrchestrator:
 
         stored = 0
         batch_size = 100
+        _last_log = time.monotonic()
         for collection, vectors in routed_vectors.items():
             store = self.collection_manager.get_store(collection)
             try:
@@ -645,6 +647,16 @@ class IndexingOrchestrator:
                     stored += len(batch)
                     if progress_callback:
                         progress_callback(stored, total, f"Storing vectors ({collection})")
+                    _now = time.monotonic()
+                    if _now - _last_log >= 30:
+                        pct = stored / total * 100 if total else 0
+                        logger.info(
+                            "Storing vectors: %d/%d (%.0f%%)",
+                            stored,
+                            total,
+                            pct,
+                        )
+                        _last_log = _now
             except Exception as e:
                 logger.error(f"Error storing vectors to {collection}: {e}")
                 job.files_errored += 1
@@ -800,25 +812,38 @@ class IndexingOrchestrator:
             # Multi-collection: upsert to each collection's store
             self._store_routed_vectors(routed_vectors, job, progress_callback)
         elif all_vectors:
-            logger.info(f"Storing {len(all_vectors)} vectors")
+            total_all = len(all_vectors)
+            logger.info("Storing %d vectors", total_all)
 
             try:
                 # Store in batches of 100
                 batch_size = 100
-                total_batches = (len(all_vectors) + batch_size - 1) // batch_size
+                total_batches = (total_all + batch_size - 1) // batch_size
+                stored_all = 0
+                _last_log = time.monotonic()
 
-                for batch_idx, i in enumerate(range(0, len(all_vectors), batch_size), 1):
+                for batch_idx, i in enumerate(range(0, total_all, batch_size), 1):
                     batch = all_vectors[i : i + batch_size]
                     self.vector_store.upsert(batch)
+                    stored_all += len(batch)
 
                     # Update progress after each batch
                     if progress_callback:
-                        vectors_stored = min(i + batch_size, len(all_vectors))
                         progress_callback(
-                            vectors_stored,
-                            len(all_vectors),
+                            stored_all,
+                            total_all,
                             f"Storing vectors ({batch_idx}/{total_batches} batches)",
                         )
+                    _now = time.monotonic()
+                    if _now - _last_log >= 30:
+                        pct = stored_all / total_all * 100 if total_all else 0
+                        logger.info(
+                            "Storing vectors: %d/%d (%.0f%%)",
+                            stored_all,
+                            total_all,
+                            pct,
+                        )
+                        _last_log = _now
 
             except Exception as e:
                 logger.error(f"Error storing vectors: {e}")
@@ -1048,25 +1073,38 @@ class IndexingOrchestrator:
         if self.collection_manager is not None and routed_vectors:
             self._store_routed_vectors(routed_vectors, job, progress_callback)
         elif all_vectors:
-            logger.info(f"Storing {len(all_vectors)} vectors")
+            total_all = len(all_vectors)
+            logger.info("Storing %d vectors", total_all)
 
             try:
                 # Store in batches of 100
                 batch_size = 100
-                total_batches = (len(all_vectors) + batch_size - 1) // batch_size
+                total_batches = (total_all + batch_size - 1) // batch_size
+                stored_all = 0
+                _last_log = time.monotonic()
 
-                for batch_idx, i in enumerate(range(0, len(all_vectors), batch_size), 1):
+                for batch_idx, i in enumerate(range(0, total_all, batch_size), 1):
                     batch = all_vectors[i : i + batch_size]
                     self.vector_store.upsert(batch)
+                    stored_all += len(batch)
 
                     # Update progress after each batch
                     if progress_callback:
-                        vectors_stored = min(i + batch_size, len(all_vectors))
                         progress_callback(
-                            vectors_stored,
-                            len(all_vectors),
+                            stored_all,
+                            total_all,
                             f"Storing vectors ({batch_idx}/{total_batches} batches)",
                         )
+                    _now = time.monotonic()
+                    if _now - _last_log >= 30:
+                        pct = stored_all / total_all * 100 if total_all else 0
+                        logger.info(
+                            "Storing vectors: %d/%d (%.0f%%)",
+                            stored_all,
+                            total_all,
+                            pct,
+                        )
+                        _last_log = _now
 
             except Exception as e:
                 logger.error(f"Error storing vectors: {e}")
