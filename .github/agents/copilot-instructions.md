@@ -17,6 +17,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-03
 - Qdrant (embedded file-based via qdrant-client, stored at `~/.cache/krag/storage`) (009-retrieval-modes)
 - Python 3.11+ (requires-python = ">=3.11,<3.14") + FastAPI 0.115+, Qdrant-client 1.8+, sentence-transformers 2.3+, llama-cpp-python 0.2.90+, Rich 13+, Typer 0.9+, Pydantic 2.6+, uvicorn 0.34+, httpx 0.28+ (010-infrastructure-polish)
 - Qdrant (vector store), filesystem (metadata.json, TOML config, mode files, logs) (010-infrastructure-polish)
+- Python 3.11–3.13 + krag (core), pyyaml (frontmatter parsing), pydantic (config schema) (011-obsidian-plugin)
+- Qdrant (existing `krag_docs` and `krag_code` collections via CollectionManager) (011-obsidian-plugin)
 
 - Python 3.11+ (001-text-rag-indexing)
 
@@ -36,9 +38,9 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+: Follow standard conventions
 
 ## Recent Changes
+- 011-obsidian-plugin: Added Python 3.11–3.13 + krag (core), pyyaml (frontmatter parsing), pydantic (config schema)
+- 011-obsidian-plugin: Added Qdrant (existing krag_docs and krag_code collections via CollectionManager)
 - 010-infrastructure-polish: Added Python 3.11+ (requires-python = ">=3.11,<3.14") + FastAPI 0.115+, Qdrant-client 1.8+, sentence-transformers 2.3+, llama-cpp-python 0.2.90+, Rich 13+, Typer 0.9+, Pydantic 2.6+, uvicorn 0.34+, httpx 0.28+
-- 009-retrieval-modes: Added Python 3.11–3.13 (requires-python = ">=3.11,<3.14") + FastAPI >=0.115.0, Typer >=0.9.0, qdrant-client >=1.8.0, sentence-transformers >=2.3.0, llama-cpp-python >=0.2.90, pydantic >=2.6.0, pydantic-settings >=2.2.0, httpx >=0.28.0, rich >=13.0.0, tomli-w >=1.0.0
-- 007-service-architecture: Added Python 3.11+ (`requires-python = ">=3.11,<3.14"`)
 
 
 <!-- MANUAL ADDITIONS START -->
