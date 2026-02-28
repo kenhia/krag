@@ -198,10 +198,24 @@ class PluginRegistry:
                     self._extension_map[ext_lower] = plugin_name
                     logger.debug(f"Mapped extension {ext_lower} to plugin {plugin_name}")
                 else:
-                    logger.warning(
-                        f"Extension {ext_lower} conflict: {plugin_name} ignored "
-                        f"(already mapped to {self._extension_map[ext_lower]})"
-                    )
+                    if metadata.has_claims_file:
+                        # Plugin uses claims_file() for path-based routing and does not
+                        # depend on the extension map, so this is not a real conflict.
+                        logger.debug(
+                            "Extension %s: %s uses claims_file() routing "
+                            "(extension map entry belongs to %s)",
+                            ext_lower,
+                            plugin_name,
+                            self._extension_map[ext_lower],
+                        )
+                    else:
+                        logger.warning(
+                            "Extension %s conflict: %s ignored "
+                            "(already mapped to %s)",
+                            ext_lower,
+                            plugin_name,
+                            self._extension_map[ext_lower],
+                        )
 
     def list_plugins(self, filter_status: str | None = None) -> list[PluginMetadata]:
         """List plugins with optional status filtering.

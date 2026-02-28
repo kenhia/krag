@@ -274,6 +274,75 @@ class TestExtensionMapping:
         # First plugin wins
         assert registry_empty._extension_map[".conflict"] in ["plugin_a", "plugin_b"]
 
+    def test_conflict_claims_file_plugin_does_not_warn(self, registry_empty, caplog):
+        """A plugin with has_claims_file=True losing an extension conflict should not
+        emit a WARNING — it uses path-based routing and doesn't need the extension map.
+
+        Regression test: obsidian + markdown both declare .md/.markdown; the WARNING
+        fired once per indexing run (fresh PluginRegistry per index) when it should be
+        silent because obsidian overrides claims_file().
+        """
+        import logging
+
+        registry_empty._discovered["markdown"] = PluginMetadata(
+            name="markdown",
+            version="1.0.0",
+            entry_point="dummy:MarkdownHandler",
+            supported_extensions=[".md", ".markdown"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+            has_claims_file=False,
+        )
+        registry_empty._discovered["obsidian"] = PluginMetadata(
+            name="obsidian",
+            version="1.0.0",
+            entry_point="dummy:ObsidianHandler",
+            supported_extensions=[".md", ".markdown"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+            has_claims_file=True,  # uses claims_file() — doesn't need extension map
+        )
+
+        with caplog.at_level(logging.WARNING, logger="krag.plugins.registry"):
+            registry_empty._build_extension_map()
+
+        # markdown wins the extension map
+        assert registry_empty._extension_map[".md"] == "markdown"
+        assert registry_empty._extension_map[".markdown"] == "markdown"
+        # No WARNING emitted — the "conflict" is expected and harmless
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert len(warnings) == 0
+
+    def test_conflict_extension_only_plugin_still_warns(self, registry_empty, caplog):
+        """Two extension-only plugins on the same extension should still emit WARNING."""
+        import logging
+
+        registry_empty._discovered["plugin_a"] = PluginMetadata(
+            name="plugin_a",
+            version="1.0.0",
+            entry_point="dummy:HandlerA",
+            supported_extensions=[".conf"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+            has_claims_file=False,
+        )
+        registry_empty._discovered["plugin_b"] = PluginMetadata(
+            name="plugin_b",
+            version="1.0.0",
+            entry_point="dummy:HandlerB",
+            supported_extensions=[".conf"],
+            required_api_version="1.0.0",
+            is_enabled=True,
+            has_claims_file=False,
+        )
+
+        with caplog.at_level(logging.WARNING, logger="krag.plugins.registry"):
+            registry_empty._build_extension_map()
+
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert len(warnings) == 1
+        assert ".conf" in warnings[0].message
+
     def test_get_supported_extensions_returns_enabled_extensions(self, registry_empty):
         """get_supported_extensions should return all extensions from enabled plugins."""
         registry_empty._extension_map = {".mock": "mock_plugin", ".test": "test_plugin"}
