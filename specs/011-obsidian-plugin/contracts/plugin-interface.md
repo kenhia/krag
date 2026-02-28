@@ -24,6 +24,7 @@ def claims_file(self, file_path: Path) -> bool:
         - Should be fast — use path prefix checks, not file I/O.
         - Should not raise exceptions (return False on error).
         - When True, this plugin handles the file instead of extension-based lookup.
+        - If file_path is not absolute, resolve it before comparison. Return False for paths that cannot be resolved.
     """
     return False
 ```
@@ -80,7 +81,7 @@ def _resolve_by_path_claim(
 ### PluginMetadata Extension
 
 ```python
-# In src/krag/models/configuration.py (or wherever PluginMetadata lives)
+# In src/krag/models/configuration.py
 has_claims_file: bool = Field(
     default=False,
     description="Whether plugin overrides claims_file() for path-based resolution",

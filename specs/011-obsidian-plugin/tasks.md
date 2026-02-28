@@ -220,9 +220,11 @@
 - [ ] T076 [P] Create live test for vault indexing and query against kragd in tests/live/test_live_obsidian.py
 - [ ] T077 [P] Create live test for mixed-content routing verification in tests/live/test_live_obsidian.py
 - [ ] T078 [P] Create live test for --mode obsidian query in tests/live/test_live_obsidian.py
-- [ ] T079 Validate quickstart.md steps work end-to-end
-- [ ] T080 Run full test suite: uv run pytest (all tests pass, no regressions)
-- [ ] T081 Run pre-commit validation: ruff format, ruff check --fix, pytest
+- [ ] T079 [P] Test path-based resolution adds <10ms overhead per file via timing assertion in tests/unit/test_registry_path_claim.py (SC-005). If target is not met, document actual latency before optimizing.
+- [ ] T080 [P] Test indexing 10,000 synthetic .md files completes without errors or timeouts in tests/integration/test_obsidian_indexing.py (SC-007)
+- [ ] T081 Validate quickstart.md steps work end-to-end
+- [ ] T082 Run full test suite: uv run pytest (all tests pass, no regressions)
+- [ ] T083 Run pre-commit validation: ruff format, ruff check --fix, pytest
 
 ---
 

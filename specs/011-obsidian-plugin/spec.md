@@ -126,31 +126,34 @@ As a krag user querying vault content, I want Obsidian-specific terminology (bac
 #### Plugin Architecture Extension
 
 - **FR-006**: The `PluginRegistry.get_handler_for_file()` method MUST support path-based handler resolution in addition to extension-based resolution.
-- **FR-007**: Path-based handlers MUST take priority over extension-based handlers when a file matches a configured path.
-- **FR-008**: The `FileTypeHandler` interface MUST be extended with a `claims_file(file_path: Path) -> bool` method that defaults to `False` for backward compatibility.
-- **FR-009**: The resolution order in `get_handler_for_file()` MUST be: path-claiming plugins (via `claims_file`) → extension-based plugins → no handler.
+- **FR-007**: The `FileTypeHandler` interface MUST be extended with a `claims_file(file_path: Path) -> bool` method that defaults to `False` for backward compatibility.
+- **FR-008**: The resolution order in `get_handler_for_file()` MUST be: path-claiming plugins (via `claims_file`) → extension-based plugins → no handler.
 
 #### Content Splitting & Routing
 
-- **FR-010**: Plugin MUST split note content into prose segments and fenced code blocks.
-- **FR-011**: Fenced code blocks with a language identifier MUST be routed to the `code` collection.
-- **FR-012**: Fenced code blocks without a language identifier MUST be routed to the `docs` collection (treated as prose).
-- **FR-013**: Prose segments (everything outside fenced code blocks) MUST be routed to the `docs` collection.
-- **FR-014**: Each code block MUST preserve its language identifier in chunk metadata (`language` field).
-- **FR-015**: Plugin MUST use the collection routing override (Level 1 in CollectionRouter) to direct chunks to the correct collection.
+- **FR-009**: Plugin MUST split note content into prose segments and fenced code blocks.
+- **FR-010**: Fenced code blocks with a language identifier MUST be routed to the `code` collection.
+- **FR-011**: Fenced code blocks without a language identifier MUST be routed to the `docs` collection (treated as prose).
+- **FR-012**: Prose segments (everything outside fenced code blocks) MUST be routed to the `docs` collection.
+- **FR-013**: Each code block MUST preserve its language identifier in chunk metadata (`language` field).
+- **FR-014**: Plugin MUST annotate each chunk's payload with `target_collection` metadata to direct chunks to the correct collection. The indexer routes per-chunk when this field is present.
 
 #### Virtual Paths
 
-- **FR-016**: Plugin MUST replace the vault root path with `obsidian://vault-name/` in all stored `file_path` metadata.
-- **FR-017**: Virtual paths MUST be deterministic — the same file always produces the same virtual path.
-- **FR-018**: Multiple vaults MUST produce distinct prefixes (e.g., `obsidian://gratch/...`, `obsidian://work/...`).
+- **FR-015**: Plugin MUST replace the vault root path with `obsidian://vault-name/` in all stored `file_path` metadata.
+- **FR-016**: Virtual paths MUST be deterministic — the same file always produces the same virtual path.
+- **FR-017**: Multiple vaults MUST produce distinct prefixes (e.g., `obsidian://gratch/...`, `obsidian://work/...`).
 
 #### Configuration
 
-- **FR-019**: Plugin MUST be configurable via `[plugins.obsidian]` section in `config.toml`.
-- **FR-020**: Vault mappings MUST be specified under `[plugins.obsidian.vaults]` as `name = "path"` pairs.
-- **FR-021**: Plugin MUST validate that configured vault paths exist on disk during initialization and warn (not error) for missing paths.
-- **FR-022**: Plugin MUST provide a Pydantic `config_schema()` for validation of the vault configuration.
+- **FR-018**: Plugin MUST be configurable via `[plugins.obsidian]` section in `config.toml`.
+- **FR-019**: Vault mappings MUST be specified under `[plugins.obsidian.vaults]` as `name = "path"` pairs.
+- **FR-020**: Plugin MUST validate that configured vault paths exist on disk during initialization and warn (not error) for missing paths.
+- **FR-021**: Plugin MUST provide a Pydantic `config_schema()` for validation of the vault configuration.
+
+#### Frontmatter
+
+- **FR-022**: Plugin MUST parse YAML frontmatter (between `---` delimiters) and strip it from indexed text while preserving frontmatter fields as chunk metadata.
 
 #### Retrieval Mode
 

@@ -111,7 +111,7 @@ if self.collection_manager is not None:
 
 **Context**: FR-026/FR-027 require the plugin to contribute Obsidian-specific terms to the domain lexicon on initialization.
 
-**Decision**: Ship a bundled `obsidian-lexicon.json` file inside the plugin package. During `initialize()`, the plugin loads this JSON and merges it into the `LexiconStore` via the `PluginContext`.
+**Decision**: Ship a bundled `lexicon.json` file inside the plugin package. During `initialize()`, the plugin loads this JSON and merges it into the `LexiconStore` via the `PluginContext`.
 
 **Rationale**: The `LexiconStore` loads terms from a JSON file (`dict[str, str]`). The `PluginContext` provides access to krag services. The plugin can either: (a) write a temporary JSON and call `lexicon_store.load()`, or (b) contribute entries directly (requires a small extension to `LexiconStore`).
 
