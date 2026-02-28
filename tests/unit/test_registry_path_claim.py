@@ -80,6 +80,102 @@ class _ClaimingHandler(FileTypeHandler):
             return False
 
 
+class TestPathResolutionPerformance:
+    """SC-005: Path-based resolution must add <10ms overhead per file."""
+
+    def test_claims_file_under_10ms(self, tmp_path: Path) -> None:
+        """claims_file() path-prefix check completes in <10ms per file (T079).
+
+        Creates a handler with 5 vaults and times 1 000 calls against files
+        both inside and outside vaults.  The median call must be <10ms;
+        the test documents actual latency before any optimization attempt.
+        """
+        import time
+
+        from krag_plugin_obsidian.handler import ObsidianFileTypeHandler
+
+        # Create 5 vaults
+        vaults: dict[str, str] = {}
+        for i in range(5):
+            v = tmp_path / f"vault-{i}"
+            v.mkdir()
+            (v / "note.md").write_text(f"Vault {i} note", encoding="utf-8")
+            vaults[f"v{i}"] = str(v)
+
+        h = ObsidianFileTypeHandler()
+        h.initialize({"vaults": vaults}, context=None)
+
+        # Build file list: half inside vaults, half outside
+        files: list[Path] = []
+        for i in range(5):
+            v = tmp_path / f"vault-{i}"
+            for j in range(100):
+                files.append(v / f"note-{j}.md")
+        for j in range(500):
+            files.append(tmp_path / f"outside-{j}.md")
+
+        # Time 1000 claims_file calls
+        start = time.perf_counter()
+        for f in files:
+            h.claims_file(f)
+        elapsed = time.perf_counter() - start
+
+        per_file_ms = (elapsed / len(files)) * 1000
+        # Document actual latency
+        print(f"\nSC-005: claims_file per-file latency = {per_file_ms:.4f} ms")
+        assert per_file_ms < 10, (
+            f"Path resolution took {per_file_ms:.4f} ms/file — exceeds 10ms target"
+        )
+
+    def test_resolve_by_path_claim_under_10ms(self, tmp_path: Path) -> None:
+        """_resolve_by_path_claim() completes in <10ms per file.
+
+        Tests the full registry path-claim resolution path, not just
+        the handler's claims_file().
+        """
+        import time
+
+        from krag_plugin_obsidian.handler import ObsidianFileTypeHandler
+
+        from krag.plugins.registry import PluginRegistry
+
+        vault = tmp_path / "vault"
+        vault.mkdir()
+
+        handler = ObsidianFileTypeHandler()
+        handler.initialize({"vaults": {"main": str(vault)}}, context=None)
+
+        config = _make_config()
+        registry = PluginRegistry(config)
+        registry._loaded["obsidian"] = handler
+        registry._discovered["obsidian"] = PluginMetadata(
+            name="obsidian",
+            version="1.0.0",
+            entry_point="krag_plugin_obsidian:ObsidianFileTypeHandler",
+            supported_extensions=[".md"],
+            required_api_version="1.0",
+            has_claims_file=True,
+        )
+
+        # Mix of vault and non-vault files
+        files: list[Path] = []
+        for i in range(500):
+            files.append(vault / f"note-{i}.md")
+        for i in range(500):
+            files.append(tmp_path / f"outside-{i}.md")
+
+        start = time.perf_counter()
+        for f in files:
+            registry._resolve_by_path_claim(f)
+        elapsed = time.perf_counter() - start
+
+        per_file_ms = (elapsed / len(files)) * 1000
+        print(f"\nSC-005: _resolve_by_path_claim per-file latency = {per_file_ms:.4f} ms")
+        assert per_file_ms < 10, (
+            f"Registry path resolution took {per_file_ms:.4f} ms/file — exceeds 10ms target"
+        )
+
+
 class TestResolveByPathClaim:
     """_resolve_by_path_claim() behavior."""
 

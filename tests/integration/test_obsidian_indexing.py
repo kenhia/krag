@@ -548,3 +548,71 @@ class TestVirtualPathInChunkPayload:
         assert meta["virtual_path"].startswith("obsidian://")
         assert "my-vault" in meta["virtual_path"]
         assert "note-a.md" in meta["virtual_path"]
+
+
+# =========================================================================
+# Phase 9 / SC-007 — Scale: 10 000 synthetic .md files
+# =========================================================================
+
+
+class TestTenThousandFilesScale:
+    """SC-007: Indexing 10 000 synthetic .md files completes without errors (T080).
+
+    This test creates a vault with 10 000 tiny .md files in a flat directory,
+    exercises claims_file + extract_text + extract_metadata + chunk for each,
+    and ensures no errors or timeouts occur.  It does NOT talk to Qdrant;
+    the goal is to validate the plugin pipeline at scale.
+    """
+
+    FILE_COUNT = 10_000
+    TIMEOUT_SECONDS = 120  # generous — should finish in <30s
+
+    def test_create_and_process_10k_files(self, tmp_path: Path) -> None:
+        """Process 10 000 synthetic vault notes end-to-end without errors."""
+        import time
+
+        vault = tmp_path / "big-vault"
+        vault.mkdir()
+
+        # --- create files ------------------------------------------------
+        for i in range(self.FILE_COUNT):
+            (vault / f"note-{i:05d}.md").write_text(
+                f"---\ntitle: Note {i}\n---\n\n# Note {i}\n\nContent for note number {i}.\n",
+                encoding="utf-8",
+            )
+
+        # --- initialise handler ------------------------------------------
+        h = ObsidianFileTypeHandler()
+        h.initialize({"vaults": {"scale": str(vault)}}, context=None)
+
+        # --- process every file ------------------------------------------
+        errors: list[str] = []
+        start = time.perf_counter()
+
+        for md_file in sorted(vault.glob("*.md")):
+            try:
+                assert h.claims_file(md_file), f"Handler did not claim {md_file.name}"
+                text = h.extract_text(md_file)
+                meta = h.extract_metadata(md_file)
+                assert meta["virtual_path"].startswith("obsidian://scale/")
+                # get_chunking_strategy() uses state set by extract_text()
+                chunker = h.get_chunking_strategy()
+                assert chunker is not None, "Chunker is None after extract_text()"
+                chunks = chunker.chunk(text, file_path=md_file)
+                assert len(chunks) >= 1
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{md_file.name}: {exc}")
+
+        elapsed = time.perf_counter() - start
+
+        print(
+            f"\nSC-007: Processed {self.FILE_COUNT} files in {elapsed:.1f}s "
+            f"({elapsed / self.FILE_COUNT * 1000:.2f} ms/file)"
+        )
+
+        assert elapsed < self.TIMEOUT_SECONDS, (
+            f"Processing took {elapsed:.1f}s — exceeds {self.TIMEOUT_SECONDS}s timeout"
+        )
+        assert len(errors) == 0, (
+            f"{len(errors)} errors out of {self.FILE_COUNT} files:\n" + "\n".join(errors[:20])
+        )
