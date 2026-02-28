@@ -134,16 +134,16 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T053 [P] [US3] Test vault .md file handled by Obsidian plugin, non-vault .md by markdown plugin in tests/integration/test_obsidian_indexing.py
-- [ ] T054 [P] [US3] Test no vaults configured → all .md files handled by markdown plugin in tests/integration/test_obsidian_indexing.py
-- [ ] T055 [P] [US3] Test two vaults configured → correct virtual path prefix per vault in tests/integration/test_obsidian_indexing.py
-- [ ] T056 [P] [US3] Test overlapping vault paths → first vault in config order wins in tests/integration/test_obsidian_indexing.py
+- [x] T053 [P] [US3] Test vault .md file handled by Obsidian plugin, non-vault .md by markdown plugin in tests/integration/test_obsidian_indexing.py
+- [x] T054 [P] [US3] Test no vaults configured → all .md files handled by markdown plugin in tests/integration/test_obsidian_indexing.py
+- [x] T055 [P] [US3] Test two vaults configured → correct virtual path prefix per vault in tests/integration/test_obsidian_indexing.py
+- [x] T056 [P] [US3] Test overlapping vault paths → first vault in config order wins in tests/integration/test_obsidian_indexing.py
 
 ### Implementation for User Story 3
 
-- [ ] T057 [US3] Verify end-to-end indexing pipeline handles claims_file priority correctly (integration test fixtures) in tests/integration/test_obsidian_indexing.py
-- [ ] T058 [US3] Add handler edge case handling: zero-byte files, binary files, permission errors in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
-- [ ] T059 [US3] Run pre-commit validation: ruff format, ruff check --fix, pytest
+- [x] T057 [US3] Verify end-to-end indexing pipeline handles claims_file priority correctly (integration test fixtures) in tests/integration/test_obsidian_indexing.py
+- [x] T058 [US3] Add handler edge case handling: zero-byte files, binary files, permission errors in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/handler.py
+- [x] T059 [US3] Run pre-commit validation: ruff format, ruff check --fix, pytest
 
 **Checkpoint**: Path-based ownership works correctly. Obsidian plugin and markdown plugin coexist without conflicts. All P1 stories complete — MVP delivered.
 
@@ -157,13 +157,13 @@
 
 ### Tests for User Story 4
 
-- [ ] T060 [P] [US4] Test virtual path determinism — same file always produces same virtual path in examples/krag-plugin-obsidian/tests/test_handler.py
-- [ ] T061 [P] [US4] Test multiple vaults produce distinct prefixes (obsidian://gratch/..., obsidian://work/...) in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T060 [P] [US4] Test virtual path determinism — same file always produces same virtual path in examples/krag-plugin-obsidian/tests/test_handler.py
+- [x] T061 [P] [US4] Test multiple vaults produce distinct prefixes (obsidian://gratch/..., obsidian://work/...) in examples/krag-plugin-obsidian/tests/test_handler.py
 
 ### Implementation for User Story 4
 
-- [ ] T062 [US4] Verify virtual paths appear correctly in query results via integration test in tests/integration/test_obsidian_indexing.py
-- [ ] T063 [US4] Run pre-commit validation: ruff format, ruff check --fix, pytest
+- [x] T062 [US4] Verify virtual paths appear correctly in query results via integration test in tests/integration/test_obsidian_indexing.py
+- [x] T063 [US4] Run pre-commit validation: ruff format, ruff check --fix, pytest
 
 **Checkpoint**: Virtual paths appear in all query results for vault-sourced content. Multiple vaults show distinct prefixes.
 
