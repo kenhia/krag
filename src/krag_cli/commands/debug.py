@@ -27,6 +27,9 @@ def debug_query_command(
     query: str = typer.Argument(..., help="Query text"),
     top_k: int | None = typer.Option(None, "--top-k", "-k", help="Number of results"),
     preset: str | None = typer.Option(None, "--preset", "-p", help="Prompt preset name"),
+    mode: str | None = typer.Option(
+        None, "--mode", "-m", help="Named retrieval mode (e.g. default, code, docs)"
+    ),
     llm: str | None = typer.Option(None, "--llm", help="Force LLM: text or code"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
     host: str | None = typer.Option(None, "--host", help="kragd host"),
@@ -46,6 +49,8 @@ def debug_query_command(
             payload["top_k"] = top_k
         if preset is not None:
             payload["preset"] = preset
+        if mode is not None:
+            payload["mode"] = mode
         if llm is not None:
             payload["llm"] = llm
 

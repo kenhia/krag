@@ -7,7 +7,6 @@ T010: POST /index returns immediately; indexing runs in background thread.
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
 
 from kragd.schemas import IndexRequest, IndexResponse
 
@@ -15,7 +14,7 @@ router = APIRouter(tags=["index"])
 
 
 @router.post("/index", response_model=IndexResponse)
-def index(body: IndexRequest, request: Request) -> IndexResponse | JSONResponse:
+def index(body: IndexRequest, request: Request) -> IndexResponse:
     """Trigger indexing using already-loaded embedding models.
 
     Returns immediately with a 'running' status. Indexing proceeds
@@ -23,13 +22,7 @@ def index(body: IndexRequest, request: Request) -> IndexResponse | JSONResponse:
     Returns 409 if indexing is already in progress.
     """
     service = request.app.state.service
-    try:
-        return service.index(body)
-    except RuntimeError as exc:
-        # Already indexing or not started
-        if "already in progress" in str(exc).lower():
-            return JSONResponse(status_code=409, content={"detail": str(exc)})
-        raise
+    return service.index(body)
 
 
 @router.get("/index/status", response_model=IndexResponse | list[IndexResponse])

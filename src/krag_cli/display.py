@@ -7,6 +7,7 @@ Supports TEXT, JSON, and MARKDOWN output formats.
 from __future__ import annotations
 
 import json
+import sys
 from enum import Enum
 from typing import Any
 
@@ -16,7 +17,11 @@ from rich.panel import Panel
 
 from krag.config.path_reducer import PathReducer
 
-console = Console()
+# TTY-aware console: suppress formatting when stdout is piped
+console = Console(
+    force_terminal=sys.stdout.isatty(),
+    no_color=not sys.stdout.isatty(),
+)
 
 
 class OutputFormat(str, Enum):  # noqa: UP042
@@ -132,7 +137,7 @@ def _display_text(
     console.print()
     console.print(
         Panel(
-            answer,
+            Markdown(answer),
             title="Answer",
             border_style="green",
             padding=(1, 2),

@@ -124,6 +124,9 @@ def build_query_pipeline(
     embedding_orchestrator = EmbeddingOrchestrator(
         default_model=config.embedding_model,
         device=config.embedding_device,
+        additional_models=(
+            {"code": config.embedding_code_model} if config.embedding_code_model else None
+        ),
     )
     if config.plugins is not None:
         from krag.plugins.registry import PluginRegistry

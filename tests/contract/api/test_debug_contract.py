@@ -15,9 +15,9 @@ from fastapi.testclient import TestClient
 
 from kragd.schemas import (
     DebugMetadata,
-    DebugQueryResponse,
     QdrantSearchResponse,
     QdrantSearchResult,
+    QueryResponse,
     SourceChunk,
 )
 
@@ -88,8 +88,8 @@ def test_client() -> TestClient:
         mock_service.start = AsyncMock()
         mock_service.shutdown = AsyncMock()
 
-        # Default debug_query response
-        mock_service.debug_query.return_value = DebugQueryResponse(
+        # Default query response (debug router calls service.query with include_debug=True)
+        mock_service.query.return_value = QueryResponse(
             answer="Debug answer to the question.",
             sources=[_make_source_chunk(1), _make_source_chunk(2)],
             debug=_make_debug_metadata(),

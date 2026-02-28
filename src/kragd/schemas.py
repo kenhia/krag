@@ -208,7 +208,7 @@ class QdrantSearchResponse(BaseModel):
     vector_space: str | None = Field(None, description="Space searched")
 
 
-class IndexError(BaseModel):
+class IndexingFileError(BaseModel):
     """Individual file indexing error."""
 
     file_path: str = Field(..., description="Path of failed file")
@@ -236,7 +236,7 @@ class IndexResponse(BaseModel):
     vectors_stored: int = Field(..., ge=0, description="Vectors written to Qdrant")
     duration_seconds: float = Field(..., ge=0.0, description="Elapsed time")
     dry_run: bool = Field(..., description="Whether this was a preview")
-    errors: list[IndexError] = Field(default_factory=list, description="Error details")
+    errors: list[IndexingFileError] = Field(default_factory=list, description="Error details")
     collections: dict[str, int] = Field(
         default_factory=dict,
         description="Per-collection vector counts (code, tests, docs, text)",

@@ -140,6 +140,10 @@ class PluginRegistry:
                 continue
 
         logger.info(f"Discovered {len(discovered_plugins)} plugins")
+
+        # Auto-build extension map so callers don't need to call _build_extension_map()
+        self._build_extension_map()
+
         return discovered_plugins
 
     def _is_plugin_enabled(self, plugin_name: str) -> bool:

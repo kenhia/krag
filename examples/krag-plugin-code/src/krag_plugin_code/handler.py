@@ -153,13 +153,15 @@ class CodeFileHandler(FileTypeHandler):
         """
         return self._config.get("embedding_model", self._DEFAULT_CODE_EMBEDDING_MODEL)
 
-    def initialize(self, config: dict[str, Any]) -> None:
+    def initialize(self, config: dict[str, Any], context: Any = None) -> None:
         """Initialize the handler with configuration.
 
         Args:
             config: Plugin configuration dict.
+            context: Plugin context providing access to krag services (optional).
         """
         self._config = config
+        self._context = context
         logger.info("Code file handler initialized")
 
     def cleanup(self) -> None:

@@ -230,14 +230,7 @@ class PluginLoader:
             access to krag services. Plugins can ignore the context parameter.
         """
         try:
-            # Call initialize with context if plugin supports it
-            import inspect
-
-            sig = inspect.signature(handler.initialize)
-            if "context" in sig.parameters:
-                handler.initialize(config, context=context)
-            else:
-                handler.initialize(config)
+            handler.initialize(config, context=context)
 
             logger.info(f"Initialized plugin: {handler.name} v{handler.version}")
 

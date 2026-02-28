@@ -12,6 +12,7 @@ from kragd.schemas import (
     DebugQueryResponse,
     QdrantSearchRequest,
     QdrantSearchResponse,
+    QueryRequest,
 )
 
 router = APIRouter(prefix="/debug", tags=["debug"])
@@ -25,7 +26,20 @@ def debug_query(body: DebugQueryRequest, request: Request) -> DebugQueryResponse
     candidates, embedding models, vector spaces).
     """
     service = request.app.state.service
-    return service.debug_query(body)
+    query_request = QueryRequest(
+        query=body.query,
+        top_k=body.top_k,
+        preset=body.preset,
+        llm=body.llm,
+        mode=body.mode,
+        include_debug=True,
+    )
+    result = service.query(query_request)
+    return DebugQueryResponse(
+        answer=result.answer,
+        sources=result.sources,
+        debug=result.debug,
+    )
 
 
 @router.post("/qdrant", response_model=QdrantSearchResponse)

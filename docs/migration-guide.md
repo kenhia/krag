@@ -152,6 +152,10 @@ logs_path = "/krag/logs"
 model = "BAAI/bge-base-en-v1.5"
 device = "cuda"  # Use "cpu" if no GPU
 
+# Code embedding (optional — enables multi-model indexing)
+# [embedding_code]
+# model = "jinaai/jina-embeddings-v2-base-code"
+
 # LLM configuration
 [llm]
 model = "microsoft/Phi-3-mini-4k-instruct-gguf"

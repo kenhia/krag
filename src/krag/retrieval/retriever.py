@@ -212,6 +212,11 @@ class Retriever:
         fetch_limit = top_k * self._OVERFETCH_FACTOR
 
         # Multi-collection path: query each collection and merge
+        # When collection_manager is available but no explicit targets,
+        # auto-target all managed collections with equal weight so the
+        # retriever searches where data was actually indexed.
+        if self.collection_manager is not None and not target_collections:
+            target_collections = dict.fromkeys(self.collection_manager.stores, 1.0)
         if target_collections and self.collection_manager is not None:
             query_results = self._multi_collection_retrieve(query, fetch_limit, target_collections)
             using_rrf = True
@@ -370,14 +375,23 @@ class Retriever:
         all_result_lists: list[list[Any]] = []
         self._last_per_space_counts: dict[str, int] = {}
         for vector_name, embedding in query_embeddings.items():
-            results = self.vector_store.search_named(
-                query_vector=embedding,
-                vector_name=vector_name,
-                limit=fetch_limit,
-            )
+            try:
+                results = self.vector_store.search_named(
+                    query_vector=embedding,
+                    vector_name=vector_name,
+                    limit=fetch_limit,
+                )
+            except Exception:
+                logger.warning(
+                    "Search failed for vector space '%s', skipping",
+                    vector_name,
+                    exc_info=True,
+                )
+                results = []
             logger.debug(f"  Vector space '{vector_name}': {len(results)} results")
             self._last_per_space_counts[vector_name] = len(results)
-            all_result_lists.append(results)
+            if results:
+                all_result_lists.append(results)
 
         # Merge via RRF
         merged = reciprocal_rank_fusion(all_result_lists, k=60, limit=fetch_limit)

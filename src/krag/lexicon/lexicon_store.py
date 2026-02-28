@@ -12,10 +12,12 @@ import logging
 import re
 from pathlib import Path
 
+from krag.models.exceptions import KragError
+
 logger = logging.getLogger(__name__)
 
 
-class LexiconValidationError(Exception):
+class LexiconValidationError(KragError):
     """Raised when a lexicon JSON file is malformed or violates the schema."""
 
 

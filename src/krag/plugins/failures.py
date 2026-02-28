@@ -6,6 +6,7 @@ It also provides a public report_indexing_failure() API for use by plugins.
 """
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,7 @@ class IndexingFailureCollector:
 
     def __init__(self) -> None:
         """Initialize failure collector with empty records."""
+        self._lock = threading.Lock()
         self._failures: list[IndexingFailureRecord] = []
 
     def record_failure(
@@ -57,7 +59,8 @@ class IndexingFailureCollector:
             reason=reason,
             exception_type=exception_type,
         )
-        self._failures.append(failure)
+        with self._lock:
+            self._failures.append(failure)
 
     def get_failures(self, plugin_name: str | None = None) -> list[IndexingFailureRecord]:
         """Get all failure records, optionally filtered by plugin.
@@ -68,9 +71,10 @@ class IndexingFailureCollector:
         Returns:
             list[IndexingFailureRecord]: Matching failure records
         """
-        if plugin_name is None:
-            return self._failures.copy()
-        return [f for f in self._failures if f.plugin_name == plugin_name]
+        with self._lock:
+            if plugin_name is None:
+                return self._failures.copy()
+            return [f for f in self._failures if f.plugin_name == plugin_name]
 
     def total_failures(self) -> int:
         """Get total count of failures.
@@ -78,7 +82,8 @@ class IndexingFailureCollector:
         Returns:
             int: Total number of recorded failures
         """
-        return len(self._failures)
+        with self._lock:
+            return len(self._failures)
 
     def failures_by_plugin(self) -> dict[str | None, int]:
         """Get failure counts grouped by plugin.
@@ -87,14 +92,16 @@ class IndexingFailureCollector:
             dict[str | None, int]: Mapping of plugin name to failure count,
                                    None key represents core system failures
         """
-        counts: dict[str | None, int] = {}
-        for failure in self._failures:
-            counts[failure.plugin_name] = counts.get(failure.plugin_name, 0) + 1
-        return counts
+        with self._lock:
+            counts: dict[str | None, int] = {}
+            for failure in self._failures:
+                counts[failure.plugin_name] = counts.get(failure.plugin_name, 0) + 1
+            return counts
 
     def clear(self) -> None:
         """Clear all recorded failures."""
-        self._failures.clear()
+        with self._lock:
+            self._failures.clear()
 
     def format_summary(self) -> str:
         """Generate human-readable failure summary.
@@ -108,34 +115,37 @@ class IndexingFailureCollector:
             - Core system: 2 failures
             - Plugin 'pdf': 3 failures
         """
-        if not self._failures:
-            return "No indexing failures recorded."
+        with self._lock:
+            if not self._failures:
+                return "No indexing failures recorded."
 
-        lines = ["Indexing Failures Summary:"]
-        lines.append(f"Total failures: {self.total_failures()}")
-        lines.append("")
-
-        # Group by plugin
-        by_plugin = self.failures_by_plugin()
-
-        # Core system failures first
-        if None in by_plugin:
-            lines.append(f"Core system: {by_plugin[None]} failure(s)")
-            for failure in [f for f in self._failures if f.plugin_name is None]:
-                lines.append(f"  - {failure.file_path}: {failure.reason}")
+            lines = ["Indexing Failures Summary:"]
+            lines.append(f"Total failures: {len(self._failures)}")
             lines.append("")
 
-        # Plugin failures
-        for plugin_name, count in sorted(
-            (item for item in by_plugin.items() if item[0] is not None), key=lambda x: x[0]
-        ):
-            if plugin_name is not None:
-                lines.append(f"Plugin '{plugin_name}': {count} failure(s)")
-                for failure in [f for f in self._failures if f.plugin_name == plugin_name]:
+            # Group by plugin
+            counts: dict[str | None, int] = {}
+            for failure in self._failures:
+                counts[failure.plugin_name] = counts.get(failure.plugin_name, 0) + 1
+
+            # Core system failures first
+            if None in counts:
+                lines.append(f"Core system: {counts[None]} failure(s)")
+                for failure in [f for f in self._failures if f.plugin_name is None]:
                     lines.append(f"  - {failure.file_path}: {failure.reason}")
                 lines.append("")
 
-        return "\n".join(lines)
+            # Plugin failures
+            for plugin_name, count in sorted(
+                (item for item in counts.items() if item[0] is not None), key=lambda x: x[0]
+            ):
+                if plugin_name is not None:
+                    lines.append(f"Plugin '{plugin_name}': {count} failure(s)")
+                    for failure in [f for f in self._failures if f.plugin_name == plugin_name]:
+                        lines.append(f"  - {failure.file_path}: {failure.reason}")
+                    lines.append("")
+
+            return "\n".join(lines)
 
     def failures_by_exception_type(self) -> dict[str | None, int]:
         """Get failure counts grouped by exception type.
@@ -146,10 +156,11 @@ class IndexingFailureCollector:
         Returns:
             dict[str | None, int]: Mapping of exception type to failure count
         """
-        counts: dict[str | None, int] = {}
-        for failure in self._failures:
-            counts[failure.exception_type] = counts.get(failure.exception_type, 0) + 1
-        return counts
+        with self._lock:
+            counts: dict[str | None, int] = {}
+            for failure in self._failures:
+                counts[failure.exception_type] = counts.get(failure.exception_type, 0) + 1
+            return counts
 
     def get_error_report(self) -> dict[str, Any]:
         """Generate structured error aggregation report.
@@ -160,22 +171,26 @@ class IndexingFailureCollector:
         Returns:
             dict: Structured error report with aggregated statistics
         """
-        return {
-            "total_failures": self.total_failures(),
-            "by_plugin": {(k or "core"): v for k, v in self.failures_by_plugin().items()},
-            "by_exception_type": {
-                (k or "unknown"): v for k, v in self.failures_by_exception_type().items()
-            },
-            "failures": [
-                {
-                    "file_path": str(f.file_path),
-                    "plugin_name": f.plugin_name or "core",
-                    "reason": f.reason,
-                    "exception_type": f.exception_type,
-                }
-                for f in self._failures
-            ],
-        }
+        with self._lock:
+            by_plugin: dict[str | None, int] = {}
+            by_exc: dict[str | None, int] = {}
+            for failure in self._failures:
+                by_plugin[failure.plugin_name] = by_plugin.get(failure.plugin_name, 0) + 1
+                by_exc[failure.exception_type] = by_exc.get(failure.exception_type, 0) + 1
+            return {
+                "total_failures": len(self._failures),
+                "by_plugin": {(k or "core"): v for k, v in by_plugin.items()},
+                "by_exception_type": {(k or "unknown"): v for k, v in by_exc.items()},
+                "failures": [
+                    {
+                        "file_path": str(f.file_path),
+                        "plugin_name": f.plugin_name or "core",
+                        "reason": f.reason,
+                        "exception_type": f.exception_type,
+                    }
+                    for f in self._failures
+                ],
+            }
 
 
 def report_indexing_failure(

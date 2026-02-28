@@ -49,3 +49,29 @@ class FileProcessingError(KragError):
         """
         self.file_path = file_path
         super().__init__(f"{file_path}: {message}")
+
+
+class ServiceNotReadyError(KragError):
+    """Raised when a service method is called before start()."""
+
+    pass
+
+
+class IndexingInProgressError(KragError):
+    """Raised when a query is attempted while indexing is active."""
+
+    pass
+
+
+class ResourceNotConfiguredError(KragError):
+    """Raised when a required resource (LLM, vector store, etc.) is not configured."""
+
+    def __init__(self, resource: str, message: str):
+        """Initialize with resource name and message.
+
+        Args:
+            resource: Name of the missing resource (e.g., "LLM", "vector_store")
+            message: Human-readable error message
+        """
+        self.resource = resource
+        super().__init__(f"{resource}: {message}")

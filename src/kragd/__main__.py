@@ -65,6 +65,9 @@ def main(
     port: int | None = typer.Option(None, "--port", help="Override bind port"),
     daemon: bool = typer.Option(False, "--daemon", help="Run in background (daemonize)"),
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload for development"),
+    rotate_logs: bool = typer.Option(
+        False, "--rotate-logs", help="Force log rotation before starting"
+    ),
 ) -> None:
     """Start the kragd service daemon."""
     # Locate config
@@ -73,6 +76,10 @@ def main(
         console.print(f"[red]Error:[/red] Config file not found: {config_path}")
         console.print("Run 'krag config init' to create a default configuration.")
         raise typer.Exit(1)
+
+    # Forward rotate-logs request via env var so create_app_from_env can act on it
+    if rotate_logs:
+        os.environ["KRAGD_ROTATE_LOGS"] = "1"
 
     loaded_config = ConfigManager.load(config_path)
 

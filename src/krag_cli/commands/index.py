@@ -112,7 +112,7 @@ def index_command(
         import logging
 
         logging.getLogger(__name__).debug("Index request failed", exc_info=True)
-        console.print(f"[red]Fatal:[/red] {exc}")
+        console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
     finally:
         client.close()

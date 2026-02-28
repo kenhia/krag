@@ -23,7 +23,13 @@ from krag import __version__
 if TYPE_CHECKING:
     from krag_cli.client import KragClient
 
-console = Console()
+# Suppress formatting when piped (no ANSI codes in non-TTY output)
+import sys as _sys  # noqa: E402
+
+console = Console(
+    force_terminal=_sys.stdout.isatty(),
+    no_color=not _sys.stdout.isatty(),
+)
 
 app = typer.Typer(
     name="krag",

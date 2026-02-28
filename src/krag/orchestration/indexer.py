@@ -133,8 +133,13 @@ class IndexingOrchestrator:
         self.chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
         logger.info(f"Loading embedding model: {embedding_model}")
+        additional_models: dict[str, str] | None = None
+        if self.config is not None and self.config.embedding_code_model:
+            additional_models = {"code": self.config.embedding_code_model}
         self.embedding_orchestrator = EmbeddingOrchestrator(
-            default_model=embedding_model, device=device
+            default_model=embedding_model,
+            device=device,
+            additional_models=additional_models,
         )
         # Keep a reference to the default generator for backward-compat PluginContext
         self.embedding_generator = self.embedding_orchestrator._models["text"]
@@ -148,7 +153,6 @@ class IndexingOrchestrator:
             logger.info("Initializing plugin system")
             self.plugin_registry = PluginRegistry(plugin_config)
             self.plugin_registry.discover_plugins()
-            self.plugin_registry._build_extension_map()
 
             # Initialize failure collector first (needed for context)
             self.failure_collector = IndexingFailureCollector()
@@ -242,7 +246,14 @@ class IndexingOrchestrator:
         self._load_metadata()
 
     def close(self) -> None:
-        """Close resources and release locks."""
+        """Close resources, release locks, and free GPU memory."""
+        # Always release embedding models to free VRAM — these are owned by
+        # this orchestrator instance regardless of whether the vector store
+        # was injected.
+        if hasattr(self, "embedding_orchestrator") and self.embedding_orchestrator is not None:
+            logger.info("Releasing embedding models to free VRAM")
+            self.embedding_orchestrator.close()
+
         if hasattr(self, "_owns_vector_store") and not self._owns_vector_store:
             logger.debug("Skipping vector store close (injected, not owned)")
             return
@@ -326,8 +337,8 @@ class IndexingOrchestrator:
     def _load_metadata(self) -> None:
         """Load previously indexed file metadata from disk.
 
-        Only loads metadata for files within the configured directory paths
-        to avoid cross-contamination between different workspaces.
+        Loads all entries unconditionally — no directory-path filtering.
+        Stale entries (deleted files) are pruned at save time, not load time.
         """
         metadata_path = self._get_metadata_path()
 
@@ -350,20 +361,6 @@ class IndexingOrchestrator:
                 # Recreate FileMetadata object
                 file_path = Path(item["file_path"])
 
-                # Only load metadata for files within our configured directories
-                # This prevents cross-contamination between different workspaces
-                # Get directory paths from config or from direct parameters
-                dir_paths = (
-                    self.config.directory_paths
-                    if self.config
-                    else [Path(d) for d in self.directory_paths]
-                )
-
-                is_in_workspace = any(file_path.is_relative_to(dir_path) for dir_path in dir_paths)
-
-                if not is_in_workspace:
-                    continue
-
                 metadata = FileMetadata(
                     file_path=file_path,
                     file_size=item["file_size"],
@@ -384,12 +381,24 @@ class IndexingOrchestrator:
             self.indexed_files = {}
 
     def _save_metadata(self) -> None:
-        """Save indexed file metadata to disk for incremental indexing."""
+        """Save indexed file metadata to disk for incremental indexing.
+
+        Prunes entries where the file no longer exists on disk before saving.
+        """
         metadata_path = self._get_metadata_path()
 
         try:
             # Ensure parent directory exists
             metadata_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Prune stale entries (files that no longer exist on disk)
+            stale_keys = [
+                key for key, meta in self.indexed_files.items() if not meta.file_path.exists()
+            ]
+            for key in stale_keys:
+                del self.indexed_files[key]
+            if stale_keys:
+                logger.info(f"Pruned {len(stale_keys)} stale metadata entries (files deleted)")
 
             # Serialize FileMetadata objects
             data = []
@@ -549,11 +558,15 @@ class IndexingOrchestrator:
                     if code_meta:
                         payload.update(code_meta)
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Failed to get chunk metadata for %s chunk %d",
+                        chunk.source_file,
+                        chunk.chunk_index,
+                        exc_info=True,
+                    )
             vec_value: Any = (
                 {vector_name: embedding}
-                if self.embedding_orchestrator.is_multi_model
-                and self.collection_manager is None
+                if self.embedding_orchestrator.is_multi_model and self.collection_manager is None
                 else embedding
             )
             vectors.append(
@@ -826,7 +839,19 @@ class IndexingOrchestrator:
         # Stage 2: Categorize changes using ChangeDetector
         # Extract just the file paths for change detection
         all_file_paths = [fm.file_path for fm in all_file_metadata]
-        changes_dict = self.change_detector.categorize_changes(all_file_paths, self.indexed_files)
+
+        # Scope previously-indexed metadata to only files under the
+        # directories being indexed.  Without this, files from earlier
+        # indexing runs in *other* directories would be treated as
+        # "deleted" and purged from the vector store.
+        resolved_dirs = [d.resolve() for d in self.directory_paths]
+        scoped_metadata = {
+            k: v
+            for k, v in self.indexed_files.items()
+            if any(Path(k).is_relative_to(d) for d in resolved_dirs)
+        }
+
+        changes_dict = self.change_detector.categorize_changes(all_file_paths, scoped_metadata)
 
         # Extract categorized changes
         new_changes = changes_dict["new"]

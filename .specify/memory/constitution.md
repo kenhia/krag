@@ -65,6 +65,8 @@ Testing is **NON-NEGOTIABLE** and follows strict TDD principles:
   - **Unit Tests**: Test individual functions/methods in isolation
   - **Integration Tests**: Test component interactions and contracts
   - **Contract Tests**: Verify API/interface boundaries match specifications
+  - **Live Tests**: End-to-end tests against a running kragd instance (`tests/live/`, `@pytest.mark.live`)
+- **Live Test Maintenance**: When new kragd endpoints, query behaviours, indexing features, or significant service-layer changes are implemented, corresponding live tests MUST be added to `tests/live/test_live_kragd.py` (or new test modules under `tests/live/`). Live tests catch real-world issues that unit tests cannot detect — filesystem permission propagation, GPU memory lifecycle, cross-directory index integrity, and HTTP error handling under actual service conditions.
 - **Pre-Commit Gate**: All tests must pass before code can be committed
 - **Independent Stories**: Each user story must be independently testable as a deliverable MVP increment
 
@@ -203,4 +205,4 @@ This constitution supersedes all other development practices and guidelines. All
 
 For day-to-day development guidance incorporating these principles, refer to `.specify/templates/agent-file-template.md` (auto-generated from feature plans and active technologies).
 
-**Version**: 1.0.0 | **Ratified**: 2026-02-03 | **Last Amended**: 2026-02-03
+**Version**: 1.1.0 | **Ratified**: 2026-02-03 | **Last Amended**: 2026-02-24

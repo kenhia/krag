@@ -117,9 +117,12 @@ class FileScanner:
         """
         files = []
 
-        try:
-            for item in directory.rglob("*"):
-                # Handle symlinks
+        for item in directory.rglob("*"):
+            try:
+                # Handle symlinks — is_symlink() calls lstat() which can
+                # raise PermissionError in Python 3.12+ when the parent
+                # directory lacks execute permission (EACCES is no longer
+                # silenced by pathlib._ignore_error).
                 if item.is_symlink() and not self.follow_symlinks:
                     continue
 
@@ -127,29 +130,24 @@ class FileScanner:
                 if item.is_dir():
                     continue
 
-                # Check exclusion patterns
+                # Check exclusion patterns (pure string ops — no I/O)
                 if self._is_excluded(item):
                     continue
 
-                # Check file type
+                # Check file type (pure property access — no I/O)
                 if item.suffix not in self.supported_file_types:
                     continue
 
-                # Check permissions
-                try:
-                    if not item.exists() or not item.is_file():
-                        continue
-
-                    # Create FileMetadata
-                    file_meta = self._create_metadata(item)
-                    files.append(file_meta)
-
-                except (PermissionError, OSError) as e:
-                    logger.debug(f"Skipping {item}: {e}")
+                if not item.exists() or not item.is_file():
                     continue
 
-        except PermissionError as e:
-            logger.error(f"Permission denied scanning {directory}: {e}")
+                # Create FileMetadata
+                file_meta = self._create_metadata(item)
+                files.append(file_meta)
+
+            except (PermissionError, OSError) as e:
+                logger.debug(f"Skipping {item}: {e}")
+                continue
 
         return files
 
