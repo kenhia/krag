@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from krag.plugins.interfaces import FileTypeHandler
 
+from krag_plugin_obsidian.chunker import ObsidianChunker
 from krag_plugin_obsidian.config import ObsidianConfig
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class ObsidianFileTypeHandler(FileTypeHandler):
     def __init__(self) -> None:
         self.vault_paths: dict[str, Path] = {}
         self._context: Any | None = None
+        self._current_vault_info: tuple[str, str] | None = None
 
     # ------------------------------------------------------------------
     # Identity
@@ -162,6 +164,10 @@ class ObsidianFileTypeHandler(FileTypeHandler):
             PermissionError: If file cannot be read.
             UnicodeDecodeError: If file encoding is invalid.
         """
+        # Cache vault info for the current file so get_chunking_strategy()
+        # can create a correctly-configured ObsidianChunker.
+        self._current_vault_info = self._resolve_vault(file_path)
+
         content = file_path.read_text(encoding="utf-8")
         body = self._remove_frontmatter(content)
         return body.strip()
@@ -200,12 +206,21 @@ class ObsidianFileTypeHandler(FileTypeHandler):
     # Chunking strategy (T038)
     # ------------------------------------------------------------------
 
-    def get_chunking_strategy(self) -> Any | None:
-        """Return chunking strategy for Obsidian files.
+    def get_chunking_strategy(self) -> ObsidianChunker | None:
+        """Return an :class:`ObsidianChunker` configured for the current file.
 
-        Returns ``None`` to use krag's default chunker for Phase 3.
-        A custom ``ObsidianChunker`` will be returned in Phase 4.
+        The chunker splits note content into prose and fenced-code segments
+        and annotates each chunk with routing metadata
+        (``target_collection``, ``content_type``, ``language``,
+        ``vault_name``).
+
+        Returns:
+            An :class:`ObsidianChunker` instance when vault info is
+            available, otherwise ``None`` (fall back to default chunker).
         """
+        if self._current_vault_info is not None:
+            vault_name, virtual_path = self._current_vault_info
+            return ObsidianChunker(vault_name=vault_name, virtual_path=virtual_path)
         return None
 
     # ------------------------------------------------------------------

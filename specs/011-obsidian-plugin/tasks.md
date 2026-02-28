@@ -103,22 +103,22 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T040 [P] [US2] Test ObsidianChunker splits prose-only note into docs-targeted chunks in examples/krag-plugin-obsidian/tests/test_chunker.py
-- [ ] T041 [P] [US2] Test ObsidianChunker splits fenced code block (with language) into code-targeted chunk in examples/krag-plugin-obsidian/tests/test_chunker.py
-- [ ] T042 [P] [US2] Test ObsidianChunker treats fenced code block without language as docs-targeted in examples/krag-plugin-obsidian/tests/test_chunker.py
-- [ ] T043 [P] [US2] Test ObsidianChunker handles multiple code blocks with different languages in examples/krag-plugin-obsidian/tests/test_chunker.py
-- [ ] T044 [P] [US2] Test ObsidianChunker preserves language identifier in chunk metadata in examples/krag-plugin-obsidian/tests/test_chunker.py
-- [ ] T045 [P] [US2] Test ObsidianChunker get_chunk_metadata() returns target_collection and content_type in examples/krag-plugin-obsidian/tests/test_chunker.py
-- [ ] T046 [P] [US2] Test ObsidianChunker handles nested/varying backtick fence lengths in examples/krag-plugin-obsidian/tests/test_chunker.py
-- [ ] T047 [P] [US2] Test ObsidianChunker handles empty note and zero-content gracefully in examples/krag-plugin-obsidian/tests/test_chunker.py
+- [x] T040 [P] [US2] Test ObsidianChunker splits prose-only note into docs-targeted chunks in examples/krag-plugin-obsidian/tests/test_chunker.py
+- [x] T041 [P] [US2] Test ObsidianChunker splits fenced code block (with language) into code-targeted chunk in examples/krag-plugin-obsidian/tests/test_chunker.py
+- [x] T042 [P] [US2] Test ObsidianChunker treats fenced code block without language as docs-targeted in examples/krag-plugin-obsidian/tests/test_chunker.py
+- [x] T043 [P] [US2] Test ObsidianChunker handles multiple code blocks with different languages in examples/krag-plugin-obsidian/tests/test_chunker.py
+- [x] T044 [P] [US2] Test ObsidianChunker preserves language identifier in chunk metadata in examples/krag-plugin-obsidian/tests/test_chunker.py
+- [x] T045 [P] [US2] Test ObsidianChunker get_chunk_metadata() returns target_collection and content_type in examples/krag-plugin-obsidian/tests/test_chunker.py
+- [x] T046 [P] [US2] Test ObsidianChunker handles nested/varying backtick fence lengths in examples/krag-plugin-obsidian/tests/test_chunker.py
+- [x] T047 [P] [US2] Test ObsidianChunker handles empty note and zero-content gracefully in examples/krag-plugin-obsidian/tests/test_chunker.py
 
 ### Implementation for User Story 2
 
-- [ ] T048 [US2] Create ContentSegment dataclass (text, segment_type, language, start_line) in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/chunker.py
-- [ ] T049 [US2] Implement _split_content() — parse fenced code blocks vs prose segments using regex state machine in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/chunker.py
-- [ ] T050 [US2] Implement ObsidianChunker.chunk() — split content into segments, produce TextChunk objects with virtual paths in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/chunker.py
-- [ ] T051 [US2] Implement ObsidianChunker.get_chunk_metadata() — return target_collection, language, vault_name, content_type per chunk in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/chunker.py
-- [ ] T052 [US2] Run pre-commit validation: ruff format, ruff check --fix, pytest
+- [x] T048 [US2] Create ContentSegment dataclass (text, segment_type, language, start_line) in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/chunker.py
+- [x] T049 [US2] Implement _split_content() — parse fenced code blocks vs prose segments using regex state machine in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/chunker.py
+- [x] T050 [US2] Implement ObsidianChunker.chunk() — split content into segments, produce TextChunk objects with virtual paths in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/chunker.py
+- [x] T051 [US2] Implement ObsidianChunker.get_chunk_metadata() — return target_collection, language, vault_name, content_type per chunk in examples/krag-plugin-obsidian/src/krag_plugin_obsidian/chunker.py
+- [x] T052 [US2] Run pre-commit validation: ruff format, ruff check --fix, pytest
 
 **Checkpoint**: Notes with mixed prose and code are split correctly. Code blocks route to code collection, prose to docs. Language metadata preserved.
 

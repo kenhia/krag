@@ -7,8 +7,9 @@ This plugin provides support for indexing Obsidian vault `.md` files with:
 - Obsidian-specific domain lexicon
 """
 
+from krag_plugin_obsidian.chunker import ContentSegment, ObsidianChunker
 from krag_plugin_obsidian.config import ObsidianConfig
 from krag_plugin_obsidian.handler import ObsidianFileTypeHandler
 
 __version__ = "1.0.0"
-__all__ = ["ObsidianConfig", "ObsidianFileTypeHandler"]
+__all__ = ["ContentSegment", "ObsidianChunker", "ObsidianConfig", "ObsidianFileTypeHandler"]
