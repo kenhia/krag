@@ -21,8 +21,11 @@ console = Console()
 def lexicon_refresh(
     host: str | None = typer.Option(None, "--host", help="kragd host"),
     port: int | None = typer.Option(None, "--port", help="kragd port"),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
 ) -> None:
     """Reload the domain lexicon from disk."""
+    import json
+
     from krag_cli.client import KragClient
     from krag_cli.config import read_service_config
 
@@ -34,13 +37,24 @@ def lexicon_refresh(
     client = KragClient(host=host, port=port)
     try:
         resp = client._post("/lexicon/refresh", {})
+
+        if output_json:
+            console.print(json.dumps(resp, indent=2))
+            return
+
         entries = resp.get("entries", 0)
         status = resp.get("status", "unknown")
         console.print(f"[green]Lexicon {status}[/green]: {entries} entries loaded")
     except ConnectionError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
+        if output_json:
+            console.print(json.dumps({"error": str(exc)}))
+        else:
+            console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
     except Exception as exc:
+        if output_json:
+            console.print(json.dumps({"error": str(exc)}))
+            raise typer.Exit(1) from exc
         detail = str(exc)
         if "400" in detail or "No lexicon" in detail:
             console.print("[red]Error:[/red] No lexicon configured on the service")

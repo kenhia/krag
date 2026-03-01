@@ -1,0 +1,208 @@
+# Contract: POST /query/stream — SSE Streaming Query
+
+openapi: "3.1.0"
+
+paths:
+  /query/stream:
+    post:
+      operationId: streamQuery
+      summary: Submit a query and receive streaming answer via SSE
+      description: |
+        Performs retrieval, then streams the LLM-generated answer token by
+        token via Server-Sent Events. The first event delivers retrieved
+        source chunks, followed by token events, and a final done event
+        with the complete response.
+
+        Event types:
+        - `query:sources` — retrieved source chunks (sent once, before tokens)
+        - `query:token` — partial answer text (one or more tokens per event)
+        - `query:done` — complete response (answer + sources + debug)
+        - `query:error` — error during retrieval or generation
+
+        The request body is identical to `POST /query`.
+      tags:
+        - Query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryRequest"
+            examples:
+              basic:
+                summary: Basic query
+                value:
+                  query: "What is the krag architecture?"
+              with_options:
+                summary: Query with mode and debug
+                value:
+                  query: "Explain the indexing pipeline"
+                  mode: "code"
+                  top_k: 10
+                  include_debug: true
+      responses:
+        "200":
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream
+              examples:
+                sources:
+                  summary: Source chunks after retrieval
+                  value: |
+                    event: query:sources
+                    data: {"sources": [{"chunk_id": "abc", "file_path": "src/main.py", "score": 0.92, "rank": 1, "chunk_content": "...", "file_type": "python", "collection": "code"}]}
+
+                token:
+                  summary: Partial answer token
+                  value: |
+                    event: query:token
+                    data: {"token": "The krag architecture"}
+
+                done:
+                  summary: Complete response
+                  value: |
+                    event: query:done
+                    data: {"answer": "The krag architecture uses a modular pipeline...", "sources": [...], "debug": null}
+
+                error:
+                  summary: Error during generation
+                  value: |
+                    event: query:error
+                    data: {"error": "LLM generation failed: out of memory"}
+
+        "422":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Invalid mode: nonexistent"
+
+        "503":
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Service is starting up"
+
+components:
+  schemas:
+    QueryRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: The search/question text
+        top_k:
+          type: integer
+          description: Number of source chunks to retrieve
+          default: 5
+        preset:
+          type: string
+          description: Prompt preset name
+          nullable: true
+        llm:
+          type: string
+          description: LLM slot to use
+          nullable: true
+        mode:
+          type: string
+          description: Query mode name
+          nullable: true
+        include_debug:
+          type: boolean
+          description: Include debug metadata in response
+          default: false
+
+    SourceChunk:
+      type: object
+      properties:
+        chunk_id:
+          type: string
+          description: Unique chunk identifier
+        file_path:
+          type: string
+          description: Source file path
+        score:
+          type: number
+          description: Similarity score
+        rank:
+          type: integer
+          description: Result rank
+        chunk_content:
+          type: string
+          description: Chunk text content
+        file_type:
+          type: string
+          description: Source file type
+        language:
+          type: string
+          description: Programming language (if applicable)
+          nullable: true
+        function_name:
+          type: string
+          description: Enclosing function name (if applicable)
+          nullable: true
+        class_name:
+          type: string
+          description: Enclosing class name (if applicable)
+          nullable: true
+        start_line:
+          type: integer
+          description: Start line in source file
+          nullable: true
+        end_line:
+          type: integer
+          description: End line in source file
+          nullable: true
+        collection:
+          type: string
+          description: Vector store collection name
+
+    DebugMetadata:
+      type: object
+      description: Debug information about query execution
+      properties:
+        llm_used:
+          type: string
+          description: LLM slot used for generation
+        llm_model:
+          type: string
+          description: Model file name
+        route:
+          type: string
+          description: Routing decision (text/code)
+        auto_routed:
+          type: boolean
+          description: Whether routing was automatic
+        preset:
+          type: string
+          description: Prompt preset used
+        mode:
+          type: string
+          description: Query mode used
+        collections_searched:
+          type: array
+          items:
+            type: string
+          description: Collections searched during retrieval
+        retrieval_time_ms:
+          type: number
+          description: Time spent on retrieval in milliseconds
+        generation_time_ms:
+          type: number
+          description: Time spent on LLM generation in milliseconds

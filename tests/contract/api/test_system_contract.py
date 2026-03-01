@@ -1,6 +1,7 @@
 """Contract tests for GET /health, GET /status, POST /shutdown endpoints.
 
 T027: Validate request/response schemas match OpenAPI spec.
+T003: Verify relocated schemas are importable from kragd.schemas.
 """
 
 from __future__ import annotations
@@ -215,3 +216,79 @@ class TestShutdownContract:
         """Response content-type is application/json."""
         resp = test_client.post("/shutdown")
         assert "application/json" in resp.headers["content-type"]
+
+
+# ── Schema consolidation (T003) ──────────────────
+
+
+class TestSchemaConsolidation:
+    """Verify relocated schemas are importable from kragd.schemas."""
+
+    def test_lexicon_refresh_response_importable(self) -> None:
+        """LexiconRefreshResponse must be importable from kragd.schemas."""
+        from kragd.schemas import LexiconRefreshResponse
+
+        assert LexiconRefreshResponse is not None
+        # Verify it has the expected fields
+        fields = LexiconRefreshResponse.model_fields
+        assert "entries" in fields, "Missing 'entries' field"
+        assert "status" in fields, "Missing 'status' field"
+
+    def test_mode_list_response_importable(self) -> None:
+        """ModeListResponse must be importable from kragd.schemas."""
+        from kragd.schemas import ModeListResponse
+
+        assert ModeListResponse is not None
+        fields = ModeListResponse.model_fields
+        assert "modes" in fields, "Missing 'modes' field"
+
+    def test_mode_detail_response_importable(self) -> None:
+        """ModeDetailResponse must be importable from kragd.schemas."""
+        from kragd.schemas import ModeDetailResponse
+
+        assert ModeDetailResponse is not None
+        fields = ModeDetailResponse.model_fields
+        expected = {
+            "name",
+            "description",
+            "collections",
+            "llm_slot",
+            "preset",
+            "top_k",
+            "similarity_threshold",
+            "critic_enabled",
+            "critic_threshold",
+        }
+        assert expected.issubset(fields.keys()), f"Missing fields: {expected - fields.keys()}"
+
+    def test_lexicon_router_uses_schemas_import(self) -> None:
+        """Lexicon router must import LexiconRefreshResponse from schemas, not define inline."""
+        import inspect
+
+        from kragd.routers import lexicon as lexicon_module
+
+        source = inspect.getsource(lexicon_module)
+        # Must NOT define class inline
+        assert "class LexiconRefreshResponse" not in source, (
+            "LexiconRefreshResponse still defined inline in lexicon router"
+        )
+        # Must import from schemas
+        assert "from kragd.schemas import" in source and "LexiconRefreshResponse" in source, (
+            "LexiconRefreshResponse not imported from kragd.schemas"
+        )
+
+    def test_modes_router_uses_schemas_import(self) -> None:
+        """Modes router must import ModeDetailResponse and ModeListResponse from schemas."""
+        import inspect
+
+        from kragd.routers import modes as modes_module
+
+        source = inspect.getsource(modes_module)
+        assert "class ModeDetailResponse" not in source, (
+            "ModeDetailResponse still defined inline in modes router"
+        )
+        assert "class ModeListResponse" not in source, (
+            "ModeListResponse still defined inline in modes router"
+        )
+        assert "ModeDetailResponse" in source, "ModeDetailResponse not used in modes router"
+        assert "ModeListResponse" in source, "ModeListResponse not used in modes router"

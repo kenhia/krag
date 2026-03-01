@@ -1,0 +1,194 @@
+# Contract: GET /index/stream — SSE Index Progress
+
+openapi: "3.1.0"
+
+paths:
+  /index/stream:
+    get:
+      operationId: streamIndexProgress
+      summary: Stream real-time index progress via SSE
+      description: |
+        Opens a Server-Sent Events stream that delivers real-time progress
+        updates during an active indexing job. If no job is running, sends
+        an `index:idle` event and closes the stream.
+
+        Event types:
+        - `index:progress` — periodic progress updates (file count, stage)
+        - `index:complete` — final result when job finishes (full IndexResponse)
+        - `index:error` — error during indexing
+        - `index:idle` — no active job when client connects
+      tags:
+        - Index
+      responses:
+        "200":
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream
+              examples:
+                progress:
+                  summary: Progress event during file processing
+                  value: |
+                    event: index:progress
+                    data: {"current": 5, "total": 42, "stage": "Processing files", "file": "src/main.py", "job_id": "abc-123", "timestamp": "2026-02-28T12:00:05Z"}
+
+                complete:
+                  summary: Job completion event
+                  value: |
+                    event: index:complete
+                    data: {"job_id": "abc-123", "status": "completed", "files_scanned": 42, "files_processed": 42, "chunks_created": 128, "vectors_stored": 128, "duration_seconds": 15.3, "collections": ["code"], "errors": [], "timestamp": "2026-02-28T12:00:20Z"}
+
+                error:
+                  summary: Error event
+                  value: |
+                    event: index:error
+                    data: {"job_id": "abc-123", "error": "Failed to connect to vector store", "timestamp": "2026-02-28T12:00:10Z"}
+
+                idle:
+                  summary: No active job
+                  value: |
+                    event: index:idle
+                    data: {"message": "No active indexing job"}
+
+        "503":
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                example:
+                  detail: "Service is starting up"
+
+  /index/status:
+    get:
+      operationId: getIndexStatus
+      summary: Get status of recent indexing jobs
+      description: |
+        Returns a list of recent indexing job results. Always returns a list,
+        even when zero or one jobs exist. If an indexing job is currently
+        running, its in-progress status is included in the list.
+      tags:
+        - Index
+      responses:
+        "200":
+          description: List of index job statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IndexResponse"
+              examples:
+                empty:
+                  summary: No jobs have run
+                  value: []
+                single:
+                  summary: One completed job
+                  value:
+                    - job_id: "abc-123"
+                      status: "completed"
+                      mode: "full"
+                      files_scanned: 42
+                      files_processed: 42
+                      files_skipped: 0
+                      files_errored: 0
+                      chunks_created: 128
+                      vectors_stored: 128
+                      duration_seconds: 15.3
+                      dry_run: false
+                      errors: []
+                      collections: ["code"]
+                running:
+                  summary: Job in progress
+                  value:
+                    - job_id: "def-456"
+                      status: "running"
+                      mode: "incremental"
+                      files_scanned: 0
+                      files_processed: 0
+                      files_skipped: 0
+                      files_errored: 0
+                      chunks_created: 0
+                      vectors_stored: 0
+                      duration_seconds: 0.0
+                      dry_run: false
+                      errors: []
+                      collections: []
+
+components:
+  schemas:
+    IndexResponse:
+      type: object
+      required:
+        - job_id
+        - status
+        - mode
+        - files_scanned
+        - files_processed
+        - files_skipped
+        - files_errored
+        - chunks_created
+        - vectors_stored
+        - duration_seconds
+        - dry_run
+        - errors
+        - collections
+      properties:
+        job_id:
+          type: string
+          description: Unique job identifier
+        status:
+          type: string
+          description: "Job status: running, completed, failed"
+        mode:
+          type: string
+          description: "Index mode: full or incremental"
+        files_scanned:
+          type: integer
+          description: Number of files discovered
+        files_processed:
+          type: integer
+          description: Number of files successfully processed
+        files_skipped:
+          type: integer
+          description: Number of files skipped (unchanged)
+        files_errored:
+          type: integer
+          description: Number of files that errored
+        chunks_created:
+          type: integer
+          description: Number of text chunks created
+        vectors_stored:
+          type: integer
+          description: Number of vectors stored in Qdrant
+        duration_seconds:
+          type: number
+          description: Total job duration in seconds
+        dry_run:
+          type: boolean
+          description: Whether this was a dry run
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndexingFileError"
+          description: Per-file errors
+        collections:
+          type: array
+          items:
+            type: string
+          description: Collections indexed into
+
+    IndexingFileError:
+      type: object
+      properties:
+        file_path:
+          type: string
+        error_type:
+          type: string
+        error_message:
+          type: string

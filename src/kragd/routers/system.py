@@ -17,21 +17,21 @@ from kragd.schemas import HealthResponse, ServiceStatus, ShutdownResponse
 router = APIRouter(tags=["system"])
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse, summary="Check service health")
 async def health(request: Request) -> HealthResponse:
     """Simple health check endpoint (async for non-blocking)."""
     service = request.app.state.service
     return service.get_health()
 
 
-@router.get("/status", response_model=ServiceStatus)
+@router.get("/status", response_model=ServiceStatus, summary="Get full service status")
 def status(request: Request) -> ServiceStatus:
     """Full service status including models, VRAM, uptime, and vector store."""
     service = request.app.state.service
     return service.get_status()
 
 
-@router.post("/shutdown", response_model=ShutdownResponse)
+@router.post("/shutdown", response_model=ShutdownResponse, summary="Initiate graceful shutdown")
 def shutdown(request: Request) -> ShutdownResponse:
     """Graceful shutdown via SIGTERM to self.
 

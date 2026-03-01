@@ -7,6 +7,7 @@ of the KragService and its heavyweight components.
 from __future__ import annotations
 
 import logging
+import os
 import traceback
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import ResponseValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from krag.models.exceptions import (
@@ -70,6 +72,21 @@ def create_app(config: Configuration) -> FastAPI:
     app.include_router(index.router)
     app.include_router(modes.router)
     app.include_router(lexicon.router)
+
+    # CORS middleware — permissive by default for local dev / Tauri webview
+    cors_env = os.environ.get("KRAGD_CORS_ORIGINS", "").strip()
+    if cors_env:
+        allow_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+    else:
+        allow_origins = ["*"]
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Translate domain exceptions into appropriate HTTP responses
     @app.exception_handler(ValueError)

@@ -68,8 +68,11 @@ def stop_command(
     host: str | None = typer.Option(None, "--host", help="kragd host"),
     port: int | None = typer.Option(None, "--port", help="kragd port"),
     force: bool = typer.Option(False, "--force", "-f", help="Force kill with SIGKILL"),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
 ) -> None:
     """Stop the kragd service."""
+    import json
+
     from kragd.pid import get_pid_path, is_pid_alive, read_pid, remove_pid
 
     pid_path = get_pid_path()
@@ -77,12 +80,19 @@ def stop_command(
 
     if pid is None:
         # Try HTTP shutdown as fallback
-        _try_http_shutdown(host, port)
+        if output_json:
+            _try_http_shutdown(host, port)
+            console.print(json.dumps({"status": "not_running"}))
+        else:
+            _try_http_shutdown(host, port)
         return
 
     if not is_pid_alive(pid):
-        console.print("[yellow]kragd is not running[/yellow] (stale PID file removed)")
         remove_pid(pid_path)
+        if output_json:
+            console.print(json.dumps({"status": "stale_pid", "pid": pid}))
+        else:
+            console.print("[yellow]kragd is not running[/yellow] (stale PID file removed)")
         return
 
     # Send signal
@@ -91,12 +101,23 @@ def stop_command(
 
     try:
         os.kill(pid, sig)
-        console.print(f"[green]Sent {sig_name} to kragd[/green] (PID {pid})")
+        if output_json:
+            console.print(json.dumps({"status": "stopped", "pid": pid, "signal": sig_name}))
+        else:
+            console.print(f"[green]Sent {sig_name} to kragd[/green] (PID {pid})")
     except ProcessLookupError:
-        console.print("[yellow]kragd already stopped[/yellow]")
+        if output_json:
+            console.print(json.dumps({"status": "already_stopped", "pid": pid}))
+        else:
+            console.print("[yellow]kragd already stopped[/yellow]")
         remove_pid(pid_path)
     except PermissionError as exc:
-        console.print(f"[red]Permission denied:[/red] Cannot signal PID {pid}")
+        if output_json:
+            console.print(
+                json.dumps({"status": "error", "error": f"Permission denied for PID {pid}"})
+            )
+        else:
+            console.print(f"[red]Permission denied:[/red] Cannot signal PID {pid}")
         raise typer.Exit(1) from exc
 
 
