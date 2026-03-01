@@ -5,7 +5,7 @@
 SYNC IMPACT REPORT - Constitution Creation
 ═══════════════════════════════════════════════════════════════════════════
 
-Version: 1.0.0 (Initial Constitution)
+Version: 1.1.0 (Added Terminal Usage & Reuse guidance)
 Change Type: MAJOR (Initial establishment of governance framework)
 
 Project Context:
@@ -164,6 +164,30 @@ Before completing any development phase (research, design, implementation):
 - **Commit Messages**: Use conventional commit format (e.g., `feat:`, `fix:`, `docs:`, `test:`)
 
 **Note**: Pre-commit validation requirements are specified in the "Pre-Commit Validation (MANDATORY)" section above.
+
+### Terminal Usage & Reuse
+
+This project is developed as **Peer Programming** — the user actively monitors agent activity, including watching terminal output in real time. Unnecessary terminal proliferation makes it hard to track what the agent is doing.
+
+**Default: Always reuse the existing terminal.**
+
+- Run all commands in the currently active foreground terminal unless there is a specific technical reason to do otherwise
+- Before opening a new terminal, ask: *"Could this run in the existing terminal?"* — if yes, use it
+- Chain related commands with `&&` or run them sequentially in the same terminal session
+
+**A new background terminal is justified only when:**
+
+1. A long-running process must stay alive while other work continues (e.g., a dev server, a test watcher, a background build)
+2. The command would block the foreground terminal and subsequent steps cannot wait for it
+3. A completely isolated environment is required (e.g., a separate virtualenv or working directory that conflicts with the current session)
+
+**What to avoid:**
+
+- Opening a new terminal to run a single short command that could run in the existing session
+- Spawning parallel terminals for independent read-only operations (prefer sequential or a single terminal with `&&`)
+- Leaving background terminals running after they are no longer needed — kill them explicitly
+
+**Rationale**: Multiplying terminals fragments the execution trace and forces the user to hunt across a hidden terminal list to follow along. Reusing the active terminal keeps the command history visible, contiguous, and easy to follow during peer programming sessions.
 
 ### Ad-Hoc Changes & Consistency
 

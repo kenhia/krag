@@ -22,8 +22,11 @@ console = Console()
 def modes_list(
     host: str | None = typer.Option(None, "--host", help="kragd host"),
     port: int | None = typer.Option(None, "--port", help="kragd port"),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
 ) -> None:
     """List all available retrieval modes from the kragd service."""
+    import json
+
     from krag_cli.client import KragClient
     from krag_cli.config import read_service_config
 
@@ -35,6 +38,11 @@ def modes_list(
     client = KragClient(host=host, port=port)
     try:
         resp = client._get("/modes")
+
+        if output_json:
+            console.print(json.dumps(resp, indent=2))
+            return
+
         modes = resp.get("modes", [])
 
         if not modes:
@@ -60,7 +68,10 @@ def modes_list(
 
         console.print(table)
     except ConnectionError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
+        if output_json:
+            console.print(json.dumps({"error": str(exc)}))
+        else:
+            console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
     finally:
         client.close()
@@ -71,8 +82,11 @@ def modes_show(
     name: str = typer.Argument(..., help="Mode name"),
     host: str | None = typer.Option(None, "--host", help="kragd host"),
     port: int | None = typer.Option(None, "--port", help="kragd port"),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
 ) -> None:
     """Show full details for a specific mode from the kragd service."""
+    import json
+
     from krag_cli.client import KragClient
     from krag_cli.config import read_service_config
 
@@ -84,6 +98,10 @@ def modes_show(
     client = KragClient(host=host, port=port)
     try:
         mode = client._get(f"/modes/{name}")
+
+        if output_json:
+            console.print(json.dumps(mode, indent=2))
+            return
 
         console.print(f"\n[bold cyan]{mode['name']}[/bold cyan]")
         desc = mode.get("description", "")
@@ -112,6 +130,15 @@ def modes_show(
         console.print(table)
         console.print()
     except ConnectionError as exc:
+        if output_json:
+            console.print(json.dumps({"error": str(exc)}))
+        else:
+            console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    except RuntimeError as exc:
+        if output_json:
+            console.print(json.dumps({"error": str(exc)}))
+            raise typer.Exit(1) from exc
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
     finally:

@@ -442,3 +442,91 @@ class Test08ErrorHandling:
         )
         # Service should still be alive
         assert client.health() is True
+
+
+# ──────────────────────────────────────────────
+# Phase 9 — SSE streaming endpoints
+# ──────────────────────────────────────────────
+
+
+class Test09SSEStreaming:
+    """Verify SSE streaming endpoints return well-formed event streams."""
+
+    def test_index_stream_returns_sse(self, client: KragClient) -> None:
+        """GET /index/stream should return text/event-stream content."""
+        import httpx
+
+        with httpx.Client(base_url=client._base_url, timeout=30.0) as http:
+            resp = http.get("/index/stream")
+            assert resp.status_code == 200
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+            # When idle, should contain at least one event
+            assert "event:" in resp.text or "data:" in resp.text
+
+    def test_index_stream_idle_event(self, client: KragClient) -> None:
+        """When not indexing, index stream should send index:idle."""
+        import httpx
+
+        ensure_idle(client, timeout=60)
+        with httpx.Client(base_url=client._base_url, timeout=30.0) as http:
+            resp = http.get("/index/stream")
+            assert "index:idle" in resp.text
+
+    def test_query_stream_returns_sse(self, client: KragClient) -> None:
+        """POST /query/stream should return text/event-stream content."""
+        import httpx
+
+        with httpx.Client(base_url=client._base_url, timeout=60.0) as http:
+            resp = http.post("/query/stream", json={"query": "What is this project?"})
+            assert resp.status_code == 200
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+
+    def test_query_stream_event_sequence(self, client: KragClient) -> None:
+        """Query stream should emit sources, tokens, then done in order."""
+        import httpx
+
+        with httpx.Client(base_url=client._base_url, timeout=120.0) as http:
+            resp = http.post(
+                "/query/stream",
+                json={"query": "Describe the codebase architecture", "top_k": 3},
+            )
+            assert resp.status_code == 200
+
+            # Parse SSE events from response text
+            event_types: list[str] = []
+            for line in resp.text.splitlines():
+                if line.startswith("event:"):
+                    event_type = line[len("event:") :].strip()
+                    if event_type.startswith("query:"):
+                        event_types.append(event_type)
+
+            # Must have sources first
+            assert len(event_types) >= 2, f"Expected at least sources+done, got: {event_types}"
+            assert event_types[0] == "query:sources"
+            # Must end with done or error
+            assert event_types[-1] in ("query:done", "query:error")
+
+    def test_query_stream_done_has_answer(self, client: KragClient) -> None:
+        """The query:done event should contain an answer field."""
+        import json
+
+        import httpx
+
+        with httpx.Client(base_url=client._base_url, timeout=120.0) as http:
+            resp = http.post(
+                "/query/stream",
+                json={"query": "What files exist in this project?", "top_k": 3},
+            )
+            # Find the done event data
+            lines = resp.text.splitlines()
+            for i, line in enumerate(lines):
+                if line.strip() == "event: query:done" or line.strip() == "event:query:done":
+                    # Next line(s) should be data:
+                    for j in range(i + 1, min(i + 5, len(lines))):
+                        if lines[j].startswith("data:"):
+                            data = json.loads(lines[j][len("data:") :].strip())
+                            assert "answer" in data
+                            assert "sources" in data
+                            return
+            # If we didn't find done, check for error
+            assert "query:error" in resp.text, "Expected query:done or query:error event"

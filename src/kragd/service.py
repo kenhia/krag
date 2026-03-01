@@ -7,9 +7,11 @@ handlers delegate to.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
+from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -66,6 +68,10 @@ class KragService:
         self._indexing: bool = False
         self._indexing_lock = threading.Lock()
 
+        # SSE index event streaming (US5)
+        self._index_event_subscribers: list[asyncio.Queue] = []
+        self._index_subscribers_lock = threading.Lock()
+
         # Mode hot-reload TTL (seconds) to avoid reloading on every request
         self._mode_reload_interval: float = 5.0
         self._mode_last_reload: float = 0.0
@@ -93,6 +99,50 @@ class KragService:
                 "Indexing is in progress — queries are unavailable until indexing completes. "
                 "Use 'krag index-status' to check progress."
             )
+
+    # ── SSE index event streaming (US5) ─────────
+
+    def _broadcast_index_event(self, event: dict) -> None:
+        """Push an event to all active SSE subscribers (thread-safe)."""
+        with self._index_subscribers_lock:
+            dead: list[asyncio.Queue] = []
+            for q in self._index_event_subscribers:
+                try:
+                    q.put_nowait(event)
+                except asyncio.QueueFull:
+                    dead.append(q)
+            for q in dead:
+                self._index_event_subscribers.remove(q)
+
+    async def subscribe_index_events(self) -> AsyncGenerator[dict, None]:
+        """Async generator that yields index events for an SSE client.
+
+        If no indexing is in progress, yields a single ``index:idle``
+        event and returns.  Otherwise yields events until the stream
+        sees ``index:complete`` or ``index:error``.
+        """
+        with self._indexing_lock:
+            is_indexing = self._indexing
+
+        if not is_indexing:
+            yield {"type": "index:idle", "data": {"message": "No active indexing job"}}
+            return
+
+        queue: asyncio.Queue[dict | None] = asyncio.Queue(maxsize=256)
+        with self._index_subscribers_lock:
+            self._index_event_subscribers.append(queue)
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                yield event
+                if event.get("type") in ("index:complete", "index:error"):
+                    break
+        finally:
+            with self._index_subscribers_lock:
+                if queue in self._index_event_subscribers:
+                    self._index_event_subscribers.remove(queue)
 
     # ── lifecycle ───────────────────────────────
 
@@ -687,6 +737,179 @@ class KragService:
             for i, r in enumerate(results)
         ]
 
+    async def query_stream(self, request: QueryRequest) -> AsyncGenerator[dict, None]:
+        """Stream a RAG query answer via SSE events.
+
+        Performs the same retrieval pipeline as :meth:`query` but streams
+        the LLM generation token-by-token.  Yields dicts with ``type``
+        and ``data`` keys matching the SSE event contract.
+
+        Event sequence:
+            1. ``query:sources`` — retrieved chunks (sent once)
+            2. ``query:token``   — one per token delta from LLM
+            3. ``query:done``    — complete answer + sources
+            4. ``query:error``   — on any failure (may replace 2–3)
+        """
+        import asyncio
+        import concurrent.futures
+
+        self._require_started()
+        self._require_not_indexing()
+
+        if self.query_engine is None:
+            from krag.models.exceptions import ResourceNotConfiguredError
+
+            raise ResourceNotConfiguredError(
+                "LLM", "No LLM model configured — cannot synthesize answers"
+            )
+
+        mode_config = self._resolve_mode(request.mode)
+        slot = request.llm or (mode_config.llm_slot if mode_config else None) or "text"
+
+        if self.lifecycle_manager is not None:
+            self.lifecycle_manager.ensure_loaded(slot)
+            self.lifecycle_manager.on_request_start(slot)
+
+        try:
+            from krag.retrieval.retriever import Retriever
+
+            top_k = (
+                request.top_k or (mode_config.top_k if mode_config else None) or self.config.top_k
+            )
+            threshold = (
+                mode_config.similarity_threshold if mode_config else None
+            ) or self.config.similarity_threshold
+
+            retriever = Retriever(
+                vector_store=self.vector_store,
+                embedding_generator=self.embedding_generator,
+                embedding_orchestrator=self.embedding_orchestrator,
+                collection_manager=self.collection_manager,
+            )
+            results = retriever.retrieve(
+                query=request.query,
+                top_k=top_k,
+                similarity_threshold=threshold,
+            )
+
+            # Apply critic if enabled
+            if mode_config and mode_config.critic_enabled and results:
+                from krag.critic.relevance_critic import RelevanceCritic
+
+                critic_slot = self.llm_pool._slot_for(slot)
+                critic_llm = critic_slot.instance
+                critic = RelevanceCritic(
+                    llm_client=critic_llm,
+                    threshold=mode_config.critic_threshold,
+                    enabled=True,
+                )
+                scored = critic.score_chunks(request.query, results)
+                results = critic.filter_chunks(scored)
+
+            # Match lexicon terms
+            lexicon_glossary: str | None = None
+            if self.lexicon_store is not None:
+                from krag.lexicon.lexicon_injector import LexiconInjector
+
+                matches = self.lexicon_store.match_terms(request.query)
+                if matches:
+                    injector = LexiconInjector()
+                    selected = injector.select_top(matches)
+                    lexicon_glossary = injector.format_glossary(selected)
+
+            # Build source chunks
+            sources = [
+                SourceChunk(
+                    chunk_id=str(getattr(s, "chunk_id", "")),
+                    file_path=str(s.file_path),
+                    score=s.score,
+                    rank=i + 1,
+                    chunk_content=s.chunk_content,
+                    file_type=getattr(s, "file_type", ""),
+                    language=getattr(s, "language", None),
+                    function_name=getattr(s, "function_name", None),
+                    class_name=getattr(s, "class_name", None),
+                    start_line=getattr(s, "start_line", None),
+                    end_line=getattr(s, "end_line", None),
+                    collection=getattr(s, "collection", None),
+                )
+                for i, s in enumerate(results)
+            ]
+
+            # Yield sources event
+            yield {
+                "type": "query:sources",
+                "data": {"sources": [s.model_dump() for s in sources]},
+            }
+
+            # Handle all-filtered case
+            if not results:
+                from krag.synthesis.prompt_builder import INSUFFICIENT_CONTEXT_PHRASE
+
+                yield {
+                    "type": "query:done",
+                    "data": {
+                        "answer": INSUFFICIENT_CONTEXT_PHRASE,
+                        "sources": [s.model_dump() for s in sources],
+                        "debug": None,
+                    },
+                }
+                return
+
+            # Build messages for LLM
+            messages = self.query_engine.prompt_builder.build(
+                request.query, results, lexicon_glossary=lexicon_glossary
+            )
+            effective_llm = request.llm or (mode_config.llm_slot if mode_config else None)
+
+            # Stream tokens from LLM via thread-to-async bridge
+            token_iter, _route = self.llm_pool.route_and_stream(
+                messages=messages,
+                retrieved_chunks=results,
+                llm_override=effective_llm,
+            )
+
+            loop = asyncio.get_running_loop()
+            token_queue: asyncio.Queue[str | None] = asyncio.Queue()
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+            def _consume_tokens() -> None:
+                """Run in thread: iterate sync token stream, push to async queue."""
+                try:
+                    for token in token_iter:
+                        asyncio.run_coroutine_threadsafe(token_queue.put(token), loop).result()
+                finally:
+                    asyncio.run_coroutine_threadsafe(token_queue.put(None), loop).result()
+
+            future = loop.run_in_executor(executor, _consume_tokens)
+
+            full_answer_parts: list[str] = []
+            while True:
+                token = await token_queue.get()
+                if token is None:
+                    break
+                full_answer_parts.append(token)
+                yield {"type": "query:token", "data": {"token": token}}
+
+            # Wait for the thread to finish cleanly
+            await asyncio.wrap_future(future)
+
+            yield {
+                "type": "query:done",
+                "data": {
+                    "answer": "".join(full_answer_parts),
+                    "sources": [s.model_dump() for s in sources],
+                    "debug": None,
+                },
+            }
+
+        except Exception as exc:
+            logger.error("query_stream failed: %s", exc, exc_info=True)
+            yield {"type": "query:error", "data": {"error": str(exc)}}
+        finally:
+            if self.lifecycle_manager is not None:
+                self.lifecycle_manager.on_request_end(slot)
+
     def debug_query(self, request: DebugQueryRequest) -> DebugQueryResponse:
         """Execute a query with full debug metadata.
 
@@ -952,10 +1175,20 @@ class KragService:
 
         try:
             is_full = request.mode == "full"
+
+            # SSE progress callback — broadcasts to all SSE subscribers
+            def _progress_callback(current: int, total: int, stage: str) -> None:
+                self._broadcast_index_event(
+                    {
+                        "type": "index:progress",
+                        "data": {"current": current, "total": total, "stage": stage},
+                    }
+                )
+
             if is_full:
-                job = orchestrator.index_full()
+                job = orchestrator.index_full(progress_callback=_progress_callback)
             else:
-                job = orchestrator.index_incremental()
+                job = orchestrator.index_incremental(progress_callback=_progress_callback)
 
             duration = time.monotonic() - t0
 
@@ -992,6 +1225,19 @@ class KragService:
                 self._index_job_cache.append(response)
                 if len(self._index_job_cache) > self._max_index_cache:
                     self._index_job_cache = self._index_job_cache[-self._max_index_cache :]
+
+            # Broadcast completion to SSE subscribers
+            self._broadcast_index_event(
+                {
+                    "type": "index:complete",
+                    "data": {
+                        "job_id": job_id,
+                        "status": response.status,
+                        "files_processed": response.files_processed,
+                        "duration_seconds": response.duration_seconds,
+                    },
+                }
+            )
         except Exception as exc:
             logger.error("Indexing failed: %s", exc, exc_info=True)
             with self._indexing_lock:
@@ -1018,6 +1264,17 @@ class KragService:
                     ],
                 )
                 self._index_job_cache.append(self._last_index_job)
+
+            # Broadcast error to SSE subscribers
+            self._broadcast_index_event(
+                {
+                    "type": "index:error",
+                    "data": {
+                        "job_id": job_id,
+                        "error": str(exc),
+                    },
+                }
+            )
         finally:
             orchestrator.close()
 
@@ -1049,12 +1306,16 @@ class KragService:
             with self._indexing_lock:
                 self._indexing = False
 
-    def get_index_status(self) -> IndexResponse | list[IndexResponse]:
+    def get_index_status(self) -> list[IndexResponse]:
         """Return cached indexing job results.
 
-        Checks active indexing state first — returns 'running' immediately
-        if indexing is in progress, regardless of cache contents.
-        Otherwise returns all undelivered results plus the most recent job.
+        Always returns a list of IndexResponse objects:
+        - Empty list when no jobs have ever run
+        - Single-element list for one job or active indexing
+        - Multi-element list for concurrent/recent jobs
+
+        Checks active indexing state first — returns a single-element
+        list with 'running' status if indexing is in progress.
         After retrieval, marks results as delivered so they can be
         evicted when new jobs arrive.
         """
@@ -1065,28 +1326,10 @@ class KragService:
             is_indexing = self._indexing
 
         if is_indexing:
-            return IndexResponse(
-                job_id="pending",
-                status="running",
-                mode="incremental",
-                files_scanned=0,
-                files_processed=0,
-                files_skipped=0,
-                files_skipped_unchanged=0,
-                files_skipped_other=0,
-                files_errored=0,
-                chunks_created=0,
-                vectors_stored=0,
-                duration_seconds=0.0,
-                dry_run=False,
-                errors=[],
-            )
-
-        with self._indexing_lock:
-            if not self._index_job_cache:
-                return IndexResponse(
-                    job_id="none",
-                    status="none",
+            return [
+                IndexResponse(
+                    job_id="pending",
+                    status="running",
                     mode="incremental",
                     files_scanned=0,
                     files_processed=0,
@@ -1100,14 +1343,17 @@ class KragService:
                     dry_run=False,
                     errors=[],
                 )
+            ]
+
+        with self._indexing_lock:
+            if not self._index_job_cache:
+                return []
 
             # Return all cached results, then clear all but the most recent
             results = list(self._index_job_cache)
             # Keep only the most recent in cache
             self._index_job_cache = self._index_job_cache[-1:]
 
-        if len(results) == 1:
-            return results[0]
         return results
 
     def get_status(self) -> ServiceStatus:

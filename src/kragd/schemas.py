@@ -6,7 +6,7 @@ domain models in krag.models and serve as the API contract boundary.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ──────────────────────────────────────────────
 # Enums / Literals (used by multiple schemas)
@@ -25,6 +25,19 @@ _INDEX_STATUSES = {"completed", "failed", "none", "running"}
 
 class QueryRequest(BaseModel):
     """POST /query request body."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "What is the krag architecture?",
+                    "top_k": 5,
+                    "mode": "default",
+                    "include_debug": False,
+                }
+            ]
+        }
+    )
 
     query: str = Field(..., min_length=1, max_length=10000, description="Query text")
     top_k: int | None = Field(None, ge=1, le=100, description="Number of results")
@@ -45,6 +58,18 @@ class QueryRequest(BaseModel):
 class RetrieveRequest(BaseModel):
     """POST /retrieve request body."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "How does the indexing pipeline work?",
+                    "top_k": 10,
+                    "mode": "code",
+                }
+            ]
+        }
+    )
+
     query: str = Field(..., min_length=1, max_length=10000, description="Query text")
     top_k: int | None = Field(None, ge=1, le=100, description="Number of results")
     mode: str | None = Field(None, description="Named retrieval mode")
@@ -52,6 +77,19 @@ class RetrieveRequest(BaseModel):
 
 class DebugQueryRequest(BaseModel):
     """POST /debug/query request body."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "Explain the retriever module",
+                    "top_k": 5,
+                    "preset": "rag",
+                    "mode": "code",
+                }
+            ]
+        }
+    )
 
     query: str = Field(..., min_length=1, max_length=10000, description="Query text")
     top_k: int | None = Field(None, ge=1, le=100, description="Number of results")
@@ -83,6 +121,20 @@ class QdrantFilters(BaseModel):
 class QdrantSearchRequest(BaseModel):
     """POST /debug/qdrant request body."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "vector store implementation",
+                    "vector_space": "code",
+                    "top_k": 10,
+                    "score_threshold": 0.5,
+                    "with_payload": True,
+                }
+            ]
+        }
+    )
+
     query: str = Field(..., min_length=1, description="Query text")
     vector_space: str | None = Field(None, description="Restrict to one vector space")
     top_k: int = Field(10, ge=1, le=1000, description="Number of results")
@@ -95,6 +147,17 @@ class QdrantSearchRequest(BaseModel):
 
 class IndexRequest(BaseModel):
     """POST /index request body."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "mode": "incremental",
+                    "dry_run": False,
+                }
+            ]
+        }
+    )
 
     mode: str = Field("incremental", description="Indexing mode")
     directories: list[str] | None = Field(None, description="Override directories")
@@ -331,3 +394,33 @@ class ShutdownResponse(BaseModel):
     """POST /shutdown response."""
 
     message: str = Field(..., description="Shutdown confirmation message")
+
+
+# ── Relocated from routers (T005) ───────────────
+
+
+class LexiconRefreshResponse(BaseModel):
+    """POST /lexicon/refresh response."""
+
+    entries: int = Field(..., description="Number of lexicon entries after reload")
+    status: str = Field(..., description="Reload status message")
+
+
+class ModeDetailResponse(BaseModel):
+    """Full detail for a single mode."""
+
+    name: str = Field(..., description="Mode name")
+    description: str = Field("", description="Brief description")
+    collections: dict[str, float] = Field(..., description="Collection weights")
+    llm_slot: str = Field(..., description="LLM slot")
+    preset: str = Field(..., description="Prompt preset")
+    top_k: int = Field(..., description="Default top_k")
+    similarity_threshold: float = Field(..., description="Default threshold")
+    critic_enabled: bool = Field(..., description="Context critic active")
+    critic_threshold: int = Field(..., description="Minimum critic score")
+
+
+class ModeListResponse(BaseModel):
+    """GET /modes response."""
+
+    modes: list[ModeInfo] = Field(..., description="All registered modes")

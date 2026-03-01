@@ -210,8 +210,7 @@ class PluginRegistry:
                         )
                     else:
                         logger.warning(
-                            "Extension %s conflict: %s ignored "
-                            "(already mapped to %s)",
+                            "Extension %s conflict: %s ignored (already mapped to %s)",
                             ext_lower,
                             plugin_name,
                             self._extension_map[ext_lower],

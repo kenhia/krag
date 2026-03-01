@@ -1,6 +1,7 @@
 """Contract tests for POST /index and GET /index/status endpoints.
 
 T045: Validate IndexResponse schema against OpenAPI spec.
+T004: GET /index/status must always return list[IndexResponse].
 Tests use FastAPI TestClient with a mocked KragService.
 """
 
@@ -53,18 +54,20 @@ def test_client() -> TestClient:
         # Default index response
         mock_service.index.return_value = _make_index_response()
 
-        # Default index_status response
-        mock_service.get_index_status.return_value = _make_index_response(
-            status="none",
-            job_id="none",
-            files_scanned=0,
-            files_processed=0,
-            files_skipped=0,
-            files_errored=0,
-            chunks_created=0,
-            vectors_stored=0,
-            duration_seconds=0.0,
-        )
+        # Default index_status response — always a list
+        mock_service.get_index_status.return_value = [
+            _make_index_response(
+                status="none",
+                job_id="none",
+                files_scanned=0,
+                files_processed=0,
+                files_skipped=0,
+                files_errored=0,
+                chunks_created=0,
+                vectors_stored=0,
+                duration_seconds=0.0,
+            )
+        ]
 
         MockService.return_value = mock_service
 
@@ -194,26 +197,40 @@ class TestIndexContract:
 
 
 class TestIndexStatusContract:
-    """Contract tests for GET /index/status."""
+    """Contract tests for GET /index/status.
+
+    T004: Response is always list[IndexResponse], never a bare object.
+    """
 
     def test_index_status_returns_200(self, test_client: TestClient) -> None:
         resp = test_client.get("/index/status")
         assert resp.status_code == 200
 
-    def test_index_status_has_job_id(self, test_client: TestClient) -> None:
+    def test_index_status_always_returns_list(self, test_client: TestClient) -> None:
+        """GET /index/status must always return a JSON array."""
         resp = test_client.get("/index/status")
         data = resp.json()
-        assert "job_id" in data
+        assert isinstance(data, list), f"Expected list, got {type(data).__name__}"
 
-    def test_index_status_has_status(self, test_client: TestClient) -> None:
+    def test_index_status_list_elements_have_job_id(self, test_client: TestClient) -> None:
         resp = test_client.get("/index/status")
         data = resp.json()
-        assert "status" in data
+        assert isinstance(data, list)
+        for item in data:
+            assert "job_id" in item
+
+    def test_index_status_list_elements_have_status(self, test_client: TestClient) -> None:
+        resp = test_client.get("/index/status")
+        data = resp.json()
+        assert isinstance(data, list)
+        for item in data:
+            assert "status" in item
 
     def test_index_status_schema_matches_index_response(self, test_client: TestClient) -> None:
-        """GET /index/status should return the same schema as POST /index."""
+        """Each element in the list must have all IndexResponse fields."""
         resp = test_client.get("/index/status")
         data = resp.json()
+        assert isinstance(data, list)
         required_fields = [
             "job_id",
             "status",
@@ -228,5 +245,49 @@ class TestIndexStatusContract:
             "dry_run",
             "errors",
         ]
-        for field in required_fields:
-            assert field in data, f"Missing field: {field}"
+        for item in data:
+            for field in required_fields:
+                assert field in item, f"Missing field: {field}"
+
+    def test_index_status_empty_list_when_no_jobs(self, test_client: TestClient) -> None:
+        """When no indexing ever ran, return an empty list."""
+        test_client.app.state.service.get_index_status.return_value = []
+        resp = test_client.get("/index/status")
+        data = resp.json()
+        assert data == []
+
+    def test_index_status_single_job_still_list(self, test_client: TestClient) -> None:
+        """A single job result is still wrapped in a list."""
+        test_client.app.state.service.get_index_status.return_value = [
+            _make_index_response(status="completed")
+        ]
+        resp = test_client.get("/index/status")
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["status"] == "completed"
+
+    def test_index_status_multiple_jobs(self, test_client: TestClient) -> None:
+        """Multiple concurrent/recent jobs return as list elements."""
+        test_client.app.state.service.get_index_status.return_value = [
+            _make_index_response(job_id="job-1", status="completed"),
+            _make_index_response(job_id="job-2", status="running"),
+        ]
+        resp = test_client.get("/index/status")
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) == 2
+        job_ids = {item["job_id"] for item in data}
+        assert job_ids == {"job-1", "job-2"}
+
+    def test_index_status_running_job_in_list(self, test_client: TestClient) -> None:
+        """A running indexing job is returned as a single-element list."""
+        test_client.app.state.service.get_index_status.return_value = [
+            _make_index_response(status="running", job_id="active-001")
+        ]
+        resp = test_client.get("/index/status")
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["status"] == "running"
+        assert data[0]["job_id"] == "active-001"

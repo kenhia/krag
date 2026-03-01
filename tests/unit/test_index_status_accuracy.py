@@ -1,9 +1,11 @@
 """Unit tests for index-status accuracy (US2).
 
 T021: Validates that:
+- get_index_status() always returns list[IndexResponse]
 - get_index_status() returns 'running' status when indexing is active,
   even if there are cached results from a prior run
 - get_index_status() returns cached results when NOT indexing
+- get_index_status() returns empty list when cache is empty and not indexing
 """
 
 from __future__ import annotations
@@ -46,7 +48,7 @@ class TestIndexStatusRunningPriority:
     """Active indexing must take priority over cached results."""
 
     def test_returns_running_when_indexing_active_and_cache_empty(self) -> None:
-        """When _indexing=True and cache is empty, returns running status."""
+        """When _indexing=True and cache is empty, returns single-element list with running status."""
         from kragd.service import KragService
 
         service = KragService(_make_config())
@@ -55,7 +57,9 @@ class TestIndexStatusRunningPriority:
         service._index_job_cache = []
 
         result = service.get_index_status()
-        assert result.status == "running"
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0].status == "running"
 
     def test_returns_running_when_indexing_active_and_cache_has_results(self) -> None:
         """When _indexing=True and cache has previous results, returns running status.
@@ -71,12 +75,14 @@ class TestIndexStatusRunningPriority:
         service._index_job_cache = [_make_index_response(job_id="old-job", status="completed")]
 
         result = service.get_index_status()
+        assert isinstance(result, list)
+        assert len(result) == 1
         # Must be the running status, NOT the cached completed result
-        assert result.status == "running"
-        assert result.job_id != "old-job"
+        assert result[0].status == "running"
+        assert result[0].job_id != "old-job"
 
     def test_returns_cached_when_not_indexing(self) -> None:
-        """When _indexing=False and cache has results, returns cached results."""
+        """When _indexing=False and cache has results, returns cached results as list."""
         from kragd.service import KragService
 
         service = KragService(_make_config())
@@ -85,10 +91,12 @@ class TestIndexStatusRunningPriority:
         service._index_job_cache = [_make_index_response(job_id="completed-job")]
 
         result = service.get_index_status()
-        assert result.job_id == "completed-job"
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0].job_id == "completed-job"
 
     def test_returns_none_when_not_indexing_and_cache_empty(self) -> None:
-        """When _indexing=False and cache is empty, returns 'none' status."""
+        """When _indexing=False and cache is empty, returns empty list."""
         from kragd.service import KragService
 
         service = KragService(_make_config())
@@ -97,5 +105,5 @@ class TestIndexStatusRunningPriority:
         service._index_job_cache = []
 
         result = service.get_index_status()
-        assert result.status == "none"
-        assert result.job_id == "none"
+        assert isinstance(result, list)
+        assert len(result) == 0

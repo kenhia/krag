@@ -99,8 +99,11 @@ def status_command(
 def health_command(
     host: str | None = typer.Option(None, "--host", help="kragd host"),
     port: int | None = typer.Option(None, "--port", help="kragd port"),
+    output_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
 ) -> None:
     """Check if kragd is running and healthy."""
+    import json
+
     from krag_cli.client import KragClient
     from krag_cli.config import read_service_config
 
@@ -111,13 +114,25 @@ def health_command(
 
     client = KragClient(host=host, port=port)
     try:
+        if output_json:
+            try:
+                data = client._get("/health")
+                console.print(json.dumps(data, indent=2))
+            except Exception:
+                console.print(json.dumps({"status": "error", "error": "kragd is not responding"}))
+                raise typer.Exit(1) from None
+            return
+
         if client.health():
             console.print("[green]kragd is healthy[/green]")
         else:
             console.print("[red]kragd is not responding[/red]")
             raise typer.Exit(1)
     except ConnectionError as exc:
-        console.print("[red]kragd is not responding[/red]")
+        if output_json:
+            console.print(json.dumps({"status": "error", "error": str(exc)}))
+        else:
+            console.print("[red]kragd is not responding[/red]")
         raise typer.Exit(1) from exc
     finally:
         client.close()

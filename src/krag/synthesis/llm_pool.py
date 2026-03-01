@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 from krag.synthesis.llm_client import LLMClient
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from krag.models.query_result import QueryResult
 
 logger = logging.getLogger(__name__)
@@ -69,6 +71,7 @@ class LLMSlot:
     instance: LLMClient | None = None
     is_loaded: bool = False
     load_time_ms: float = 0.0
+    streaming: bool = False
     # Extra kwargs forwarded to LLMClient.
     llm_kwargs: dict[str, Any] = field(default_factory=dict)
 
@@ -167,6 +170,47 @@ class LLMPool:
             assert slot.instance is not None  # noqa: S101
             response = slot.instance.generate(messages, **kwargs)
             return response, route
+
+    def route_and_stream(
+        self,
+        messages: list[dict[str, str]],
+        retrieved_chunks: list[QueryResult],
+        llm_override: str | None = None,
+        **kwargs: Any,
+    ) -> tuple[Iterator[str], str]:
+        """Route to appropriate LLM and return a streaming token iterator.
+
+        Acquires the lock for routing and model loading, then releases it
+        before streaming begins.  The target slot is marked as ``streaming``
+        to prevent concurrent access.
+
+        Returns:
+            ``(token_iterator, llm_name_used)`` — caller **must** exhaust
+            or close the iterator so the streaming flag is cleared.
+        """
+        with self._lock:
+            route = self._determine_route_unlocked(retrieved_chunks, llm_override)
+            slot = self._slot_for(route)
+
+            if slot.streaming:
+                raise RuntimeError(f"LLM slot '{route}' is already streaming")
+
+            if not slot.is_loaded:
+                self._swap_to_unlocked(route)
+                slot = self._slot_for(route)
+
+            assert slot.instance is not None  # noqa: S101
+            slot.streaming = True
+
+        # Lock released — stream tokens without holding the pool lock.
+        def _guarded_stream() -> Iterator[str]:
+            try:
+                yield from slot.instance.generate_stream(messages, **kwargs)  # type: ignore[union-attr]
+            finally:
+                with self._lock:
+                    slot.streaming = False
+
+        return _guarded_stream(), route
 
     def determine_route(
         self,

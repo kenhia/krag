@@ -163,9 +163,11 @@ graph TB
 
         subgraph ROUTERS["API Routers"]
             R_SYSTEM[system.py<br/>GET /health · /status<br/>POST /shutdown]
-            R_QUERY[query.py<br/>POST /query · /retrieve]
+            R_QUERY[query.py<br/>POST /query · /retrieve<br/>POST /query/stream SSE]
             R_DEBUG[debug.py<br/>POST /debug/query · /debug/qdrant]
-            R_INDEX[index.py<br/>POST /index<br/>GET /index/status]
+            R_INDEX[index.py<br/>POST /index<br/>GET /index/status · /index/stream SSE]
+            R_MODES[modes.py<br/>GET /modes · /modes/‹name›]
+            R_LEXICON[lexicon.py<br/>GET /lexicon]
         end
     end
 
@@ -191,11 +193,13 @@ graph TB
 
 ### Key Design Decisions
 
-1. **Sync route handlers** (R-02): All endpoints use `def` (not `async def`) because LLM inference and embedding are blocking. Only `GET /health` is async for lightweight responsiveness.
+1. **Sync route handlers** (R-02): Most endpoints use `def` (not `async def`) because LLM inference and embedding are blocking. SSE streaming endpoints (`/index/stream`, `/query/stream`) use `async def` with `EventSourceResponse` from sse-starlette.
 2. **LLM Lifecycle** (R-04/R-06): `LLMLifecycleManager` wraps `LLMPool` without modifying it. Primary LLM stays loaded permanently; secondary unloads after configurable idle timeout via asyncio timer.
 3. **PID file management** (R-07): Uvicorn handles SIGTERM natively; `POST /shutdown` sends SIGTERM to self; `krag stop` reads PID file.
 4. **Raw Qdrant bypass** (R-09): `POST /debug/qdrant` calls `QdrantVectorStore` directly, bypassing Retriever (no dedup, boost, RRF).
 5. **Direct mode preserved**: `krag-direct` entry point is unchanged — runs entirely in-process, does not import `kragd`.
+6. **SSE streaming** (US5/US6): Real-time index progress and token-by-token query answers use Server-Sent Events via sse-starlette. LLM streaming holds the pool lock only during routing/swap, then releases it — the slot is marked `streaming=True` to prevent concurrent access. Thread-to-async bridging uses `asyncio.Queue` with `run_coroutine_threadsafe`.
+7. **CORS** (US3): `CORSMiddleware` with configurable `allow_origins` (default `["*"]`) supports Tauri webview and browser-based clients.
 
 ---
 

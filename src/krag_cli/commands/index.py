@@ -79,9 +79,12 @@ def index_command(
                 time.sleep(poll_interval)
                 try:
                     status_result = client._get("/index/status")
-                    # Handle list response (multiple results)
-                    if isinstance(status_result, list):
+                    # /index/status always returns a list; take the latest entry
+                    if isinstance(status_result, list) and status_result:
                         status_result = status_result[-1]
+                    elif isinstance(status_result, list):
+                        # Empty list — no jobs yet
+                        continue
                     current_status = status_result.get("status", "unknown")
                     if current_status in ("completed", "failed"):
                         if output_json:
@@ -136,13 +139,17 @@ def index_status_command(
             console.print(json.dumps(result, indent=2))
             return
 
-        # Handle single result (dict) or multiple results (list)
+        # /index/status always returns a list
         if isinstance(result, list):
+            if not result:
+                console.print("\n[dim]No indexing runs since kragd was started.[/dim]")
+                return
             for i, job in enumerate(result):
                 if i > 0:
                     console.print()  # blank line between jobs
                 _display_index_result(job)
         else:
+            # Backward-compat: handle bare dict from older kragd
             _display_index_result(result)
 
     except ConnectionError as exc:

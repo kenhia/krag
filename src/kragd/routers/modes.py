@@ -6,41 +6,20 @@ Exposes the registered retrieval modes for discovery.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
 
-from kragd.schemas import ModeInfo
+from kragd.schemas import ModeDetailResponse, ModeListResponse
 
 router = APIRouter(prefix="/modes", tags=["modes"])
 
 
-class ModeDetailResponse(BaseModel):
-    """Full detail for a single mode."""
-
-    name: str = Field(..., description="Mode name")
-    description: str = Field("", description="Brief description")
-    collections: dict[str, float] = Field(..., description="Collection weights")
-    llm_slot: str = Field(..., description="LLM slot")
-    preset: str = Field(..., description="Prompt preset")
-    top_k: int = Field(..., description="Default top_k")
-    similarity_threshold: float = Field(..., description="Default threshold")
-    critic_enabled: bool = Field(..., description="Context critic active")
-    critic_threshold: int = Field(..., description="Minimum critic score")
-
-
-class ModeListResponse(BaseModel):
-    """GET /modes response."""
-
-    modes: list[ModeInfo] = Field(..., description="All registered modes")
-
-
-@router.get("", response_model=ModeListResponse)
+@router.get("", response_model=ModeListResponse, summary="List all retrieval modes")
 def list_modes(request: Request) -> ModeListResponse:
     """List all registered retrieval modes."""
     service = request.app.state.service
     return ModeListResponse(modes=service._get_mode_infos())
 
 
-@router.get("/{name}", response_model=ModeDetailResponse)
+@router.get("/{name}", response_model=ModeDetailResponse, summary="Get mode details by name")
 def get_mode(request: Request, name: str) -> ModeDetailResponse:
     """Get full details for a specific mode."""
     service = request.app.state.service

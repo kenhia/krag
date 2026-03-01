@@ -18,7 +18,7 @@ from kragd.schemas import (
 router = APIRouter(prefix="/debug", tags=["debug"])
 
 
-@router.post("/query", response_model=DebugQueryResponse)
+@router.post("/query", response_model=DebugQueryResponse, summary="Debug query with full metadata")
 def debug_query(body: DebugQueryRequest, request: Request) -> DebugQueryResponse:
     """Execute a query with full debug metadata.
 
@@ -42,7 +42,7 @@ def debug_query(body: DebugQueryRequest, request: Request) -> DebugQueryResponse
     )
 
 
-@router.post("/qdrant", response_model=QdrantSearchResponse)
+@router.post("/qdrant", response_model=QdrantSearchResponse, summary="Raw vector store search")
 def debug_qdrant(body: QdrantSearchRequest, request: Request) -> QdrantSearchResponse:
     """Raw vector store search bypassing Retriever.
 
