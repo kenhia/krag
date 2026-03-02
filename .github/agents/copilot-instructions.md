@@ -21,6 +21,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-03
 - Qdrant (existing `krag_docs` and `krag_code` collections via CollectionManager) (011-obsidian-plugin)
 - Python >=3.11,<3.14 (ruff/mypy target: py311) + FastAPI >=0.115.0, Pydantic >=2.6.0, Uvicorn >=0.34.0, Typer >=0.9.0, Rich >=13.0.0, httpx >=0.28.0, llama-cpp-python >=0.2.90, sse-starlette >=2.0.0 (new) (012-krager-prep)
 - Qdrant vector store (via qdrant-client >=1.8.0), YAML/TOML config files (012-krager-prep)
+- TypeScript 5.6, Rust stable (Tauri v2 requirement), Node.js 20+ + Tauri v2, SvelteKit 2 (SPA mode, SSR off), Svelte 5 (runes), `@tauri-apps/plugin-http`, Shiki (syntax highlighting), Vitest, `@testing-library/svelte` (013-krager)
+- In-memory only — Svelte 5 `$state` reactive objects in `.svelte.ts` modules; no persistence layer (013-krager)
 
 - Python 3.11+ (001-text-rag-indexing)
 
@@ -40,9 +42,9 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+: Follow standard conventions
 
 ## Recent Changes
+- 013-krager: Added TypeScript 5.6, Rust stable (Tauri v2 requirement), Node.js 20+ + Tauri v2, SvelteKit 2 (SPA mode, SSR off), Svelte 5 (runes), `@tauri-apps/plugin-http`, Shiki (syntax highlighting), Vitest, `@testing-library/svelte`
 - 012-krager-prep: Added Python >=3.11,<3.14 (ruff/mypy target: py311) + FastAPI >=0.115.0, Pydantic >=2.6.0, Uvicorn >=0.34.0, Typer >=0.9.0, Rich >=13.0.0, httpx >=0.28.0, llama-cpp-python >=0.2.90, sse-starlette >=2.0.0 (new)
 - 011-obsidian-plugin: Added Python 3.11–3.13 + krag (core), pyyaml (frontmatter parsing), pydantic (config schema)
-- 011-obsidian-plugin: Added Qdrant (existing krag_docs and krag_code collections via CollectionManager)
 
 
 <!-- MANUAL ADDITIONS START -->
