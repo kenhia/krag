@@ -205,21 +205,20 @@ After building the Windows NSIS installer:
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "http-capability",
-  "description": "HTTP access to kragd",
+  "description": "HTTP access to kragd (any host — user-configurable connection target)",
   "windows": ["main"],
   "permissions": [
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "http://localhost:8742/**" },
-        { "url": "http://127.0.0.1:8742/**" }
+        { "url": "http://*:*" }
       ]
     }
   ]
 }
 ```
 
-> **Security note**: The `allow` list locks HTTP access to kragd's default address. If the user configures a different host/port, update the capability or add a broader wildcard rule (consult Tauri docs on dynamic capability scopes).
+> **Security note**: The `allow` list uses `http://*:*` to permit connections to any HTTP host and port, since the user configures the kragd target at runtime. Tauri's HTTP plugin uses [URLPattern](https://urlpattern.spec.whatwg.org/) syntax — `*` matches any host, `:*` matches any port. Use `http://localhost:8742/**` to restrict to localhost only.
 
 ---
 
