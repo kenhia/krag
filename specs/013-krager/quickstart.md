@@ -98,7 +98,7 @@ This launches:
 2. Tauri webview window wrapping `http://localhost:1420`
 3. Hot-reload for `.svelte` changes (< 2 seconds)
 
-> **Note**: kragd must be running separately at `localhost:11435` for the app to connect. Start it with `uv run kragd` from the repo root.
+> **Note**: kragd must be running separately at `localhost:8742` for the app to connect. Start it with `uv run kragd` from the repo root.
 
 ### Run tests
 
@@ -168,7 +168,7 @@ After building the Windows NSIS installer:
 1. Run `krager_*_x64-setup.exe` on a Windows 10/11 machine
 2. Launch `krager.exe` from the Start Menu or install directory
 3. Verify the app window opens with no errors
-4. Enter `<kragd-host>:11435` (use a kragd instance accessible over the network or localhost if kragd is also running on Windows)
+4. Enter `<kragd-host>:8742` (use a kragd instance accessible over the network or localhost if kragd is also running on Windows)
 5. Verify the connection indicator turns green
 6. Submit a test query — verify the answer and sources appear in the transcript
 7. Trigger an incremental index — verify status shows Running → Completed
@@ -211,8 +211,8 @@ After building the Windows NSIS installer:
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "http://localhost:11435/**" },
-        { "url": "http://127.0.0.1:11435/**" }
+        { "url": "http://localhost:8742/**" },
+        { "url": "http://127.0.0.1:8742/**" }
       ]
     }
   ]

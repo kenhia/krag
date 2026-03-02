@@ -124,7 +124,7 @@ describe("streaming", () => {
 
 			const events: QueryStreamEvent[] = [];
 			await streamQuerySSE(
-				"http://localhost:11435",
+				"http://localhost:8742",
 				{ query: "test" },
 				(event) => events.push(event),
 			);
@@ -143,7 +143,7 @@ describe("streaming", () => {
 			const events: QueryStreamEvent[] = [];
 			const errors: Error[] = [];
 			await streamQuerySSE(
-				"http://localhost:11435",
+				"http://localhost:8742",
 				{ query: "test" },
 				(event) => events.push(event),
 				{ onError: (err) => errors.push(err) },
@@ -163,7 +163,7 @@ describe("streaming", () => {
 			const events: QueryStreamEvent[] = [];
 			const errors: Error[] = [];
 			await streamQuerySSE(
-				"http://localhost:11435",
+				"http://localhost:8742",
 				{ query: "test" },
 				(event) => events.push(event),
 				{ signal: controller.signal, onError: (err) => errors.push(err) },
@@ -193,7 +193,7 @@ describe("streaming", () => {
 
 			const events: IndexStreamEvent[] = [];
 			await streamIndexSSE(
-				"http://localhost:11435",
+				"http://localhost:8742",
 				(event) => events.push(event),
 			);
 
@@ -217,7 +217,7 @@ describe("streaming", () => {
 
 			const events: IndexStreamEvent[] = [];
 			await streamIndexSSE(
-				"http://localhost:11435",
+				"http://localhost:8742",
 				(event) => events.push(event),
 			);
 

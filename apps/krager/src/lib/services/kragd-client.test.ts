@@ -25,12 +25,12 @@ function jsonResponse(data: unknown, status = 200, ok = true): Response {
 describe("kragd-client", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		setBaseUrl("http://localhost:11435");
+		setBaseUrl("http://localhost:8742");
 	});
 
 	describe("getBaseUrl / setBaseUrl", () => {
 		it("returns default base URL", () => {
-			expect(getBaseUrl()).toBe("http://localhost:11435");
+			expect(getBaseUrl()).toBe("http://localhost:8742");
 		});
 
 		it("updates base URL", () => {
@@ -46,7 +46,7 @@ describe("kragd-client", () => {
 
 			const result = await kragdFetch<{ status: string; version: string }>("/health");
 
-			expect(mockFetch).toHaveBeenCalledWith("http://localhost:11435/health", {
+			expect(mockFetch).toHaveBeenCalledWith("http://localhost:8742/health", {
 				method: "GET",
 				headers: { "Content-Type": "application/json" },
 			});
@@ -63,7 +63,7 @@ describe("kragd-client", () => {
 				body: JSON.stringify(reqBody),
 			});
 
-			expect(mockFetch).toHaveBeenCalledWith("http://localhost:11435/query", {
+			expect(mockFetch).toHaveBeenCalledWith("http://localhost:8742/query", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(reqBody),
@@ -174,7 +174,7 @@ describe("kragd-client", () => {
 			await kragdFetch("/health", { signal: controller.signal });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/health",
+				"http://localhost:8742/health",
 				expect.objectContaining({ signal: controller.signal }),
 			);
 		});
@@ -210,7 +210,7 @@ describe("kragd-client", () => {
 		it("throws KragdError on non-OK response", async () => {
 			mockFetch.mockResolvedValue(jsonResponse({ detail: "error" }, 500, false));
 
-			await expect(getHealth("localhost", 11435)).rejects.toThrow(KragdError);
+			await expect(getHealth("localhost", 8742)).rejects.toThrow(KragdError);
 		});
 
 		it("throws KragdError on invalid JSON response", async () => {
@@ -224,7 +224,7 @@ describe("kragd-client", () => {
 			} as unknown as Response;
 			mockFetch.mockResolvedValue(res);
 
-			await expect(getHealth("localhost", 11435)).rejects.toThrow(KragdError);
+			await expect(getHealth("localhost", 8742)).rejects.toThrow(KragdError);
 		});
 	});
 
@@ -236,7 +236,7 @@ describe("kragd-client", () => {
 			const result = await getStatus();
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/status",
+				"http://localhost:8742/status",
 				expect.objectContaining({ method: "GET" }),
 			);
 			expect(result).toEqual(data);
@@ -251,7 +251,7 @@ describe("kragd-client", () => {
 			const result = await postQuery({ query: "What is the answer?", top_k: 5 });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/query",
+				"http://localhost:8742/query",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify({ query: "What is the answer?", top_k: 5 }),
@@ -266,7 +266,7 @@ describe("kragd-client", () => {
 			await postQuery({ query: "test", mode: "code" });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/query",
+				"http://localhost:8742/query",
 				expect.objectContaining({
 					body: JSON.stringify({ query: "test", mode: "code" }),
 				}),
@@ -288,7 +288,7 @@ describe("kragd-client", () => {
 			const result = await postRetrieve({ query: "foo function" });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/retrieve",
+				"http://localhost:8742/retrieve",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify({ query: "foo function" }),
@@ -303,7 +303,7 @@ describe("kragd-client", () => {
 			await postRetrieve({ query: "test", mode: "docs", top_k: 10 });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/retrieve",
+				"http://localhost:8742/retrieve",
 				expect.objectContaining({
 					body: JSON.stringify({ query: "test", mode: "docs", top_k: 10 }),
 				}),
@@ -319,7 +319,7 @@ describe("kragd-client", () => {
 			const result = await getModes();
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/modes",
+				"http://localhost:8742/modes",
 				expect.objectContaining({ method: "GET" }),
 			);
 			expect(result).toEqual(data);
@@ -349,7 +349,7 @@ describe("kragd-client", () => {
 			const result = await getModeDetail("code");
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/modes/code",
+				"http://localhost:8742/modes/code",
 				expect.objectContaining({ method: "GET" }),
 			);
 			expect(result).toEqual(data);
@@ -360,7 +360,7 @@ describe("kragd-client", () => {
 			await getModeDetail("my mode");
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/modes/my%20mode",
+				"http://localhost:8742/modes/my%20mode",
 				expect.objectContaining({ method: "GET" }),
 			);
 		});
@@ -395,7 +395,7 @@ describe("kragd-client", () => {
 			const result = await triggerIndex({ mode: "incremental" });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/index",
+				"http://localhost:8742/index",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify({ mode: "incremental" }),
@@ -409,7 +409,7 @@ describe("kragd-client", () => {
 			await triggerIndex({ mode: "full", dry_run: true });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/index",
+				"http://localhost:8742/index",
 				expect.objectContaining({
 					body: JSON.stringify({ mode: "full", dry_run: true }),
 				}),
@@ -448,7 +448,7 @@ describe("kragd-client", () => {
 			const result = await getIndexStatus();
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/index/status",
+				"http://localhost:8742/index/status",
 				expect.objectContaining({ method: "GET" }),
 			);
 			expect(result).toEqual(data);
@@ -495,7 +495,7 @@ describe("kragd-client", () => {
 			const result = await postDebugQuery({ query: "test debug", top_k: 5 });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/debug/query",
+				"http://localhost:8742/debug/query",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify({ query: "test debug", top_k: 5 }),
@@ -512,7 +512,7 @@ describe("kragd-client", () => {
 			await postDebugQuery({ query: "hello" });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/debug/query",
+				"http://localhost:8742/debug/query",
 				expect.objectContaining({
 					body: JSON.stringify({ query: "hello" }),
 				}),
@@ -539,7 +539,7 @@ describe("kragd-client", () => {
 			const result = await postDebugQdrant({ query: "vector search", vector_space: "dense", top_k: 10 });
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/debug/qdrant",
+				"http://localhost:8742/debug/qdrant",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify({ query: "vector search", vector_space: "dense", top_k: 10 }),
@@ -560,7 +560,7 @@ describe("kragd-client", () => {
 			});
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/debug/qdrant",
+				"http://localhost:8742/debug/qdrant",
 				expect.objectContaining({
 					body: JSON.stringify({
 						query: "filtered",
@@ -585,7 +585,7 @@ describe("kragd-client", () => {
 			const result = await refreshLexicon();
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost:11435/lexicon/refresh",
+				"http://localhost:8742/lexicon/refresh",
 				expect.objectContaining({ method: "POST" }),
 			);
 			expect(result).toEqual(resData);

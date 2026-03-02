@@ -30,7 +30,7 @@ import type {
 // Base URL management
 // ─────────────────────────────────────────────────────────────────
 
-let baseUrl = "http://localhost:11435";
+let baseUrl = "http://localhost:8742";
 
 export function getBaseUrl(): string {
 	return baseUrl;
@@ -176,10 +176,11 @@ export async function getHealth(host: string, port: number): Promise<HealthRespo
 			headers: { "Content-Type": "application/json" },
 		});
 	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
 		throw new KragdError(
 			0,
-			`Cannot reach kragd at ${host}:${port}`,
-			err instanceof Error ? err.message : String(err),
+			`Cannot reach kragd at ${host}:${port} — ${detail}`,
+			detail,
 		);
 	}
 

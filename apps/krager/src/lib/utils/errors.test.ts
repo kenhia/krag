@@ -17,7 +17,7 @@ describe("errors utilities", () => {
 
 	describe("handleKragdError", () => {
 		it("handles network error (status 0)", () => {
-			const err = new KragdError(0, "Cannot reach kragd at localhost:11435");
+			const err = new KragdError(0, "Cannot reach kragd at localhost:8742");
 			const msg = handleKragdError(err);
 
 			expect(msg).toContain("Cannot reach kragd");

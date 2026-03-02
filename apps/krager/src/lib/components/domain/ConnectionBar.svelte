@@ -42,12 +42,13 @@
 			setConnected(health.version);
 			setBaseUrl(`http://${connection.host}:${connection.port}`);
 			return true;
-		} catch {
+		} catch (e) {
+			const detail = e instanceof Error ? e.message : String(e);
 			if (connection.status === "connected") {
 				setDisconnected();
 				addToast("Lost connection to kragd", "warning");
 			} else {
-				setConnectionError("Cannot reach kragd");
+				setConnectionError(detail || "Cannot reach kragd");
 			}
 			return false;
 		}

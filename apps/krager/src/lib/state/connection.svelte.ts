@@ -19,7 +19,7 @@ export interface ConnectionState {
 /** Reactive connection state. */
 export const connection = $state<ConnectionState>({
 	host: "localhost",
-	port: 11435,
+	port: 8742,
 	status: "disconnected",
 	lastCheck: null,
 	errorMsg: null,

@@ -10,12 +10,12 @@ import {
 
 describe("connection.svelte", () => {
 	beforeEach(() => {
-		setConnectionTarget("localhost", 11435);
+		setConnectionTarget("localhost", 8742);
 	});
 
 	it("has correct default values", () => {
 		expect(connection.host).toBe("localhost");
-		expect(connection.port).toBe(11435);
+		expect(connection.port).toBe(8742);
 		expect(connection.status).toBe("disconnected");
 		expect(connection.lastCheck).toBeNull();
 		expect(connection.errorMsg).toBeNull();
@@ -24,7 +24,7 @@ describe("connection.svelte", () => {
 
 	describe("getConnectionBaseUrl", () => {
 		it("derives base URL from host and port", () => {
-			expect(getConnectionBaseUrl()).toBe("http://localhost:11435");
+			expect(getConnectionBaseUrl()).toBe("http://localhost:8742");
 		});
 
 		it("updates when host/port change", () => {
