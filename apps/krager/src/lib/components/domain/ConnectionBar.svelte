@@ -174,7 +174,7 @@
 	</div>
 
 	{#if connection.errorMsg && connection.status === "error"}
-		<span class="error-msg">{connection.errorMsg}</span>
+		<span class="error-msg" title={connection.errorMsg}>{connection.errorMsg}</span>
 	{/if}
 </header>
 
@@ -207,6 +207,7 @@
 
 	.input-group {
 		flex: 1;
+		min-width: 120px;
 	}
 
 	.port-input {
@@ -250,6 +251,10 @@
 	.error-msg {
 		font-size: 0.75rem;
 		color: var(--error, #f38ba8);
-		flex-shrink: 0;
+		flex: 0 1 auto;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 350px;
 	}
 </style>

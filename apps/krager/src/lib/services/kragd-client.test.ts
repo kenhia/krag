@@ -181,16 +181,17 @@ describe("kragd-client", () => {
 	});
 
 	describe("getHealth", () => {
-		it("calls /health on the specified host:port and returns HealthResponse", async () => {
+		it("calls /health on the specified host:port with AbortSignal and returns HealthResponse", async () => {
 			const data = { status: "healthy", version: "2.0.0" };
 			mockFetch.mockResolvedValue(jsonResponse(data));
 
 			const result = await getHealth("myhost", 9999);
 
-			expect(mockFetch).toHaveBeenCalledWith("http://myhost:9999/health", {
+			expect(mockFetch).toHaveBeenCalledWith("http://myhost:9999/health", expect.objectContaining({
 				method: "GET",
 				headers: { "Content-Type": "application/json" },
-			});
+				signal: expect.any(AbortSignal),
+			}));
 			expect(result).toEqual(data);
 		});
 

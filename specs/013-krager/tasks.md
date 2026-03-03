@@ -233,6 +233,18 @@ Dedicated test tasks (T069, T070, T076) cover the most complex modules. For all 
 
 ---
 
+## Phase 12: Manual Testing Fixes
+
+**Purpose**: Address bugs and UX issues found during Windows manual testing (see `specs/krager-manual-test-observations.md`).
+
+- [x] T078 Add 15s connection timeout via AbortController to `getHealth()` in `apps/krager/src/lib/services/kragd-client.ts` — prevents infinite connection loop on unreachable hosts (especially localhost)
+- [x] T079 Fix host input squished by error message — add `min-width: 120px` to `.input-group`, change `.error-msg` to `flex: 0 1 auto` with `overflow: hidden; text-overflow: ellipsis; max-width: 350px` and `title` tooltip in `ConnectionBar.svelte`
+- [x] T080 Reverse transcript display order (newest on top) — add `reversedEntries` derived state, change `scrollToBottom` to `scrollToTop`, update `{#each}` in `TranscriptView.svelte`
+
+**Checkpoint**: All manual testing blockers resolved, ready for PR
+
+---
+
 ## Dependencies
 
 ```
@@ -324,4 +336,5 @@ T043 triggerIndex()        ──┴──> T044 IndexPanel ──> T045 polling
 | 9: US6 | P3 | T052–T055 (4) | T052 (1) |
 | 10: US8 | P3 | T056–T060 (5) | T056 (1) |
 | 11: Polish | — | T061–T066, T077 (7) | T063–T064, T066 (3) |
-| **Total** | | **77 tasks** | **34 parallelizable** |
+| 12: Testing Fixes | — | T078–T080 (3) | 0 |
+| **Total** | | **80 tasks** | **34 parallelizable** |

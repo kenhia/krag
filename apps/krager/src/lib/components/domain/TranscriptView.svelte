@@ -4,7 +4,7 @@
   Displays TranscriptEntry[] from transcript state. Each entry shows:
   timestamp, type badge, query text, answer (or loading spinner),
   SourceList for query/retrieve entries, error messages.
-  Auto-scrolls to bottom on new entry. "Clear" button.
+  Newest entries appear at the top. "Clear" button.
 -->
 <script lang="ts">
 	import { tick } from "svelte";
@@ -97,22 +97,25 @@
 		return typeof r.query === "string" ? r.query : "";
 	}
 
-	async function scrollToBottom() {
+	async function scrollToTop() {
 		await tick();
 		if (scrollContainer) {
-			scrollContainer.scrollTop = scrollContainer.scrollHeight;
+			scrollContainer.scrollTop = 0;
 		}
 	}
 
-	// Auto-scroll when entries change
+	// Auto-scroll to top when entries change (newest first)
 	$effect(() => {
 		const _len = transcript.entries.length;
-		scrollToBottom();
+		scrollToTop();
 	});
 
 	function handleClear() {
 		clearTranscript();
 	}
+
+	/** Entries in reverse chronological order (newest first). */
+	const reversedEntries = $derived([...transcript.entries].reverse());
 </script>
 
 <div class="transcript-view">
@@ -129,7 +132,7 @@
 		</div>
 	{:else}
 		<div class="transcript-scroll" bind:this={scrollContainer}>
-			{#each transcript.entries as entry (entry.id)}
+			{#each reversedEntries as entry (entry.id)}
 				{@const badgeInfo = typeBadgeConfig[entry.type] ?? { label: "?", cssClass: "badge-default" }}
 				{@const answer = getAnswer(entry.response)}
 				{@const sources = getSources(entry.response)}

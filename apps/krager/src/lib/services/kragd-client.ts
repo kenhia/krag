@@ -163,25 +163,41 @@ function detailString(detail: unknown): string {
 // API endpoint functions
 // ─────────────────────────────────────────────────────────────────
 
+/** Connection timeout for health checks (ms). */
+const HEALTH_TIMEOUT_MS = 15_000;
+
 /**
  * Check kragd health at a specific host:port.
  * Uses a custom baseUrl (not the module-level one) for initial connection probing.
+ * Aborts after HEALTH_TIMEOUT_MS to avoid hanging on unreachable hosts.
  */
 export async function getHealth(host: string, port: number): Promise<HealthResponse> {
 	const url = `http://${host}:${port}/health`;
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
 	let response: Response;
 	try {
 		response = await tauriFetch(url, {
 			method: "GET",
 			headers: { "Content-Type": "application/json" },
+			signal: controller.signal,
 		});
 	} catch (err) {
+		if (controller.signal.aborted) {
+			throw new KragdError(
+				0,
+				`Connection timed out after ${HEALTH_TIMEOUT_MS / 1000}s — ${host}:${port} is unreachable`,
+				"timeout",
+			);
+		}
 		const detail = err instanceof Error ? err.message : String(err);
 		throw new KragdError(
 			0,
 			`Cannot reach kragd at ${host}:${port} — ${detail}`,
 			detail,
 		);
+	} finally {
+		clearTimeout(timer);
 	}
 
 	if (!response.ok) {
