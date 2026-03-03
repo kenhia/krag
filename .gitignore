@@ -73,3 +73,10 @@ temp/
 models/*.gguf
 models/*.bin
 !models/.gitkeep
+
+# Node.js / Tauri (apps/krager/)
+node_modules/
+apps/*/build/
+apps/*/.svelte-kit/
+apps/*/src-tauri/target/
+apps/*/src-tauri/gen/
