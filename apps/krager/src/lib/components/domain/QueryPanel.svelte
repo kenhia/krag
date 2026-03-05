@@ -329,6 +329,7 @@ function handleKeydown(event: KeyboardEvent) {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-md, 16px);
+		flex-shrink: 0;
 	}
 
 	.mode-slot {

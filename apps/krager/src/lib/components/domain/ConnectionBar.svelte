@@ -26,6 +26,14 @@ let hostInput = $state(connection.host);
 let portInput = $state(String(connection.port));
 let connecting = $state(false);
 
+// Sync local inputs when connection state changes (e.g. after async config load)
+$effect(() => {
+	if (connection.status === "disconnected") {
+		hostInput = connection.host;
+		portInput = String(connection.port);
+	}
+});
+
 const POLL_INTERVAL = 5000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 

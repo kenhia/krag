@@ -85,12 +85,14 @@ $effect(() => {
 					</QueryPanel>
 					{#if transcript.entries.length > 0}
 						{@const latestEntry = transcript.entries[transcript.entries.length - 1]}
-						<QueryAnswer
-							entry={latestEntry}
-							criticEnabled={queryState.critic_enabled}
-							criticCutOff={queryState.critic_cut_off}
-							showSources={queryState.show_sources}
-						/>
+						<div class="query-answer-scroll">
+							<QueryAnswer
+								entry={latestEntry}
+								criticEnabled={queryState.critic_enabled}
+								criticCutOff={queryState.critic_cut_off}
+								showSources={queryState.show_sources}
+							/>
+						</div>
 					{/if}
 				</div>
 			{:else if activePanel === "transcript"}
@@ -195,6 +197,12 @@ $effect(() => {
 		flex-direction: column;
 		height: 100%;
 		gap: var(--space-md);
+		min-height: 0;
+	}
+
+	.query-answer-scroll {
+		flex: 1;
+		overflow-y: auto;
 		min-height: 0;
 	}
 

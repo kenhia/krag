@@ -209,6 +209,15 @@
 
 ---
 
+## Phase 11: User Acceptance Testing Fixes
+
+**Purpose**: Address issues found during UAT on Windows
+
+- [x] T051 Fix connection host/port not persisting after restart — ConnectionBar local inputs not syncing from async config load; add $effect to sync hostInput/portInput when connection state updates
+- [x] T052 Fix query result missing scrollbar for long source lists (top-k=30) — wrap QueryAnswer in scrollable container, set QueryPanel flex-shrink:0
+
+---
+
 ## Deferred: User Story 8 — Index Path Selection (P3)
 
 > **Blocked**: kragd `/status` does not expose configured source directories. See research.md R6.
