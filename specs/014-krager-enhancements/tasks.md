@@ -218,6 +218,7 @@
 - [x] T053 Fix critic cut_off scale: change from 0.0-1.0 float to 0-5 integer to match kragd critic scoring scale (relevance_critic.py 0-5, default threshold 3)
 - [x] T054 Fix debug toggle not affecting output — SSE query:done handler was dropping event.data.debug; include debug in stored response
 - [x] T055 Add collapsible/folded sources to QueryAnswer (collapsed by default, matching TranscriptView pattern)
+- [x] T056 Re-fix debug: kragd SSE query_stream always sends debug:None — skip SSE when include_debug enabled, use POST /query directly; wire DebugMetadataView into QueryAnswer and TranscriptView (collapsible)
 
 ---
 

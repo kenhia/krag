@@ -103,6 +103,14 @@ async function handleQuery(text: string, entryId: string, startTime: number) {
 		loading: true,
 	});
 
+	// SSE streaming doesn't return debug metadata from the server,
+	// so when include_debug is enabled, skip SSE and use POST directly.
+	if (queryState.include_debug) {
+		await fallbackQuery(entryId, req, startTime);
+		queryText = "";
+		return;
+	}
+
 	// Try SSE streaming first
 	let sseSuccess = false;
 	try {

@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
 import { tick } from "svelte";
+import DebugMetadataView from "$lib/components/domain/DebugMetadataView.svelte";
 import SourceList from "$lib/components/domain/SourceList.svelte";
 import Button from "$lib/components/ui/Button.svelte";
 import CodeBlock from "$lib/components/ui/CodeBlock.svelte";
@@ -18,7 +19,7 @@ import {
 	toggleChunksExpanded,
 	transcript,
 } from "$lib/state/transcript.svelte";
-import type { QueryResponse, RetrieveResponse, SourceChunk } from "$lib/types";
+import type { DebugMetadata, QueryResponse, RetrieveResponse, SourceChunk } from "$lib/types";
 import { formatDuration, formatTimestamp } from "$lib/utils/format";
 
 let scrollContainer: HTMLElement | undefined = $state(undefined);
@@ -102,6 +103,13 @@ function getQueryText(request: unknown): string {
 	return typeof r.query === "string" ? r.query : "";
 }
 
+function getDebug(response: unknown): DebugMetadata | null {
+	if (!response || typeof response !== "object") return null;
+	const r = response as Record<string, unknown>;
+	if (r.debug && typeof r.debug === "object") return r.debug as DebugMetadata;
+	return null;
+}
+
 async function scrollToTop() {
 	await tick();
 	if (scrollContainer) {
@@ -142,6 +150,7 @@ const reversedEntries = $derived([...transcript.entries].reverse());
 				{@const answer = getAnswer(entry.response)}
 				{@const sources = getSources(entry.response)}
 				{@const queryText = getQueryText(entry.request)}
+				{@const debugMeta = getDebug(entry.response)}
 				<div class="entry" class:entry-error={!!entry.error}>
 					<div class="entry-header">
 						<span class="type-badge {badgeInfo.cssClass}">{badgeInfo.label}</span>
@@ -198,6 +207,21 @@ const reversedEntries = $derived([...transcript.entries].reverse());
 							</button>
 							{#if isChunksExpanded(entry.id)}
 								<SourceList {sources} />
+							{/if}
+						</div>
+					{/if}
+
+					{#if debugMeta}
+						<div class="entry-debug">
+							<button
+								class="chunks-toggle"
+								onclick={() => toggleChunksExpanded(`${entry.id}-debug`)}
+								aria-expanded={isChunksExpanded(`${entry.id}-debug`)}
+							>
+								{isChunksExpanded(`${entry.id}-debug`) ? "▾" : "▸"} Debug metadata
+							</button>
+							{#if isChunksExpanded(`${entry.id}-debug`)}
+								<DebugMetadataView metadata={debugMeta} />
 							{/if}
 						</div>
 					{/if}

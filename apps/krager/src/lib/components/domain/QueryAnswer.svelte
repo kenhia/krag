@@ -7,6 +7,7 @@
   - Low-confidence warning when critic enabled and any score < cut_off
 -->
 <script lang="ts">
+import DebugMetadataView from "$lib/components/domain/DebugMetadataView.svelte";
 import { queryState } from "$lib/state/query.svelte";
 import type { DebugMetadata, SourceChunk, TranscriptEntry } from "$lib/types";
 
@@ -20,6 +21,7 @@ interface Props {
 let { entry, criticEnabled = false, criticCutOff = 3, showSources = true }: Props = $props();
 
 let sourcesExpanded = $state(false);
+let debugExpanded = $state(false);
 
 // Safely extract typed fields from the `unknown` response
 const response = $derived(
@@ -75,6 +77,21 @@ const hasLowConfidence = $derived(() => {
 							</li>
 						{/each}
 					</ul>
+				{/if}
+			</div>
+		{/if}
+
+		{#if debug}
+			<div class="answer-debug">
+				<button
+					class="sources-toggle"
+					onclick={() => (debugExpanded = !debugExpanded)}
+					aria-expanded={debugExpanded}
+				>
+					{debugExpanded ? "▾" : "▸"} Debug metadata
+				</button>
+				{#if debugExpanded}
+					<DebugMetadataView metadata={debug} />
 				{/if}
 			</div>
 		{/if}
