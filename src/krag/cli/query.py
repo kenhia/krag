@@ -75,6 +75,18 @@ def query_command(
         "-c",
         help="Path to configuration file (default: ~/.config/krag/config.toml)",
     ),
+    critic: bool | None = typer.Option(
+        None,
+        "--critic/--no-critic",
+        help="Enable/disable context relevance critic. Overrides mode default.",
+    ),
+    critic_threshold: int | None = typer.Option(
+        None,
+        "--critic-threshold",
+        help="Minimum critic score (0–5). Overrides mode default.",
+        min=0,
+        max=5,
+    ),
 ) -> None:
     """Query your personal knowledge base.
 
@@ -117,21 +129,31 @@ def query_command(
                 llm = mode_config.llm_slot
             logger.info("Using mode '%s': preset=%s, llm=%s, top_k=%d", mode, preset, llm, top_k)
 
-        # Wire critic if mode has it enabled
-        critic = None
-        if mode_config and mode_config.critic_enabled:
+        # Wire critic: per-request override > mode config
+        critic_inst = None
+        want_critic = (
+            critic
+            if critic is not None
+            else (mode_config.critic_enabled if mode_config else False)
+        )
+        if want_critic:
             from krag.critic.relevance_critic import RelevanceCritic
 
-            critic = RelevanceCritic(
+            effective_threshold = (
+                critic_threshold
+                if critic_threshold is not None
+                else (mode_config.critic_threshold if mode_config else 3)
+            )
+            critic_inst = RelevanceCritic(
                 llm_client=pipeline.llm_client,
-                threshold=mode_config.critic_threshold,
+                threshold=effective_threshold,
                 enabled=True,
             )
             logger.info(
-                "Critic enabled via mode '%s' (threshold=%d)", mode, mode_config.critic_threshold
+                "Critic enabled (threshold=%d)", effective_threshold
             )
             # Attach critic to query engine for standard path
-            query_engine.critic = critic
+            query_engine.critic = critic_inst
 
         # Override llm_pool if user explicitly requests --llm routing.
         # Close the pipeline's standalone LLM first to free VRAM.
@@ -214,9 +236,9 @@ def query_command(
                 )
 
                 # Apply critic filtering in multi-LLM path
-                if critic is not None and critic.enabled and results:
-                    scored = critic.score_chunks(query, results)
-                    results = critic.filter_chunks(scored)
+                if critic_inst is not None and critic_inst.enabled and results:
+                    scored = critic_inst.score_chunks(query, results)
+                    results = critic_inst.filter_chunks(scored)
 
                 if not results:
                     console.print(

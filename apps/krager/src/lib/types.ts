@@ -38,6 +38,10 @@ export interface QueryRequest {
 	mode?: string | null;
 	/** Include debug metadata in response */
 	include_debug?: boolean;
+	/** Override: enable context relevance critic for this query */
+	critic_enabled?: boolean;
+	/** Override: minimum critic score (0–5) */
+	critic_threshold?: number;
 }
 
 /** POST /retrieve request body. */

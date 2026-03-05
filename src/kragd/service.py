@@ -500,19 +500,29 @@ class KragService:
             total_before = getattr(retriever, "_last_total_before_dedup", len(results))
             total_after = len(results)
 
-            # Apply context relevance critic if enabled via mode config
+            # Apply context relevance critic if enabled (per-request override or mode config)
             critic_scores: list[int] = []
             chunks_pre_critic = len(results)
             chunks_post_critic = len(results)
 
-            if mode_config and mode_config.critic_enabled and results:
+            want_critic = (
+                request.critic_enabled
+                if request.critic_enabled is not None
+                else (mode_config.critic_enabled if mode_config else False)
+            )
+            if want_critic and results:
                 from krag.critic.relevance_critic import RelevanceCritic
 
+                critic_threshold = (
+                    request.critic_threshold
+                    if request.critic_threshold is not None
+                    else (mode_config.critic_threshold if mode_config else 3)
+                )
                 critic_slot = self.llm_pool._slot_for(slot)
                 critic_llm = critic_slot.instance
                 critic = RelevanceCritic(
                     llm_client=critic_llm,
-                    threshold=mode_config.critic_threshold,
+                    threshold=critic_threshold,
                     enabled=True,
                 )
                 scored = critic.score_chunks(request.query, results)
@@ -523,7 +533,7 @@ class KragService:
                     "Critic: %d/%d chunks passed (threshold %d)",
                     chunks_post_critic,
                     chunks_pre_critic,
-                    mode_config.critic_threshold,
+                    critic_threshold,
                 )
 
             # Match lexicon terms for prompt injection
@@ -792,15 +802,25 @@ class KragService:
                 similarity_threshold=threshold,
             )
 
-            # Apply critic if enabled
-            if mode_config and mode_config.critic_enabled and results:
+            # Apply critic if enabled (per-request override or mode config)
+            want_critic = (
+                request.critic_enabled
+                if request.critic_enabled is not None
+                else (mode_config.critic_enabled if mode_config else False)
+            )
+            if want_critic and results:
                 from krag.critic.relevance_critic import RelevanceCritic
 
+                critic_threshold = (
+                    request.critic_threshold
+                    if request.critic_threshold is not None
+                    else (mode_config.critic_threshold if mode_config else 3)
+                )
                 critic_slot = self.llm_pool._slot_for(slot)
                 critic_llm = critic_slot.instance
                 critic = RelevanceCritic(
                     llm_client=critic_llm,
-                    threshold=mode_config.critic_threshold,
+                    threshold=critic_threshold,
                     enabled=True,
                 )
                 scored = critic.score_chunks(request.query, results)
@@ -922,6 +942,8 @@ class KragService:
             llm=request.llm,
             mode=request.mode,
             include_debug=True,
+            critic_enabled=request.critic_enabled,
+            critic_threshold=request.critic_threshold,
         )
         result = self.query(query_request)
         return DebugQueryResponse(

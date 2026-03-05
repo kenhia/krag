@@ -219,6 +219,8 @@
 - [x] T054 Fix debug toggle not affecting output — SSE query:done handler was dropping event.data.debug; include debug in stored response
 - [x] T055 Add collapsible/folded sources to QueryAnswer (collapsed by default, matching TranscriptView pattern)
 - [x] T056 Re-fix debug: kragd SSE query_stream always sends debug:None — skip SSE when include_debug enabled, use POST /query directly; wire DebugMetadataView into QueryAnswer and TranscriptView (collapsible)
+- [x] T057 Fix double spinner on Send button — remove standalone Spinner next to Button (Button already has built-in loading spinner via loading prop)
+- [x] T058 Fix critic not working — add per-request critic_enabled/critic_threshold to QueryRequest and DebugQueryRequest schemas; wire override logic in kragd service.py query() and query_stream(); send critic settings from krager QueryPanel; add --critic/--critic-threshold CLI flags to krag query command
 
 ---
 

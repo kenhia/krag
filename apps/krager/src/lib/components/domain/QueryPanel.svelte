@@ -10,7 +10,6 @@ import type { Snippet } from "svelte";
 import Button from "$lib/components/ui/Button.svelte";
 import Select from "$lib/components/ui/Select.svelte";
 import Slider from "$lib/components/ui/Slider.svelte";
-import Spinner from "$lib/components/ui/Spinner.svelte";
 import Toggle from "$lib/components/ui/Toggle.svelte";
 import { postQuery, postRetrieve } from "$lib/services/kragd-client";
 import { streamQuerySSE } from "$lib/services/streaming";
@@ -90,6 +89,10 @@ async function handleQuery(text: string, entryId: string, startTime: number) {
 	if (queryState.top_k !== null) req.top_k = queryState.top_k;
 	if (queryState.preset !== null) req.preset = queryState.preset;
 	if (queryState.include_debug) req.include_debug = true;
+	if (queryState.critic_enabled) {
+		req.critic_enabled = true;
+		req.critic_threshold = queryState.critic_cut_off;
+	}
 
 	// Add loading entry
 	addEntry({
@@ -313,9 +316,6 @@ function handleKeydown(event: KeyboardEvent) {
 
 		<div class="query-actions">
 			<div class="send-area">
-				{#if loading}
-					<Spinner size="sm" />
-				{/if}
 				<Button
 					label={queryState.retrieve_only ? "Retrieve" : "Send"}
 					variant="primary"

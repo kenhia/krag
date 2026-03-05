@@ -45,6 +45,16 @@ class QueryRequest(BaseModel):
     llm: str | None = Field(None, description="Force specific LLM slot (deprecated — use mode)")
     mode: str | None = Field(None, description="Named retrieval mode (e.g. default, code, docs)")
     include_debug: bool = Field(False, description="Include debug metadata in response")
+    critic_enabled: bool | None = Field(
+        None,
+        description="Override: enable context relevance critic for this query (None = use mode default)",
+    )
+    critic_threshold: int | None = Field(
+        None,
+        ge=0,
+        le=5,
+        description="Override: minimum critic score 0–5 (None = use mode default)",
+    )
 
     @field_validator("llm")
     @classmethod
@@ -96,6 +106,16 @@ class DebugQueryRequest(BaseModel):
     preset: str | None = Field(None, description="Prompt preset name")
     llm: str | None = Field(None, description="Force specific LLM slot (deprecated — use mode)")
     mode: str | None = Field(None, description="Named retrieval mode")
+    critic_enabled: bool | None = Field(
+        None,
+        description="Override: enable context relevance critic (None = use mode default)",
+    )
+    critic_threshold: int | None = Field(
+        None,
+        ge=0,
+        le=5,
+        description="Override: minimum critic score 0–5 (None = use mode default)",
+    )
 
     @field_validator("llm")
     @classmethod
