@@ -9,170 +9,169 @@
   Wires results to transcript with type: 'debug'.
 -->
 <script lang="ts">
-	import { postDebugQuery, postDebugQdrant } from "$lib/services/kragd-client";
-	import { handleKragdError } from "$lib/utils/errors";
-	import { requireConnection } from "$lib/utils/errors";
-	import { connection } from "$lib/state/connection.svelte";
-	import { addEntry, updateEntry } from "$lib/state/transcript.svelte";
-	import DebugMetadataView from "$lib/components/domain/DebugMetadataView.svelte";
-	import SourceList from "$lib/components/domain/SourceList.svelte";
-	import Button from "$lib/components/ui/Button.svelte";
-	import Spinner from "$lib/components/ui/Spinner.svelte";
-	import type {
-		DebugQueryRequest,
-		DebugQueryResponse,
-		QdrantSearchRequest,
-		QdrantSearchResponse,
-		QdrantFilters,
-		SourceChunk,
-		DebugMetadata,
-		TranscriptEntry,
-	} from "$lib/types";
+import DebugMetadataView from "$lib/components/domain/DebugMetadataView.svelte";
+import SourceList from "$lib/components/domain/SourceList.svelte";
+import Button from "$lib/components/ui/Button.svelte";
+import Spinner from "$lib/components/ui/Spinner.svelte";
+import { postDebugQdrant, postDebugQuery } from "$lib/services/kragd-client";
+import { connection } from "$lib/state/connection.svelte";
+import { addEntry, updateEntry } from "$lib/state/transcript.svelte";
+import type {
+	DebugMetadata,
+	DebugQueryRequest,
+	DebugQueryResponse,
+	QdrantFilters,
+	QdrantSearchRequest,
+	QdrantSearchResponse,
+	SourceChunk,
+	TranscriptEntry,
+} from "$lib/types";
+import { handleKragdError, requireConnection } from "$lib/utils/errors";
 
-	type DebugTab = "query" | "qdrant";
-	let activeTab = $state<DebugTab>("query");
+type DebugTab = "query" | "qdrant";
+let activeTab = $state<DebugTab>("query");
 
-	// Debug Query state
-	let dqQuery = $state("");
-	let dqTopK = $state("");
-	let dqPreset = $state("");
-	let dqMode = $state("");
-	let dqLoading = $state(false);
-	let dqResult = $state<DebugQueryResponse | null>(null);
+// Debug Query state
+let dqQuery = $state("");
+let dqTopK = $state("");
+let dqPreset = $state("");
+let dqMode = $state("");
+let dqLoading = $state(false);
+let dqResult = $state<DebugQueryResponse | null>(null);
 
-	// Qdrant Search state
-	let qsQuery = $state("");
-	let qsVectorSpace = $state("");
-	let qsTopK = $state("10");
-	let qsScoreThreshold = $state("");
-	let qsFileType = $state("");
-	let qsPathContains = $state("");
-	let qsLoading = $state(false);
-	let qsResult = $state<QdrantSearchResponse | null>(null);
+// Qdrant Search state
+let qsQuery = $state("");
+let qsVectorSpace = $state("");
+let qsTopK = $state("10");
+let qsScoreThreshold = $state("");
+let qsFileType = $state("");
+let qsPathContains = $state("");
+let qsLoading = $state(false);
+let qsResult = $state<QdrantSearchResponse | null>(null);
 
-	async function handleDebugQuery() {
-		if (!requireConnection(connection.status)) return;
-		if (!dqQuery.trim()) return;
+async function handleDebugQuery() {
+	if (!requireConnection(connection.status)) return;
+	if (!dqQuery.trim()) return;
 
-		dqLoading = true;
-		dqResult = null;
+	dqLoading = true;
+	dqResult = null;
 
-		const req: DebugQueryRequest = { query: dqQuery.trim() };
-		if (dqTopK.trim()) req.top_k = Number.parseInt(dqTopK, 10);
-		if (dqPreset.trim()) req.preset = dqPreset.trim();
-		if (dqMode.trim()) req.mode = dqMode.trim();
+	const req: DebugQueryRequest = { query: dqQuery.trim() };
+	if (dqTopK.trim()) req.top_k = Number.parseInt(dqTopK, 10);
+	if (dqPreset.trim()) req.preset = dqPreset.trim();
+	if (dqMode.trim()) req.mode = dqMode.trim();
 
-		const entryId = crypto.randomUUID();
-		addEntry({
-			id: entryId,
-			timestamp: new Date(),
-			type: "debug",
-			request: req,
-			response: null,
-			durationMs: null,
-			error: null,
-			loading: true,
+	const entryId = crypto.randomUUID();
+	addEntry({
+		id: entryId,
+		timestamp: new Date(),
+		type: "debug",
+		request: req,
+		response: null,
+		durationMs: null,
+		error: null,
+		loading: true,
+	});
+	const startTime = Date.now();
+
+	try {
+		const result = await postDebugQuery(req);
+		dqResult = result;
+		updateEntry(entryId, {
+			response: result,
+			durationMs: Date.now() - startTime,
+			loading: false,
 		});
-		const startTime = Date.now();
-
-		try {
-			const result = await postDebugQuery(req);
-			dqResult = result;
-			updateEntry(entryId, {
-				response: result,
-				durationMs: Date.now() - startTime,
-				loading: false,
-			});
-		} catch (e) {
-			const msg = handleKragdError(e);
-			updateEntry(entryId, {
-				error: msg,
-				durationMs: Date.now() - startTime,
-				loading: false,
-			});
-		} finally {
-			dqLoading = false;
-		}
-	}
-
-	async function handleQdrantSearch() {
-		if (!requireConnection(connection.status)) return;
-		if (!qsQuery.trim()) return;
-
-		qsLoading = true;
-		qsResult = null;
-
-		const req: QdrantSearchRequest = { query: qsQuery.trim() };
-		if (qsVectorSpace.trim()) req.vector_space = qsVectorSpace.trim();
-		if (qsTopK.trim()) req.top_k = Number.parseInt(qsTopK, 10);
-		if (qsScoreThreshold.trim()) req.score_threshold = Number.parseFloat(qsScoreThreshold);
-		if (qsFileType.trim() || qsPathContains.trim()) {
-			const filters: QdrantFilters = {};
-			if (qsFileType.trim()) filters.file_type = qsFileType.trim();
-			if (qsPathContains.trim()) filters.file_path_contains = qsPathContains.trim();
-			req.filters = filters;
-		}
-
-		const entryId = crypto.randomUUID();
-		addEntry({
-			id: entryId,
-			timestamp: new Date(),
-			type: "debug",
-			request: req,
-			response: null,
-			durationMs: null,
-			error: null,
-			loading: true,
+	} catch (e) {
+		const msg = handleKragdError(e);
+		updateEntry(entryId, {
+			error: msg,
+			durationMs: Date.now() - startTime,
+			loading: false,
 		});
-		const startTime = Date.now();
+	} finally {
+		dqLoading = false;
+	}
+}
 
-		try {
-			const result = await postDebugQdrant(req);
-			qsResult = result;
-			updateEntry(entryId, {
-				response: result,
-				durationMs: Date.now() - startTime,
-				loading: false,
-			});
-		} catch (e) {
-			const msg = handleKragdError(e);
-			updateEntry(entryId, {
-				error: msg,
-				durationMs: Date.now() - startTime,
-				loading: false,
-			});
-		} finally {
-			qsLoading = false;
-		}
+async function handleQdrantSearch() {
+	if (!requireConnection(connection.status)) return;
+	if (!qsQuery.trim()) return;
+
+	qsLoading = true;
+	qsResult = null;
+
+	const req: QdrantSearchRequest = { query: qsQuery.trim() };
+	if (qsVectorSpace.trim()) req.vector_space = qsVectorSpace.trim();
+	if (qsTopK.trim()) req.top_k = Number.parseInt(qsTopK, 10);
+	if (qsScoreThreshold.trim()) req.score_threshold = Number.parseFloat(qsScoreThreshold);
+	if (qsFileType.trim() || qsPathContains.trim()) {
+		const filters: QdrantFilters = {};
+		if (qsFileType.trim()) filters.file_type = qsFileType.trim();
+		if (qsPathContains.trim()) filters.file_path_contains = qsPathContains.trim();
+		req.filters = filters;
 	}
 
-	function handleQueryKeydown(e: KeyboardEvent) {
-		if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-			e.preventDefault();
-			handleDebugQuery();
-		}
-	}
+	const entryId = crypto.randomUUID();
+	addEntry({
+		id: entryId,
+		timestamp: new Date(),
+		type: "debug",
+		request: req,
+		response: null,
+		durationMs: null,
+		error: null,
+		loading: true,
+	});
+	const startTime = Date.now();
 
-	function handleQdrantKeydown(e: KeyboardEvent) {
-		if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-			e.preventDefault();
-			handleQdrantSearch();
-		}
+	try {
+		const result = await postDebugQdrant(req);
+		qsResult = result;
+		updateEntry(entryId, {
+			response: result,
+			durationMs: Date.now() - startTime,
+			loading: false,
+		});
+	} catch (e) {
+		const msg = handleKragdError(e);
+		updateEntry(entryId, {
+			error: msg,
+			durationMs: Date.now() - startTime,
+			loading: false,
+		});
+	} finally {
+		qsLoading = false;
 	}
+}
 
-	// Convert QdrantSearchResult[] to SourceChunk[] for SourceList rendering
-	function qdrantResultsToChunks(result: QdrantSearchResponse): SourceChunk[] {
-		return result.results.map((r, i) => ({
-			chunk_id: r.chunk_id,
-			file_path: r.file_path,
-			score: r.score,
-			rank: i + 1,
-			chunk_content: r.chunk_content,
-			file_type: r.file_type,
-			start_line: r.start_line ?? null,
-			end_line: r.end_line ?? null,
-		}));
+function handleQueryKeydown(e: KeyboardEvent) {
+	if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+		e.preventDefault();
+		handleDebugQuery();
 	}
+}
+
+function handleQdrantKeydown(e: KeyboardEvent) {
+	if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+		e.preventDefault();
+		handleQdrantSearch();
+	}
+}
+
+// Convert QdrantSearchResult[] to SourceChunk[] for SourceList rendering
+function qdrantResultsToChunks(result: QdrantSearchResponse): SourceChunk[] {
+	return result.results.map((r, i) => ({
+		chunk_id: r.chunk_id,
+		file_path: r.file_path,
+		score: r.score,
+		rank: i + 1,
+		chunk_content: r.chunk_content,
+		file_type: r.file_type,
+		start_line: r.start_line ?? null,
+		end_line: r.end_line ?? null,
+	}));
+}
 </script>
 
 <div class="debug-panel">

@@ -5,8 +5,8 @@
  * shows appropriate toast notifications with user-friendly copy.
  */
 
-import { KragdError } from "$lib/types";
 import { addToast } from "$lib/state/notifications.svelte";
+import { KragdError } from "$lib/types";
 
 /**
  * Handle a kragd API error by showing an appropriate toast notification.

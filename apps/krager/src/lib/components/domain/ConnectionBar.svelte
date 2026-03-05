@@ -5,129 +5,130 @@
   Includes health polling $effect that runs while connected.
 -->
 <script lang="ts">
-	import { onMount } from "svelte";
-	import Button from "$lib/components/ui/Button.svelte";
-	import Input from "$lib/components/ui/Input.svelte";
-	import Spinner from "$lib/components/ui/Spinner.svelte";
-	import {
-		connection,
-		setConnectionTarget,
-		setConnected,
-		setDisconnected,
-		setConnectionError,
-	} from "$lib/state/connection.svelte";
-	import { getHealth, getModes } from "$lib/services/kragd-client";
-	import { setBaseUrl } from "$lib/services/kragd-client";
-	import { addToast } from "$lib/state/notifications.svelte";
-	import { handleKragdError } from "$lib/utils/errors";
-	import { setModes, setModesLoading, setModesError, clearModes } from "$lib/state/modes.svelte";
+import { onMount } from "svelte";
+import Button from "$lib/components/ui/Button.svelte";
+import Input from "$lib/components/ui/Input.svelte";
+import Spinner from "$lib/components/ui/Spinner.svelte";
+import { getHealth, getModes, setBaseUrl } from "$lib/services/kragd-client";
+import {
+	connection,
+	saveConnectionToConfig,
+	setConnected,
+	setConnectionError,
+	setConnectionTarget,
+	setDisconnected,
+} from "$lib/state/connection.svelte";
+import { clearModes, setModes, setModesError, setModesLoading } from "$lib/state/modes.svelte";
+import { addToast } from "$lib/state/notifications.svelte";
+import { handleKragdError } from "$lib/utils/errors";
 
-	let hostInput = $state(connection.host);
-	let portInput = $state(String(connection.port));
-	let connecting = $state(false);
+let hostInput = $state(connection.host);
+let portInput = $state(String(connection.port));
+let connecting = $state(false);
 
-	const POLL_INTERVAL = 5000;
-	let pollTimer: ReturnType<typeof setInterval> | null = null;
+const POLL_INTERVAL = 5000;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-	/** Status badge display config */
-	const statusConfig = {
-		connected: { color: "var(--success, #a6e3a1)", label: "Connected" },
-		disconnected: { color: "var(--error, #f38ba8)", label: "Disconnected" },
-		error: { color: "var(--warning, #f9e2af)", label: "Error" },
-	} as const;
+/** Status badge display config */
+const statusConfig = {
+	connected: { color: "var(--success, #a6e3a1)", label: "Connected" },
+	disconnected: { color: "var(--error, #f38ba8)", label: "Disconnected" },
+	error: { color: "var(--warning, #f9e2af)", label: "Error" },
+} as const;
 
-	async function checkHealth(): Promise<boolean> {
-		try {
-			const health = await getHealth(connection.host, connection.port);
-			setConnected(health.version);
-			setBaseUrl(`http://${connection.host}:${connection.port}`);
-			return true;
-		} catch (e) {
-			const detail = e instanceof Error ? e.message : String(e);
-			if (connection.status === "connected") {
-				setDisconnected();
-				addToast("Lost connection to kragd", "warning");
-			} else {
-				setConnectionError(detail || "Cannot reach kragd");
-			}
-			return false;
+async function checkHealth(): Promise<boolean> {
+	try {
+		const health = await getHealth(connection.host, connection.port);
+		setConnected(health.version);
+		setBaseUrl(`http://${connection.host}:${connection.port}`);
+		return true;
+	} catch (e) {
+		const detail = e instanceof Error ? e.message : String(e);
+		if (connection.status === "connected") {
+			setDisconnected();
+			addToast("Lost connection to kragd", "warning");
+		} else {
+			setConnectionError(detail || "Cannot reach kragd");
 		}
+		return false;
+	}
+}
+
+function startPolling() {
+	stopPolling();
+	pollTimer = setInterval(async () => {
+		await checkHealth();
+	}, POLL_INTERVAL);
+}
+
+function stopPolling() {
+	if (pollTimer !== null) {
+		clearInterval(pollTimer);
+		pollTimer = null;
+	}
+}
+
+async function handleConnect() {
+	const port = Number.parseInt(portInput, 10);
+	if (Number.isNaN(port) || port < 1 || port > 65535) {
+		addToast("Invalid port number", "error");
+		return;
 	}
 
-	function startPolling() {
+	connecting = true;
+	setConnectionTarget(hostInput, port);
+
+	const ok = await checkHealth();
+	connecting = false;
+
+	if (ok) {
+		addToast(`Connected to kragd v${connection.version}`, "success");
+		startPolling();
+		fetchModes();
+		saveConnectionToConfig();
+	}
+}
+
+function handleDisconnect() {
+	stopPolling();
+	setDisconnected();
+	clearModes();
+	addToast("Disconnected from kragd", "info");
+}
+
+async function fetchModes() {
+	setModesLoading();
+	try {
+		const res = await getModes();
+		setModes(res.modes);
+	} catch (e) {
+		const msg = handleKragdError(e);
+		setModesError(msg);
+	}
+}
+
+function handleKeydown(event: KeyboardEvent) {
+	if (event.key === "Enter" && connection.status !== "connected") {
+		handleConnect();
+	}
+}
+
+// Cleanup on component destroy
+onMount(() => {
+	return () => stopPolling();
+});
+
+// Restart polling when connection status changes to 'connected' externally
+$effect(() => {
+	if (connection.status === "connected" && pollTimer === null && !connecting) {
+		startPolling();
+	} else if (connection.status !== "connected") {
 		stopPolling();
-		pollTimer = setInterval(async () => {
-			await checkHealth();
-		}, POLL_INTERVAL);
 	}
+});
 
-	function stopPolling() {
-		if (pollTimer !== null) {
-			clearInterval(pollTimer);
-			pollTimer = null;
-		}
-	}
-
-	async function handleConnect() {
-		const port = Number.parseInt(portInput, 10);
-		if (Number.isNaN(port) || port < 1 || port > 65535) {
-			addToast("Invalid port number", "error");
-			return;
-		}
-
-		connecting = true;
-		setConnectionTarget(hostInput, port);
-
-		const ok = await checkHealth();
-		connecting = false;
-
-		if (ok) {
-			addToast(`Connected to kragd v${connection.version}`, "success");
-			startPolling();
-			fetchModes();
-		}
-	}
-
-	function handleDisconnect() {
-		stopPolling();
-		setDisconnected();
-		clearModes();
-		addToast("Disconnected from kragd", "info");
-	}
-
-	async function fetchModes() {
-		setModesLoading();
-		try {
-			const res = await getModes();
-			setModes(res.modes);
-		} catch (e) {
-			const msg = handleKragdError(e);
-			setModesError(msg);
-		}
-	}
-
-	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === "Enter" && connection.status !== "connected") {
-			handleConnect();
-		}
-	}
-
-	// Cleanup on component destroy
-	onMount(() => {
-		return () => stopPolling();
-	});
-
-	// Restart polling when connection status changes to 'connected' externally
-	$effect(() => {
-		if (connection.status === "connected" && pollTimer === null && !connecting) {
-			startPolling();
-		} else if (connection.status !== "connected") {
-			stopPolling();
-		}
-	});
-
-	const isConnected = $derived(connection.status === "connected");
-	const statusStyle = $derived(statusConfig[connection.status]);
+const isConnected = $derived(connection.status === "connected");
+const statusStyle = $derived(statusConfig[connection.status]);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions -->

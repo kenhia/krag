@@ -6,227 +6,223 @@
   transport, polling fallback. Adds transcript entry on completion.
 -->
 <script lang="ts">
-	import { onMount } from "svelte";
-	import Button from "$lib/components/ui/Button.svelte";
-	import Spinner from "$lib/components/ui/Spinner.svelte";
-	import {
-		indexJob,
-		resetJob,
-		applyStatus,
-	} from "$lib/state/indexJob.svelte";
-	import { connection, getConnectionBaseUrl } from "$lib/state/connection.svelte";
-	import { addEntry, updateEntry } from "$lib/state/transcript.svelte";
-	import { addToast } from "$lib/state/notifications.svelte";
-	import { triggerIndex, getIndexStatus } from "$lib/services/kragd-client";
-	import { streamIndexSSE } from "$lib/services/streaming";
-	import { handleKragdError, requireConnection } from "$lib/utils/errors";
-	import type { IndexMode, IndexStreamEvent, IndexResponse } from "$lib/types";
-	import { formatDuration } from "$lib/utils/format";
+import { onMount } from "svelte";
+import Button from "$lib/components/ui/Button.svelte";
+import Spinner from "$lib/components/ui/Spinner.svelte";
+import { getIndexStatus, triggerIndex } from "$lib/services/kragd-client";
+import { streamIndexSSE } from "$lib/services/streaming";
+import { connection, getConnectionBaseUrl } from "$lib/state/connection.svelte";
+import { applyStatus, indexJob, resetJob } from "$lib/state/indexJob.svelte";
+import { addToast } from "$lib/state/notifications.svelte";
+import { addEntry, updateEntry } from "$lib/state/transcript.svelte";
+import type { IndexMode, IndexResponse, IndexStreamEvent } from "$lib/types";
+import { handleKragdError, requireConnection } from "$lib/utils/errors";
+import { formatDuration } from "$lib/utils/format";
 
-	let indexMode = $state<IndexMode>("incremental");
-	let starting = $state(false);
-	let transcriptEntryId = $state<string | null>(null);
-	let sseAbort: AbortController | null = null;
-	let pollTimer: ReturnType<typeof setInterval> | null = null;
+let indexMode = $state<IndexMode>("incremental");
+let starting = $state(false);
+let transcriptEntryId = $state<string | null>(null);
+let sseAbort: AbortController | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-	const POLL_INTERVAL = 2000;
+const POLL_INTERVAL = 2000;
 
-	const isConnected = $derived(connection.status === "connected");
-	const canStart = $derived(isConnected && !indexJob.running && !starting);
+const isConnected = $derived(connection.status === "connected");
+const canStart = $derived(isConnected && !indexJob.running && !starting);
 
-	const statusLabel = $derived.by(() => {
-		if (starting) return "Starting…";
-		if (indexJob.running) return "Running";
-		if (indexJob.status === "completed") return "Completed";
-		if (indexJob.status === "failed") return "Failed";
-		return "Idle";
+const statusLabel = $derived.by(() => {
+	if (starting) return "Starting…";
+	if (indexJob.running) return "Running";
+	if (indexJob.status === "completed") return "Completed";
+	if (indexJob.status === "failed") return "Failed";
+	return "Idle";
+});
+
+const statusClass = $derived.by(() => {
+	if (indexJob.running || starting) return "status-running";
+	if (indexJob.status === "completed") return "status-completed";
+	if (indexJob.status === "failed") return "status-failed";
+	return "status-idle";
+});
+
+function generateId(): string {
+	return `entry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function handleStart() {
+	if (!canStart) return;
+	if (!requireConnection(connection.status)) return;
+
+	starting = true;
+	resetJob();
+
+	const entryId = generateId();
+	transcriptEntryId = entryId;
+	const startTime = Date.now();
+
+	// Add loading transcript entry
+	addEntry({
+		id: entryId,
+		timestamp: new Date(),
+		type: "index",
+		request: { mode: indexMode },
+		response: null,
+		durationMs: null,
+		error: null,
+		loading: true,
 	});
 
-	const statusClass = $derived.by(() => {
-		if (indexJob.running || starting) return "status-running";
-		if (indexJob.status === "completed") return "status-completed";
-		if (indexJob.status === "failed") return "status-failed";
-		return "status-idle";
-	});
+	try {
+		const res = await triggerIndex({ mode: indexMode });
+		indexJob.running = true;
+		applyStatus(res);
+		starting = false;
 
-	function generateId(): string {
-		return `entry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-	}
-
-	async function handleStart() {
-		if (!canStart) return;
-		if (!requireConnection(connection.status)) return;
-
-		starting = true;
-		resetJob();
-
-		const entryId = generateId();
-		transcriptEntryId = entryId;
-		const startTime = Date.now();
-
-		// Add loading transcript entry
-		addEntry({
-			id: entryId,
-			timestamp: new Date(),
-			type: "index",
-			request: { mode: indexMode },
-			response: null,
-			durationMs: null,
-			error: null,
-			loading: true,
-		});
-
-		try {
-			const res = await triggerIndex({ mode: indexMode });
-			indexJob.running = true;
-			applyStatus(res);
-			starting = false;
-
-			// Try SSE streaming first, fall back to polling
-			const sseOk = await trySSEStream(entryId, startTime);
-			if (!sseOk) {
-				startPolling(entryId, startTime);
-			}
-		} catch (err) {
-			starting = false;
-			const msg = handleKragdError(err);
-			indexJob.error = msg;
-			updateEntry(entryId, {
-				error: msg,
-				loading: false,
-				durationMs: Date.now() - startTime,
-			});
+		// Try SSE streaming first, fall back to polling
+		const sseOk = await trySSEStream(entryId, startTime);
+		if (!sseOk) {
+			startPolling(entryId, startTime);
 		}
-	}
-
-	// ─── SSE Streaming ──────────────────────────────────────────
-
-	async function trySSEStream(entryId: string, startTime: number): Promise<boolean> {
-		sseAbort = new AbortController();
-		try {
-			await streamIndexSSE(
-				getConnectionBaseUrl(),
-				(event: IndexStreamEvent) => handleSSEEvent(event, entryId, startTime),
-				{ signal: sseAbort.signal },
-			);
-			return true;
-		} catch {
-			return false;
-		}
-	}
-
-	function handleSSEEvent(event: IndexStreamEvent, entryId: string, startTime: number) {
-		switch (event.type) {
-			case "index:progress": {
-				const d = event.data;
-				indexJob.filesScanned = d.total;
-				indexJob.filesProcessed = d.current;
-				indexJob.status = "running";
-				break;
-			}
-			case "index:complete": {
-				const d = event.data;
-				indexJob.status = "completed";
-				indexJob.running = false;
-				indexJob.filesProcessed = d.files_processed;
-				indexJob.durationSeconds = d.duration_seconds;
-				finalizeEntry(entryId, startTime, null);
-				cleanupSSE();
-				addToast("Indexing completed", "success");
-				break;
-			}
-			case "index:error": {
-				const d = event.data;
-				indexJob.status = "failed";
-				indexJob.running = false;
-				indexJob.error = d.error;
-				finalizeEntry(entryId, startTime, d.error);
-				cleanupSSE();
-				addToast(`Indexing failed: ${d.error}`, "error");
-				break;
-			}
-			case "index:idle": {
-				// No active job — stop listening
-				cleanupSSE();
-				break;
-			}
-		}
-	}
-
-	function cleanupSSE() {
-		if (sseAbort) {
-			sseAbort.abort();
-			sseAbort = null;
-		}
-	}
-
-	// ─── Polling Fallback ───────────────────────────────────────
-
-	function startPolling(entryId: string, startTime: number) {
-		stopPolling();
-		pollTimer = setInterval(async () => {
-			await pollStatus(entryId, startTime);
-		}, POLL_INTERVAL);
-	}
-
-	function stopPolling() {
-		if (pollTimer !== null) {
-			clearInterval(pollTimer);
-			pollTimer = null;
-		}
-	}
-
-	async function pollStatus(entryId: string, startTime: number) {
-		try {
-			const statuses = await getIndexStatus();
-			if (statuses.length > 0) {
-				const latest = statuses[0];
-				applyStatus(latest);
-
-				if (latest.status === "completed" || latest.status === "failed") {
-					stopPolling();
-					const errMsg = latest.status === "failed" ? "Indexing failed" : null;
-					finalizeEntry(entryId, startTime, errMsg);
-					addToast(
-						latest.status === "completed" ? "Indexing completed" : "Indexing failed",
-						latest.status === "completed" ? "success" : "error",
-					);
-				}
-			}
-		} catch {
-			// Polling error — keep trying
-		}
-	}
-
-	// ─── Transcript ─────────────────────────────────────────────
-
-	function finalizeEntry(entryId: string, startTime: number, errorMsg: string | null) {
-		const response: Record<string, unknown> = {
-			status: indexJob.status,
-			mode: indexJob.mode,
-			files_scanned: indexJob.filesScanned,
-			files_processed: indexJob.filesProcessed,
-			files_errored: indexJob.filesErrored,
-			chunks_created: indexJob.chunksCreated,
-			vectors_stored: indexJob.vectorsStored,
-			duration_seconds: indexJob.durationSeconds,
-		};
-
+	} catch (err) {
+		starting = false;
+		const msg = handleKragdError(err);
+		indexJob.error = msg;
 		updateEntry(entryId, {
-			response,
-			error: errorMsg,
+			error: msg,
 			loading: false,
 			durationMs: Date.now() - startTime,
 		});
 	}
+}
 
-	// Cleanup on component destroy
-	onMount(() => {
-		return () => {
-			stopPolling();
+// ─── SSE Streaming ──────────────────────────────────────────
+
+async function trySSEStream(entryId: string, startTime: number): Promise<boolean> {
+	sseAbort = new AbortController();
+	try {
+		await streamIndexSSE(
+			getConnectionBaseUrl(),
+			(event: IndexStreamEvent) => handleSSEEvent(event, entryId, startTime),
+			{ signal: sseAbort.signal },
+		);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function handleSSEEvent(event: IndexStreamEvent, entryId: string, startTime: number) {
+	switch (event.type) {
+		case "index:progress": {
+			const d = event.data;
+			indexJob.filesScanned = d.total;
+			indexJob.filesProcessed = d.current;
+			indexJob.status = "running";
+			break;
+		}
+		case "index:complete": {
+			const d = event.data;
+			indexJob.status = "completed";
+			indexJob.running = false;
+			indexJob.filesProcessed = d.files_processed;
+			indexJob.durationSeconds = d.duration_seconds;
+			finalizeEntry(entryId, startTime, null);
 			cleanupSSE();
-		};
+			addToast("Indexing completed", "success");
+			break;
+		}
+		case "index:error": {
+			const d = event.data;
+			indexJob.status = "failed";
+			indexJob.running = false;
+			indexJob.error = d.error;
+			finalizeEntry(entryId, startTime, d.error);
+			cleanupSSE();
+			addToast(`Indexing failed: ${d.error}`, "error");
+			break;
+		}
+		case "index:idle": {
+			// No active job — stop listening
+			cleanupSSE();
+			break;
+		}
+	}
+}
+
+function cleanupSSE() {
+	if (sseAbort) {
+		sseAbort.abort();
+		sseAbort = null;
+	}
+}
+
+// ─── Polling Fallback ───────────────────────────────────────
+
+function startPolling(entryId: string, startTime: number) {
+	stopPolling();
+	pollTimer = setInterval(async () => {
+		await pollStatus(entryId, startTime);
+	}, POLL_INTERVAL);
+}
+
+function stopPolling() {
+	if (pollTimer !== null) {
+		clearInterval(pollTimer);
+		pollTimer = null;
+	}
+}
+
+async function pollStatus(entryId: string, startTime: number) {
+	try {
+		const statuses = await getIndexStatus();
+		if (statuses.length > 0) {
+			const latest = statuses[0];
+			applyStatus(latest);
+
+			if (latest.status === "completed" || latest.status === "failed") {
+				stopPolling();
+				const errMsg = latest.status === "failed" ? "Indexing failed" : null;
+				finalizeEntry(entryId, startTime, errMsg);
+				addToast(
+					latest.status === "completed" ? "Indexing completed" : "Indexing failed",
+					latest.status === "completed" ? "success" : "error",
+				);
+			}
+		}
+	} catch {
+		// Polling error — keep trying
+	}
+}
+
+// ─── Transcript ─────────────────────────────────────────────
+
+function finalizeEntry(entryId: string, startTime: number, errorMsg: string | null) {
+	const response: Record<string, unknown> = {
+		status: indexJob.status,
+		mode: indexJob.mode,
+		files_scanned: indexJob.filesScanned,
+		files_processed: indexJob.filesProcessed,
+		files_errored: indexJob.filesErrored,
+		chunks_created: indexJob.chunksCreated,
+		vectors_stored: indexJob.vectorsStored,
+		duration_seconds: indexJob.durationSeconds,
+	};
+
+	updateEntry(entryId, {
+		response,
+		error: errorMsg,
+		loading: false,
+		durationMs: Date.now() - startTime,
 	});
+}
+
+// Cleanup on component destroy
+onMount(() => {
+	return () => {
+		stopPolling();
+		cleanupSSE();
+	};
+});
 </script>
 
 <div class="index-panel">

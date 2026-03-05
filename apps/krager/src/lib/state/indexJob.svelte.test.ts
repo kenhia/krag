@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { indexJob, resetJob, applyStatus } from "./indexJob.svelte";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { IndexResponse } from "$lib/types";
+import { applyStatus, indexJob, resetJob } from "./indexJob.svelte";
 
 function makeIndexResponse(overrides: Partial<IndexResponse> = {}): IndexResponse {
 	return {
@@ -103,7 +103,11 @@ describe("indexJob.svelte", () => {
 		});
 
 		it("replaces previous errors on new status", () => {
-			applyStatus(makeIndexResponse({ errors: [{ file_path: "/a.py", error_type: "e", error_message: "m" }] }));
+			applyStatus(
+				makeIndexResponse({
+					errors: [{ file_path: "/a.py", error_type: "e", error_message: "m" }],
+				}),
+			);
 			expect(indexJob.errors).toHaveLength(1);
 			applyStatus(makeIndexResponse({ errors: [] }));
 			expect(indexJob.errors).toHaveLength(0);

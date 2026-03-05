@@ -5,26 +5,54 @@
   Panels are wired to domain components as they are built.
 -->
 <script lang="ts">
-	import ConnectionBar from "$lib/components/domain/ConnectionBar.svelte";
-	import SystemStatus from "$lib/components/domain/SystemStatus.svelte";
-	import QueryPanel from "$lib/components/domain/QueryPanel.svelte";
-	import TranscriptView from "$lib/components/domain/TranscriptView.svelte";
-	import ModeSelector from "$lib/components/domain/ModeSelector.svelte";
-	import IndexPanel from "$lib/components/domain/IndexPanel.svelte";
-	import DebugPanel from "$lib/components/domain/DebugPanel.svelte";
-	import { connection } from "$lib/state/connection.svelte";
-	import { modesState } from "$lib/state/modes.svelte";
+import { onMount } from "svelte";
+import ConnectionBar from "$lib/components/domain/ConnectionBar.svelte";
+import DebugPanel from "$lib/components/domain/DebugPanel.svelte";
+import IndexPanel from "$lib/components/domain/IndexPanel.svelte";
+import ModeSelector from "$lib/components/domain/ModeSelector.svelte";
+import QueryAnswer from "$lib/components/domain/QueryAnswer.svelte";
+import QueryPanel from "$lib/components/domain/QueryPanel.svelte";
+import SettingsPanel from "$lib/components/domain/SettingsPanel.svelte";
+import SystemStatus from "$lib/components/domain/SystemStatus.svelte";
+import TranscriptView from "$lib/components/domain/TranscriptView.svelte";
+import { destroyConfigStore, initConfigStore } from "$lib/services/config-store";
+import { connection, initConnectionFromConfig } from "$lib/state/connection.svelte";
+import { modesState } from "$lib/state/modes.svelte";
+import { initQueryFromConfig, queryState } from "$lib/state/query.svelte";
+import { initSettingsFromConfig, settingsState } from "$lib/state/settings.svelte";
+import { transcript } from "$lib/state/transcript.svelte";
 
-	let activePanel = $state<string>("query");
+let activePanel = $state<string>("query");
 
-	const panels = [
-		{ id: "query", label: "Query", icon: "💬" },
-		{ id: "index", label: "Index", icon: "📑" },
-		{ id: "system", label: "System", icon: "⚙" },
-		{ id: "debug", label: "Debug", icon: "🔍" },
-	] as const;
+const panels = [
+	{ id: "query", label: "Query", icon: "💬" },
+	{ id: "transcript", label: "Transcript", icon: "📝" },
+	{ id: "index", label: "Index", icon: "📑" },
+	{ id: "system", label: "System", icon: "⚙" },
+	{ id: "settings", label: "Settings", icon: "🔧" },
+	{ id: "debug", label: "Debug", icon: "🔍" },
+] as const;
 
-	const isConnected = $derived(connection.status === "connected");
+const isConnected = $derived(connection.status === "connected");
+
+onMount(() => {
+	initConfigStore().then(() => {
+		initConnectionFromConfig();
+		initQueryFromConfig();
+		initSettingsFromConfig();
+	});
+
+	return () => {
+		destroyConfigStore();
+	};
+});
+
+// Apply window opacity reactively
+$effect(() => {
+	if (typeof document !== "undefined") {
+		document.documentElement.style.opacity = String(settingsState.opacity);
+	}
+});
 </script>
 
 <div class="app-layout">
@@ -55,8 +83,18 @@
 							<ModeSelector />
 						{/snippet}
 					</QueryPanel>
-					<TranscriptView />
+					{#if transcript.entries.length > 0}
+						{@const latestEntry = transcript.entries[transcript.entries.length - 1]}
+						<QueryAnswer
+							entry={latestEntry}
+							criticEnabled={queryState.critic_enabled}
+							criticCutOff={queryState.critic_cut_off}
+							showSources={queryState.show_sources}
+						/>
+					{/if}
 				</div>
+			{:else if activePanel === "transcript"}
+				<TranscriptView />
 			{:else if activePanel === "index"}
 				<IndexPanel />
 			{:else if activePanel === "system"}
@@ -68,6 +106,8 @@
 						<p class="text-muted">Connect to kragd to view system status.</p>
 					</div>
 				{/if}
+			{:else if activePanel === "settings"}
+				<SettingsPanel />
 			{:else if activePanel === "debug"}
 				{#if isConnected}
 					<DebugPanel />

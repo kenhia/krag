@@ -1,17 +1,29 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-	modesState,
-	setSelected,
-	clearModes,
-	setModes,
-	setModesLoading,
-	setModesError,
-} from "./modes.svelte";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ModeInfo } from "$lib/types";
+import {
+	clearModes,
+	modesState,
+	setModes,
+	setModesError,
+	setModesLoading,
+	setSelected,
+} from "./modes.svelte";
 
 const sampleModes: ModeInfo[] = [
-	{ name: "default", description: "Default mode", collections: ["main"], llm_slot: "text", preset: "standard" },
-	{ name: "code", description: "Code mode", collections: ["code"], llm_slot: "code", preset: "code" },
+	{
+		name: "default",
+		description: "Default mode",
+		collections: ["main"],
+		llm_slot: "text",
+		preset: "standard",
+	},
+	{
+		name: "code",
+		description: "Code mode",
+		collections: ["code"],
+		llm_slot: "code",
+		preset: "code",
+	},
 ];
 
 describe("modes.svelte", () => {
@@ -43,7 +55,15 @@ describe("modes.svelte", () => {
 
 		it("replaces existing modes", () => {
 			setModes(sampleModes);
-			setModes([{ name: "docs", description: "Docs mode", collections: ["docs"], llm_slot: "text", preset: "docs" }]);
+			setModes([
+				{
+					name: "docs",
+					description: "Docs mode",
+					collections: ["docs"],
+					llm_slot: "text",
+					preset: "docs",
+				},
+			]);
 			expect(modesState.available).toHaveLength(1);
 			expect(modesState.available[0].name).toBe("docs");
 		});

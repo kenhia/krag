@@ -4,18 +4,25 @@
   Props: value (bindable), placeholder, disabled, type, label, oninput
 -->
 <script lang="ts">
-	interface Props {
-		value: string;
-		placeholder?: string;
-		disabled?: boolean;
-		type?: string;
-		label?: string;
-		oninput?: (event: Event) => void;
-	}
+interface Props {
+	value: string;
+	placeholder?: string;
+	disabled?: boolean;
+	type?: string;
+	label?: string;
+	oninput?: (event: Event) => void;
+}
 
-	let { value = $bindable(""), placeholder = "", disabled = false, type = "text", label, oninput }: Props = $props();
+let {
+	value = $bindable(""),
+	placeholder = "",
+	disabled = false,
+	type = "text",
+	label,
+	oninput,
+}: Props = $props();
 
-	const inputId = `input-${Math.random().toString(36).slice(2, 9)}`;
+const inputId = `input-${Math.random().toString(36).slice(2, 9)}`;
 </script>
 
 {#if label}

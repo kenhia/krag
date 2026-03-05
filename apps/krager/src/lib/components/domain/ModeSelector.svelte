@@ -6,39 +6,36 @@
   "(default mode)" maps to null selection.
 -->
 <script lang="ts">
-	import {
-		modesState,
-		setSelected,
-	} from "$lib/state/modes.svelte";
-	import { getModeDetail } from "$lib/services/kragd-client";
-	import { handleKragdError } from "$lib/utils/errors";
-	import type { ModeDetailResponse } from "$lib/types";
-	import Spinner from "$lib/components/ui/Spinner.svelte";
+import Spinner from "$lib/components/ui/Spinner.svelte";
+import { getModeDetail } from "$lib/services/kragd-client";
+import { modesState, setSelected } from "$lib/state/modes.svelte";
+import type { ModeDetailResponse } from "$lib/types";
+import { handleKragdError } from "$lib/utils/errors";
 
-	let detail = $state<ModeDetailResponse | null>(null);
-	let detailLoading = $state(false);
-	let detailError = $state<string | null>(null);
+let detail = $state<ModeDetailResponse | null>(null);
+let detailLoading = $state(false);
+let detailError = $state<string | null>(null);
 
-	async function handleChange(event: Event) {
-		const value = (event.target as HTMLSelectElement).value;
-		const selected = value === "" ? null : value;
-		setSelected(selected);
-		detail = null;
-		detailError = null;
+async function handleChange(event: Event) {
+	const value = (event.target as HTMLSelectElement).value;
+	const selected = value === "" ? null : value;
+	setSelected(selected);
+	detail = null;
+	detailError = null;
 
-		if (selected) {
-			detailLoading = true;
-			try {
-				detail = await getModeDetail(selected);
-			} catch (e) {
-				detailError = handleKragdError(e);
-			} finally {
-				detailLoading = false;
-			}
+	if (selected) {
+		detailLoading = true;
+		try {
+			detail = await getModeDetail(selected);
+		} catch (e) {
+			detailError = handleKragdError(e);
+		} finally {
+			detailLoading = false;
 		}
 	}
+}
 
-	const selectValue = $derived(modesState.selected ?? "");
+const selectValue = $derived(modesState.selected ?? "");
 </script>
 
 <div class="mode-selector">

@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-	transcript,
-	addEntry,
-	updateEntry,
-	clearTranscript,
-} from "./transcript.svelte";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { TranscriptEntry } from "$lib/types";
+import {
+	addEntry,
+	clearTranscript,
+	isChunksExpanded,
+	toggleChunksExpanded,
+	transcript,
+	updateEntry,
+} from "./transcript.svelte";
 
 function makeEntry(overrides: Partial<TranscriptEntry> = {}): TranscriptEntry {
 	return {
@@ -99,6 +101,37 @@ describe("transcript.svelte", () => {
 			addEntry(makeEntry());
 			clearTranscript();
 			expect(transcript.entries).toHaveLength(0);
+		});
+	});
+
+	describe("chunksExpanded", () => {
+		it("defaults to collapsed (false)", () => {
+			addEntry(makeEntry({ id: "e1" }));
+			expect(isChunksExpanded("e1")).toBe(false);
+		});
+
+		it("toggles to expanded", () => {
+			addEntry(makeEntry({ id: "e1" }));
+			toggleChunksExpanded("e1");
+			expect(isChunksExpanded("e1")).toBe(true);
+		});
+
+		it("toggles back to collapsed", () => {
+			addEntry(makeEntry({ id: "e1" }));
+			toggleChunksExpanded("e1");
+			toggleChunksExpanded("e1");
+			expect(isChunksExpanded("e1")).toBe(false);
+		});
+
+		it("returns false for unknown entry", () => {
+			expect(isChunksExpanded("nonexistent")).toBe(false);
+		});
+
+		it("clear transcript resets expanded state", () => {
+			addEntry(makeEntry({ id: "e1" }));
+			toggleChunksExpanded("e1");
+			clearTranscript();
+			expect(isChunksExpanded("e1")).toBe(false);
 		});
 	});
 });

@@ -5,43 +5,43 @@
   Auto-dismisses after duration. Accessible via role="alert".
 -->
 <script lang="ts">
-	import { onMount } from "svelte";
+import { onMount } from "svelte";
 
-	interface Props {
-		id: string;
-		message: string;
-		type: "error" | "info" | "success" | "warning";
-		duration?: number;
-		onDismiss: (id: string) => void;
-	}
+interface Props {
+	id: string;
+	message: string;
+	type: "error" | "info" | "success" | "warning";
+	duration?: number;
+	onDismiss: (id: string) => void;
+}
 
-	let { id, message, type, duration = 5000, onDismiss }: Props = $props();
+let { id, message, type, duration = 5000, onDismiss }: Props = $props();
 
-	let visible = $state(false);
+let visible = $state(false);
 
-	onMount(() => {
-		// Trigger enter animation
-		requestAnimationFrame(() => {
-			visible = true;
-		});
-
-		if (duration > 0) {
-			const timer = setTimeout(() => dismiss(), duration);
-			return () => clearTimeout(timer);
-		}
+onMount(() => {
+	// Trigger enter animation
+	requestAnimationFrame(() => {
+		visible = true;
 	});
 
-	function dismiss() {
-		visible = false;
-		// Wait for exit animation before removing
-		setTimeout(() => onDismiss(id), 200);
+	if (duration > 0) {
+		const timer = setTimeout(() => dismiss(), duration);
+		return () => clearTimeout(timer);
 	}
+});
 
-	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === "Escape") {
-			dismiss();
-		}
+function dismiss() {
+	visible = false;
+	// Wait for exit animation before removing
+	setTimeout(() => onDismiss(id), 200);
+}
+
+function handleKeydown(event: KeyboardEvent) {
+	if (event.key === "Escape") {
+		dismiss();
 	}
+}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { handleKragdError, requireConnection } from "./errors";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KragdError } from "$lib/types";
+import { handleKragdError, requireConnection } from "./errors";
 
 // Mock notifications state
 const { mockAddToast } = vi.hoisted(() => ({
@@ -32,7 +32,10 @@ describe("errors utilities", () => {
 			const msg = handleKragdError(err);
 
 			expect(msg).toContain("Invalid request");
-			expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining("Invalid request"), "error");
+			expect(mockAddToast).toHaveBeenCalledWith(
+				expect.stringContaining("Invalid request"),
+				"error",
+			);
 		});
 
 		it("handles conflict error (status 409)", () => {

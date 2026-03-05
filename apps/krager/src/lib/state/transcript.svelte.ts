@@ -18,6 +18,9 @@ export const transcript = $state<TranscriptState>({
 	maxEntries: 500,
 });
 
+/** Per-entry chunks-expanded toggle state. */
+const expandedChunks = $state<Record<string, boolean>>({});
+
 /**
  * Add a transcript entry. Trims oldest entries if over maxEntries.
  */
@@ -44,4 +47,22 @@ export function updateEntry(id: string, patch: Partial<TranscriptEntry>): void {
  */
 export function clearTranscript(): void {
 	transcript.entries.length = 0;
+	// Reset expanded state
+	for (const key of Object.keys(expandedChunks)) {
+		delete expandedChunks[key];
+	}
+}
+
+/**
+ * Check if chunks are expanded for a given entry.
+ */
+export function isChunksExpanded(entryId: string): boolean {
+	return expandedChunks[entryId] ?? false;
+}
+
+/**
+ * Toggle chunks expanded state for a given entry.
+ */
+export function toggleChunksExpanded(entryId: string): void {
+	expandedChunks[entryId] = !isChunksExpanded(entryId);
 }

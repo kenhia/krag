@@ -5,15 +5,15 @@
   Keyboard accessible via native <button>.
 -->
 <script lang="ts">
-	interface Props {
-		label: string;
-		variant?: "primary" | "secondary" | "danger";
-		disabled?: boolean;
-		loading?: boolean;
-		onclick?: (event: MouseEvent) => void;
-	}
+interface Props {
+	label: string;
+	variant?: "primary" | "secondary" | "danger";
+	disabled?: boolean;
+	loading?: boolean;
+	onclick?: (event: MouseEvent) => void;
+}
 
-	let { label, variant = "primary", disabled = false, loading = false, onclick }: Props = $props();
+let { label, variant = "primary", disabled = false, loading = false, onclick }: Props = $props();
 </script>
 
 <button

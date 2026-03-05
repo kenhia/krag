@@ -6,54 +6,54 @@
   Fetches on mount and on manual refresh.
 -->
 <script lang="ts">
-	import { onMount } from "svelte";
-	import type { ServiceStatus } from "$lib/types";
-	import { getStatus, refreshLexicon } from "$lib/services/kragd-client";
-	import { handleKragdError } from "$lib/utils/errors";
-	import { addToast } from "$lib/state/notifications.svelte";
-	import { formatUptime } from "$lib/utils/format";
-	import Button from "$lib/components/ui/Button.svelte";
-	import Spinner from "$lib/components/ui/Spinner.svelte";
+import { onMount } from "svelte";
+import Button from "$lib/components/ui/Button.svelte";
+import Spinner from "$lib/components/ui/Spinner.svelte";
+import { getStatus, refreshLexicon } from "$lib/services/kragd-client";
+import { addToast } from "$lib/state/notifications.svelte";
+import type { ServiceStatus } from "$lib/types";
+import { handleKragdError } from "$lib/utils/errors";
+import { formatUptime } from "$lib/utils/format";
 
-	let status = $state<ServiceStatus | null>(null);
-	let loading = $state(false);
-	let error = $state<string | null>(null);
+let status = $state<ServiceStatus | null>(null);
+let loading = $state(false);
+let error = $state<string | null>(null);
 
-	async function fetchStatus() {
-		loading = true;
-		error = null;
-		try {
-			status = await getStatus();
-		} catch (e) {
-			error = handleKragdError(e);
-		} finally {
-			loading = false;
-		}
+async function fetchStatus() {
+	loading = true;
+	error = null;
+	try {
+		status = await getStatus();
+	} catch (e) {
+		error = handleKragdError(e);
+	} finally {
+		loading = false;
 	}
+}
 
-	onMount(() => {
-		fetchStatus();
-	});
+onMount(() => {
+	fetchStatus();
+});
 
-	const vramPercent = $derived(
-		status?.vram ? Math.round((status.vram.used_mb / status.vram.total_mb) * 100) : 0,
-	);
+const vramPercent = $derived(
+	status?.vram ? Math.round((status.vram.used_mb / status.vram.total_mb) * 100) : 0,
+);
 
-	let refreshingLexicon = $state(false);
+let refreshingLexicon = $state(false);
 
-	async function handleRefreshLexicon() {
-		refreshingLexicon = true;
-		try {
-			const result = await refreshLexicon();
-			addToast(`Lexicon refreshed: ${result.entries.toLocaleString()} entries`, "success");
-			// Re-fetch status to reflect updated lexicon counts
-			await fetchStatus();
-		} catch (e) {
-			handleKragdError(e);
-		} finally {
-			refreshingLexicon = false;
-		}
+async function handleRefreshLexicon() {
+	refreshingLexicon = true;
+	try {
+		const result = await refreshLexicon();
+		addToast(`Lexicon refreshed: ${result.entries.toLocaleString()} entries`, "success");
+		// Re-fetch status to reflect updated lexicon counts
+		await fetchStatus();
+	} catch (e) {
+		handleKragdError(e);
+	} finally {
+		refreshingLexicon = false;
 	}
+}
 </script>
 
 <div class="system-status">

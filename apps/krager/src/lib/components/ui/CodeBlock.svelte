@@ -5,28 +5,28 @@
   Shows raw code in <pre> during first render while highlighting loads.
 -->
 <script lang="ts">
-	import { highlight } from "$lib/utils/highlight";
-	import { appTheme } from "$lib/state/theme.svelte";
+import { appTheme } from "$lib/state/theme.svelte";
+import { highlight } from "$lib/utils/highlight";
 
-	interface Props {
-		code: string;
-		lang: string;
-	}
+interface Props {
+	code: string;
+	lang: string;
+}
 
-	const { code, lang }: Props = $props();
+const { code, lang }: Props = $props();
 
-	let html = $state("");
+let html = $state("");
 
-	// Re-highlight when code, lang, or theme changes
-	$effect(() => {
-		const currentCode = code;
-		const currentLang = lang;
-		const currentTheme = appTheme.current;
+// Re-highlight when code, lang, or theme changes
+$effect(() => {
+	const currentCode = code;
+	const currentLang = lang;
+	const currentTheme = appTheme.current;
 
-		highlight(currentCode, currentLang, currentTheme).then((result) => {
-			html = result;
-		});
+	highlight(currentCode, currentLang, currentTheme).then((result) => {
+		html = result;
 	});
+});
 </script>
 
 {#if html}

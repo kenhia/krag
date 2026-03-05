@@ -7,24 +7,24 @@
  */
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { KragdError } from "$lib/types";
 import type {
+	DebugQueryRequest,
+	DebugQueryResponse,
 	HealthResponse,
-	ServiceStatus,
+	IndexRequest,
+	IndexResponse,
+	LexiconRefreshResponse,
+	ModeDetailResponse,
+	ModeListResponse,
+	QdrantSearchRequest,
+	QdrantSearchResponse,
 	QueryRequest,
 	QueryResponse,
 	RetrieveRequest,
 	RetrieveResponse,
-	ModeListResponse,
-	ModeDetailResponse,
-	IndexRequest,
-	IndexResponse,
-	DebugQueryRequest,
-	DebugQueryResponse,
-	QdrantSearchRequest,
-	QdrantSearchResponse,
-	LexiconRefreshResponse,
+	ServiceStatus,
 } from "$lib/types";
+import { KragdError } from "$lib/types";
 
 // ─────────────────────────────────────────────────────────────────
 // Base URL management
@@ -191,20 +191,13 @@ export async function getHealth(host: string, port: number): Promise<HealthRespo
 			);
 		}
 		const detail = err instanceof Error ? err.message : String(err);
-		throw new KragdError(
-			0,
-			`Cannot reach kragd at ${host}:${port} — ${detail}`,
-			detail,
-		);
+		throw new KragdError(0, `Cannot reach kragd at ${host}:${port} — ${detail}`, detail);
 	} finally {
 		clearTimeout(timer);
 	}
 
 	if (!response.ok) {
-		throw new KragdError(
-			response.status,
-			`Health check failed: HTTP ${response.status}`,
-		);
+		throw new KragdError(response.status, `Health check failed: HTTP ${response.status}`);
 	}
 
 	try {

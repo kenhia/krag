@@ -4,11 +4,11 @@
   Props: size ('sm' | 'md' | 'lg')
 -->
 <script lang="ts">
-	interface Props {
-		size?: "sm" | "md" | "lg";
-	}
+interface Props {
+	size?: "sm" | "md" | "lg";
+}
 
-	let { size = "md" }: Props = $props();
+let { size = "md" }: Props = $props();
 </script>
 
 <span class="spinner spinner-{size}" role="status" aria-label="Loading">
