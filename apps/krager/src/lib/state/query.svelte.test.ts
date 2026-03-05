@@ -168,14 +168,14 @@ describe("query.svelte", () => {
 	describe("critic state", () => {
 		beforeEach(() => {
 			setCriticEnabled(false);
-			setCriticCutOff(0.5);
+			setCriticCutOff(3);
 			setIncludeDebug(false);
 			vi.clearAllMocks();
 		});
 
 		it("has correct critic defaults", () => {
 			expect(queryState.critic_enabled).toBe(false);
-			expect(queryState.critic_cut_off).toBe(0.5);
+			expect(queryState.critic_cut_off).toBe(3);
 		});
 
 		it("setCriticEnabled toggles critic", () => {
@@ -197,26 +197,31 @@ describe("query.svelte", () => {
 			expect(queryState.include_debug).toBe(true);
 		});
 
-		it("setCriticCutOff validates range 0.0–1.0", () => {
-			setCriticCutOff(0.7);
-			expect(queryState.critic_cut_off).toBe(0.7);
+		it("setCriticCutOff validates range 0–5", () => {
+			setCriticCutOff(4);
+			expect(queryState.critic_cut_off).toBe(4);
 		});
 
 		it("clamps cut_off below 0 to 0", () => {
-			setCriticCutOff(-0.1);
+			setCriticCutOff(-1);
 			expect(queryState.critic_cut_off).toBe(0);
 		});
 
-		it("clamps cut_off above 1 to 1", () => {
-			setCriticCutOff(1.5);
-			expect(queryState.critic_cut_off).toBe(1);
+		it("clamps cut_off above 5 to 5", () => {
+			setCriticCutOff(7);
+			expect(queryState.critic_cut_off).toBe(5);
+		});
+
+		it("rounds cut_off to nearest integer", () => {
+			setCriticCutOff(2.7);
+			expect(queryState.critic_cut_off).toBe(3);
 		});
 
 		it("persists critic config to config store", () => {
 			setCriticEnabled(true);
 			expect(configStoreSet).toHaveBeenCalledWith(
 				"critic",
-				expect.objectContaining({ enabled: true, cut_off: 0.5 }),
+				expect.objectContaining({ enabled: true, cut_off: 3 }),
 			);
 		});
 	});

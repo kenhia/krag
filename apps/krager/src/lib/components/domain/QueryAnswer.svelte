@@ -17,7 +17,9 @@ interface Props {
 	showSources?: boolean;
 }
 
-let { entry, criticEnabled = false, criticCutOff = 0.5, showSources = true }: Props = $props();
+let { entry, criticEnabled = false, criticCutOff = 3, showSources = true }: Props = $props();
+
+let sourcesExpanded = $state(false);
 
 // Safely extract typed fields from the `unknown` response
 const response = $derived(
@@ -57,15 +59,23 @@ const hasLowConfidence = $derived(() => {
 
 		{#if showSources && sources.length > 0}
 			<div class="answer-sources">
-				<div class="sources-header">Sources</div>
-				<ul class="sources-list">
-					{#each sources as source}
-						<li class="source-item">
-							<span class="source-path">{source.file_path}</span>
-							<span class="source-score">{source.score}</span>
-						</li>
-					{/each}
-				</ul>
+				<button
+					class="sources-toggle"
+					onclick={() => (sourcesExpanded = !sourcesExpanded)}
+					aria-expanded={sourcesExpanded}
+				>
+					{sourcesExpanded ? "▾" : "▸"} {sources.length} source{sources.length === 1 ? "" : "s"}
+				</button>
+				{#if sourcesExpanded}
+					<ul class="sources-list">
+						{#each sources as source}
+							<li class="source-item">
+								<span class="source-path">{source.file_path}</span>
+								<span class="source-score">{source.score}</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -107,13 +117,24 @@ const hasLowConfidence = $derived(() => {
 		margin-top: var(--space-xs, 4px);
 	}
 
-	.sources-header {
-		font-size: 0.75rem;
+	.sources-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-xs, 4px);
+		background: none;
+		border: none;
+		padding: 2px var(--space-xs, 4px);
+		font-size: 0.8rem;
 		font-weight: 600;
 		color: var(--fg-muted, #a6adc8);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin-bottom: var(--space-xs, 4px);
+		cursor: pointer;
+		border-radius: var(--radius-sm, 4px);
+		transition: background-color var(--transition-fast, 150ms ease);
+	}
+
+	.sources-toggle:hover {
+		background-color: var(--surface-hover, rgba(69, 71, 90, 0.5));
+		color: var(--fg, #cdd6f4);
 	}
 
 	.sources-list {

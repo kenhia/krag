@@ -48,8 +48,18 @@ describe("QueryAnswer", () => {
 		expect(screen.getByText("This is the answer.")).toBeInTheDocument();
 	});
 
-	it("renders source references with file_path and score", () => {
+	it("renders folded source toggle with count", () => {
 		render(QueryAnswer, { props: { entry: makeEntry() } });
+		expect(screen.getByText(/2 sources/)).toBeInTheDocument();
+		// Sources initially collapsed
+		expect(screen.queryByText("/docs/readme.md")).not.toBeInTheDocument();
+	});
+
+	it("expands sources on toggle click", async () => {
+		const { fireEvent } = await import("@testing-library/svelte");
+		render(QueryAnswer, { props: { entry: makeEntry() } });
+		const toggle = screen.getByText(/2 sources/);
+		await fireEvent.click(toggle);
 		expect(screen.getByText("/docs/readme.md")).toBeInTheDocument();
 		expect(screen.getByText("0.95")).toBeInTheDocument();
 		expect(screen.getByText("/docs/guide.md")).toBeInTheDocument();
@@ -82,7 +92,7 @@ describe("QueryAnswer", () => {
 				answer: "A flagged answer.",
 				sources: [],
 				debug: {
-					critic_scores: [0.3, 0.2],
+					critic_scores: [1, 2],
 					chunks_pre_critic: 5,
 					chunks_post_critic: 2,
 					embedding_models_used: ["model-a"],
@@ -90,7 +100,7 @@ describe("QueryAnswer", () => {
 			},
 		});
 		render(QueryAnswer, {
-			props: { entry, criticEnabled: true, criticCutOff: 0.5 },
+			props: { entry, criticEnabled: true, criticCutOff: 3 },
 		});
 		expect(screen.getByText(/low.confidence/i)).toBeInTheDocument();
 	});
@@ -101,7 +111,7 @@ describe("QueryAnswer", () => {
 				answer: "A good answer.",
 				sources: [],
 				debug: {
-					critic_scores: [0.8, 0.9],
+					critic_scores: [4, 5],
 					chunks_pre_critic: 5,
 					chunks_post_critic: 5,
 					embedding_models_used: ["model-a"],
@@ -109,7 +119,7 @@ describe("QueryAnswer", () => {
 			},
 		});
 		render(QueryAnswer, {
-			props: { entry, criticEnabled: true, criticCutOff: 0.5 },
+			props: { entry, criticEnabled: true, criticCutOff: 3 },
 		});
 		expect(screen.queryByText(/low.confidence/i)).not.toBeInTheDocument();
 	});
@@ -120,7 +130,7 @@ describe("QueryAnswer", () => {
 				answer: "Answer.",
 				sources: [],
 				debug: {
-					critic_scores: [0.1],
+					critic_scores: [1],
 					chunks_pre_critic: 5,
 					chunks_post_critic: 1,
 					embedding_models_used: ["model-a"],
@@ -128,7 +138,7 @@ describe("QueryAnswer", () => {
 			},
 		});
 		render(QueryAnswer, {
-			props: { entry, criticEnabled: false, criticCutOff: 0.5 },
+			props: { entry, criticEnabled: false, criticCutOff: 3 },
 		});
 		expect(screen.queryByText(/low.confidence/i)).not.toBeInTheDocument();
 	});

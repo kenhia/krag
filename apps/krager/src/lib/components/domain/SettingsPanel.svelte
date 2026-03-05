@@ -118,8 +118,8 @@ function handlePortChange(value: string) {
 				<Slider
 					value={queryState.critic_cut_off}
 					min={0}
-					max={1}
-					step={0.05}
+					max={5}
+					step={1}
 					label="Cut-off"
 					onchange={(v) => setCriticCutOff(v)}
 				/>

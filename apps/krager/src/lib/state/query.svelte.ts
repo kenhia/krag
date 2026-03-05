@@ -28,7 +28,7 @@ export const queryState = $state<QueryState>({
 	show_sources: true,
 	retrieve_only: false,
 	critic_enabled: false,
-	critic_cut_off: 0.5,
+	critic_cut_off: 3,
 });
 
 /** Persist current query config to store. */
@@ -100,9 +100,9 @@ export function setCriticEnabled(value: boolean): void {
 	persistCritic();
 }
 
-/** Set critic_cut_off with range validation (0.0–1.0). */
+/** Set critic_cut_off with range validation (0–5 integer). */
 export function setCriticCutOff(value: number): void {
-	queryState.critic_cut_off = Math.max(0, Math.min(1, value));
+	queryState.critic_cut_off = Math.max(0, Math.min(5, Math.round(value)));
 	persistCritic();
 }
 
@@ -133,7 +133,7 @@ export async function initQueryFromConfig(): Promise<void> {
 			queryState.critic_enabled = criticSaved.enabled;
 		}
 		if (criticSaved.cut_off !== undefined && criticSaved.cut_off !== null) {
-			queryState.critic_cut_off = Math.max(0, Math.min(1, criticSaved.cut_off));
+			queryState.critic_cut_off = Math.max(0, Math.min(5, Math.round(criticSaved.cut_off)));
 		}
 	}
 }

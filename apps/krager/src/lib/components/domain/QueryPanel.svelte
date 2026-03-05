@@ -144,7 +144,7 @@ async function streamQuery(entryId: string, req: QueryRequest, startTime: number
 					break;
 				case "query:done":
 					updateEntry(entryId, {
-						response: { answer: event.data.answer, sources: event.data.sources },
+						response: { answer: event.data.answer, sources: event.data.sources, debug: event.data.debug },
 						loading: false,
 						durationMs: Date.now() - startTime,
 					});
@@ -294,8 +294,8 @@ function handleKeydown(event: KeyboardEvent) {
 					<Slider
 						value={queryState.critic_cut_off}
 						min={0}
-						max={1}
-						step={0.05}
+						max={5}
+						step={1}
 						label="Critic Cut-off"
 						onchange={(v) => setCriticCutOff(v)}
 					/>

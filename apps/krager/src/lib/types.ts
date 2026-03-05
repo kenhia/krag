@@ -413,7 +413,7 @@ export interface QueryConfig {
 export interface CriticConfig {
 	/** Enable critic score display. Default: false */
 	enabled: boolean;
-	/** Critic score threshold for flagging low-quality answers. Range: 0.0–1.0. Default: 0.5 */
+	/** Critic score threshold for flagging low-quality answers. Range: 0–5 (integer). Default: 3 */
 	cut_off: number;
 }
 
@@ -474,7 +474,7 @@ export const USER_CONFIG_DEFAULTS: UserConfig = {
 	},
 	critic: {
 		enabled: false,
-		cut_off: 0.5,
+		cut_off: 3,
 	},
 	display: {
 		opacity: 1.0,

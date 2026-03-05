@@ -215,6 +215,9 @@
 
 - [x] T051 Fix connection host/port not persisting after restart — ConnectionBar local inputs not syncing from async config load; add $effect to sync hostInput/portInput when connection state updates
 - [x] T052 Fix query result missing scrollbar for long source lists (top-k=30) — wrap QueryAnswer in scrollable container, set QueryPanel flex-shrink:0
+- [x] T053 Fix critic cut_off scale: change from 0.0-1.0 float to 0-5 integer to match kragd critic scoring scale (relevance_critic.py 0-5, default threshold 3)
+- [x] T054 Fix debug toggle not affecting output — SSE query:done handler was dropping event.data.debug; include debug in stored response
+- [x] T055 Add collapsible/folded sources to QueryAnswer (collapsed by default, matching TranscriptView pattern)
 
 ---
 
