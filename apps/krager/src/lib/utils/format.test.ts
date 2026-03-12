@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { formatDuration, formatTimestamp, formatFileSize, formatUptime } from "./format";
+import { describe, expect, it } from "vitest";
+import { formatDuration, formatFileSize, formatTimestamp, formatUptime } from "./format";
 
 describe("format utilities", () => {
 	describe("formatDuration", () => {

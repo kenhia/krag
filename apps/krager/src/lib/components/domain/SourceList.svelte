@@ -5,39 +5,39 @@
   and chunk content in <pre>. Empty state when no sources.
 -->
 <script lang="ts">
-	import type { SourceChunk } from "$lib/types";
-	import { addToast } from "$lib/state/notifications.svelte";
+import { addToast } from "$lib/state/notifications.svelte";
+import type { SourceChunk } from "$lib/types";
 
-	interface Props {
-		sources: SourceChunk[];
+interface Props {
+	sources: SourceChunk[];
+}
+
+let { sources }: Props = $props();
+
+async function copyPath(path: string) {
+	try {
+		await navigator.clipboard.writeText(path);
+		addToast("Path copied", "info", 2000);
+	} catch {
+		addToast("Failed to copy path", "error");
 	}
+}
 
-	let { sources }: Props = $props();
+function scoreColor(score: number): string {
+	if (score >= 0.8) return "var(--success, #a6e3a1)";
+	if (score >= 0.5) return "var(--warning, #f9e2af)";
+	return "var(--fg-muted, #a6adc8)";
+}
 
-	async function copyPath(path: string) {
-		try {
-			await navigator.clipboard.writeText(path);
-			addToast("Path copied", "info", 2000);
-		} catch {
-			addToast("Failed to copy path", "error");
-		}
+function lineRange(chunk: SourceChunk): string {
+	if (chunk.start_line != null && chunk.end_line != null) {
+		return `L${chunk.start_line}–${chunk.end_line}`;
 	}
-
-	function scoreColor(score: number): string {
-		if (score >= 0.8) return "var(--success, #a6e3a1)";
-		if (score >= 0.5) return "var(--warning, #f9e2af)";
-		return "var(--fg-muted, #a6adc8)";
+	if (chunk.start_line != null) {
+		return `L${chunk.start_line}`;
 	}
-
-	function lineRange(chunk: SourceChunk): string {
-		if (chunk.start_line != null && chunk.end_line != null) {
-			return `L${chunk.start_line}–${chunk.end_line}`;
-		}
-		if (chunk.start_line != null) {
-			return `L${chunk.start_line}`;
-		}
-		return "";
-	}
+	return "";
+}
 </script>
 
 {#if sources.length === 0}

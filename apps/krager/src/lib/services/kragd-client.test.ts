@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Must use vi.hoisted() so the variable exists when the hoisted vi.mock factory runs
 const { mockFetch } = vi.hoisted(() => ({
@@ -8,8 +8,23 @@ vi.mock("@tauri-apps/plugin-http", () => ({
 	fetch: mockFetch,
 }));
 
-import { kragdFetch, getBaseUrl, setBaseUrl, getHealth, getStatus, postQuery, postRetrieve, getModes, getModeDetail, triggerIndex, getIndexStatus, postDebugQuery, postDebugQdrant, refreshLexicon } from "./kragd-client";
 import { KragdError } from "$lib/types";
+import {
+	getBaseUrl,
+	getHealth,
+	getIndexStatus,
+	getModeDetail,
+	getModes,
+	getStatus,
+	kragdFetch,
+	postDebugQdrant,
+	postDebugQuery,
+	postQuery,
+	postRetrieve,
+	refreshLexicon,
+	setBaseUrl,
+	triggerIndex,
+} from "./kragd-client";
 
 function jsonResponse(data: unknown, status = 200, ok = true): Response {
 	return {
@@ -73,9 +88,7 @@ describe("kragd-client", () => {
 
 		it("throws KragdError on 422 validation error", async () => {
 			const detail = [{ loc: ["body", "query"], msg: "field required", type: "missing" }];
-			mockFetch.mockResolvedValue(
-				jsonResponse({ detail }, 422, false),
-			);
+			mockFetch.mockResolvedValue(jsonResponse({ detail }, 422, false));
 
 			await expect(kragdFetch("/query")).rejects.toThrow(KragdError);
 			try {
@@ -90,9 +103,7 @@ describe("kragd-client", () => {
 		});
 
 		it("throws KragdError on 409 conflict", async () => {
-			mockFetch.mockResolvedValue(
-				jsonResponse({ detail: "Already indexing" }, 409, false),
-			);
+			mockFetch.mockResolvedValue(jsonResponse({ detail: "Already indexing" }, 409, false));
 
 			try {
 				await kragdFetch("/index");
@@ -105,9 +116,7 @@ describe("kragd-client", () => {
 		});
 
 		it("throws KragdError on 503 not ready", async () => {
-			mockFetch.mockResolvedValue(
-				jsonResponse({ detail: "Service not ready" }, 503, false),
-			);
+			mockFetch.mockResolvedValue(jsonResponse({ detail: "Service not ready" }, 503, false));
 
 			try {
 				await kragdFetch("/status");
@@ -120,9 +129,7 @@ describe("kragd-client", () => {
 		});
 
 		it("throws KragdError on 500 server error", async () => {
-			mockFetch.mockResolvedValue(
-				jsonResponse({ detail: "Internal server error" }, 500, false),
-			);
+			mockFetch.mockResolvedValue(jsonResponse({ detail: "Internal server error" }, 500, false));
 
 			try {
 				await kragdFetch("/query");
@@ -187,11 +194,14 @@ describe("kragd-client", () => {
 
 			const result = await getHealth("myhost", 9999);
 
-			expect(mockFetch).toHaveBeenCalledWith("http://myhost:9999/health", expect.objectContaining({
-				method: "GET",
-				headers: { "Content-Type": "application/json" },
-				signal: expect.any(AbortSignal),
-			}));
+			expect(mockFetch).toHaveBeenCalledWith(
+				"http://myhost:9999/health",
+				expect.objectContaining({
+					method: "GET",
+					headers: { "Content-Type": "application/json" },
+					signal: expect.any(AbortSignal),
+				}),
+			);
 			expect(result).toEqual(data);
 		});
 
@@ -246,7 +256,19 @@ describe("kragd-client", () => {
 
 	describe("postQuery", () => {
 		it("sends POST /query with request body and returns QueryResponse", async () => {
-			const resData = { answer: "The answer is 42.", sources: [{ chunk_id: "c1", file_path: "/a.py", score: 0.95, rank: 1, chunk_content: "code", file_type: "python" }] };
+			const resData = {
+				answer: "The answer is 42.",
+				sources: [
+					{
+						chunk_id: "c1",
+						file_path: "/a.py",
+						score: 0.95,
+						rank: 1,
+						chunk_content: "code",
+						file_type: "python",
+					},
+				],
+			};
 			mockFetch.mockResolvedValue(jsonResponse(resData));
 
 			const result = await postQuery({ query: "What is the answer?", top_k: 5 });
@@ -283,7 +305,18 @@ describe("kragd-client", () => {
 
 	describe("postRetrieve", () => {
 		it("sends POST /retrieve with request body and returns RetrieveResponse", async () => {
-			const resData = { sources: [{ chunk_id: "c1", file_path: "/a.py", score: 0.9, rank: 1, chunk_content: "def foo(): pass", file_type: "python" }] };
+			const resData = {
+				sources: [
+					{
+						chunk_id: "c1",
+						file_path: "/a.py",
+						score: 0.9,
+						rank: 1,
+						chunk_content: "def foo(): pass",
+						file_type: "python",
+					},
+				],
+			};
 			mockFetch.mockResolvedValue(jsonResponse(resData));
 
 			const result = await postRetrieve({ query: "foo function" });
@@ -314,7 +347,17 @@ describe("kragd-client", () => {
 
 	describe("getModes", () => {
 		it("calls GET /modes and returns ModeListResponse", async () => {
-			const data = { modes: [{ name: "default", description: "Default", collections: ["main"], llm_slot: "text", preset: "standard" }] };
+			const data = {
+				modes: [
+					{
+						name: "default",
+						description: "Default",
+						collections: ["main"],
+						llm_slot: "text",
+						preset: "standard",
+					},
+				],
+			};
 			mockFetch.mockResolvedValue(jsonResponse(data));
 
 			const result = await getModes();
@@ -467,7 +510,16 @@ describe("kragd-client", () => {
 		it("calls POST /debug/query and returns DebugQueryResponse", async () => {
 			const resData = {
 				answer: "debug answer",
-				sources: [{ chunk_id: "c1", file_path: "/a.py", score: 0.9, rank: 1, chunk_content: "x", file_type: "python" }],
+				sources: [
+					{
+						chunk_id: "c1",
+						file_path: "/a.py",
+						score: 0.9,
+						rank: 1,
+						chunk_content: "x",
+						file_type: "python",
+					},
+				],
 				debug: {
 					llm_used: "text",
 					llm_model: "gpt-4",
@@ -507,7 +559,29 @@ describe("kragd-client", () => {
 		});
 
 		it("sends minimal request with only query", async () => {
-			const resData = { answer: "a", sources: [], debug: { llm_used: "text", llm_model: "m", route: "r", auto_routed: false, preset: "default", retrieval_time_ms: 0, generation_time_ms: 0, embedding_models_used: [], vector_spaces_searched: [], total_candidates_before_dedup: 0, total_candidates_after_dedup: 0, similarity_threshold: 0, per_space_result_counts: {}, lexicon_terms_injected: 0, critic_scores: [], chunks_pre_critic: 0, chunks_post_critic: 0 } };
+			const resData = {
+				answer: "a",
+				sources: [],
+				debug: {
+					llm_used: "text",
+					llm_model: "m",
+					route: "r",
+					auto_routed: false,
+					preset: "default",
+					retrieval_time_ms: 0,
+					generation_time_ms: 0,
+					embedding_models_used: [],
+					vector_spaces_searched: [],
+					total_candidates_before_dedup: 0,
+					total_candidates_after_dedup: 0,
+					similarity_threshold: 0,
+					per_space_result_counts: {},
+					lexicon_terms_injected: 0,
+					critic_scores: [],
+					chunks_pre_critic: 0,
+					chunks_post_critic: 0,
+				},
+			};
 			mockFetch.mockResolvedValue(jsonResponse(resData));
 
 			await postDebugQuery({ query: "hello" });
@@ -530,14 +604,27 @@ describe("kragd-client", () => {
 		it("calls POST /debug/qdrant and returns QdrantSearchResponse", async () => {
 			const resData = {
 				results: [
-					{ chunk_id: "c1", score: 0.95, file_path: "/a.py", file_type: "python", chunk_content: "def foo():", chunk_index: 0, start_line: 1, end_line: 5 },
+					{
+						chunk_id: "c1",
+						score: 0.95,
+						file_path: "/a.py",
+						file_type: "python",
+						chunk_content: "def foo():",
+						chunk_index: 0,
+						start_line: 1,
+						end_line: 5,
+					},
 				],
 				total_results: 1,
 				vector_space: "dense",
 			};
 			mockFetch.mockResolvedValue(jsonResponse(resData));
 
-			const result = await postDebugQdrant({ query: "vector search", vector_space: "dense", top_k: 10 });
+			const result = await postDebugQdrant({
+				query: "vector search",
+				vector_space: "dense",
+				top_k: 10,
+			});
 
 			expect(mockFetch).toHaveBeenCalledWith(
 				"http://localhost:8742/debug/qdrant",
@@ -573,7 +660,9 @@ describe("kragd-client", () => {
 		});
 
 		it("throws KragdError on 422 validation error", async () => {
-			mockFetch.mockResolvedValue(jsonResponse({ detail: [{ loc: ["body", "query"], msg: "required" }] }, 422, false));
+			mockFetch.mockResolvedValue(
+				jsonResponse({ detail: [{ loc: ["body", "query"], msg: "required" }] }, 422, false),
+			);
 			await expect(postDebugQdrant({ query: "" })).rejects.toThrow(KragdError);
 		});
 	});

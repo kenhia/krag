@@ -5,7 +5,7 @@
  * Tracks the state of in-progress or completed indexing operations.
  */
 
-import type { IndexStatus, IndexMode, IndexingFileError, IndexResponse } from "$lib/types";
+import type { IndexingFileError, IndexMode, IndexResponse, IndexStatus } from "$lib/types";
 
 export interface IndexJobState {
 	running: boolean;

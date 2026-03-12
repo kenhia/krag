@@ -3,9 +3,11 @@
  *
  * Reactive connection state using Svelte 5 $state rune.
  * Manages kragd server connection: host, port, status, health check data.
+ * Loads/saves host+port from config store for persistence across restarts.
  */
 
-import type { ConnectionStatus } from "$lib/types";
+import { configStoreGet, configStoreSet, isConfigStoreReady } from "$lib/services/config-store";
+import type { ConnectionConfig, ConnectionStatus } from "$lib/types";
 
 export interface ConnectionState {
 	host: string;
@@ -61,4 +63,23 @@ export function setConnectionError(msg: string): void {
 	connection.status = "error";
 	connection.lastCheck = new Date();
 	connection.errorMsg = msg;
+}
+
+/** Load initial host/port from config store. */
+export async function initConnectionFromConfig(): Promise<void> {
+	if (!isConfigStoreReady()) return;
+	const saved = await configStoreGet<ConnectionConfig>("connection");
+	if (saved?.host && saved?.port) {
+		connection.host = saved.host;
+		connection.port = saved.port;
+	}
+}
+
+/** Save current host/port to config store. */
+export async function saveConnectionToConfig(): Promise<void> {
+	if (!isConfigStoreReady()) return;
+	await configStoreSet("connection", {
+		host: connection.host,
+		port: connection.port,
+	});
 }

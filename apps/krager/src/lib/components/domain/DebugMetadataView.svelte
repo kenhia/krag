@@ -7,25 +7,25 @@
   lexicon terms, critic scores, chunks pre/post critic.
 -->
 <script lang="ts">
-	import type { DebugMetadata } from "$lib/types";
+import type { DebugMetadata } from "$lib/types";
 
-	interface Props {
-		metadata: DebugMetadata;
-	}
+interface Props {
+	metadata: DebugMetadata;
+}
 
-	const { metadata }: Props = $props();
+const { metadata }: Props = $props();
 
-	const avgCriticScore = $derived(
-		metadata.critic_scores.length > 0
-			? (metadata.critic_scores.reduce((a, b) => a + b, 0) / metadata.critic_scores.length).toFixed(3)
-			: "—",
-	);
+const avgCriticScore = $derived(
+	metadata.critic_scores.length > 0
+		? (metadata.critic_scores.reduce((a, b) => a + b, 0) / metadata.critic_scores.length).toFixed(3)
+		: "—",
+);
 
-	const criticScoreRange = $derived(
-		metadata.critic_scores.length > 0
-			? `${Math.min(...metadata.critic_scores).toFixed(3)} – ${Math.max(...metadata.critic_scores).toFixed(3)}`
-			: "—",
-	);
+const criticScoreRange = $derived(
+	metadata.critic_scores.length > 0
+		? `${Math.min(...metadata.critic_scores).toFixed(3)} – ${Math.max(...metadata.critic_scores).toFixed(3)}`
+		: "—",
+);
 </script>
 
 <div class="debug-metadata">

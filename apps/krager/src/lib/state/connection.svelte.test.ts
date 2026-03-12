@@ -1,12 +1,23 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	connection,
 	getConnectionBaseUrl,
-	setConnectionTarget,
+	initConnectionFromConfig,
+	saveConnectionToConfig,
 	setConnected,
-	setDisconnected,
 	setConnectionError,
+	setConnectionTarget,
+	setDisconnected,
 } from "./connection.svelte";
+
+// Mock config store
+vi.mock("$lib/services/config-store", () => ({
+	configStoreGet: vi.fn(),
+	configStoreSet: vi.fn(),
+	isConfigStoreReady: vi.fn(() => true),
+}));
+
+import { configStoreGet, configStoreSet } from "$lib/services/config-store";
 
 describe("connection.svelte", () => {
 	beforeEach(() => {
@@ -81,6 +92,45 @@ describe("connection.svelte", () => {
 			setConnected("1.0.0");
 			expect(connection.status).toBe("connected");
 			expect(connection.errorMsg).toBeNull();
+		});
+	});
+
+	describe("config persistence", () => {
+		beforeEach(() => {
+			vi.clearAllMocks();
+		});
+
+		it("initConnectionFromConfig loads saved host/port", async () => {
+			(configStoreGet as ReturnType<typeof vi.fn>).mockResolvedValue({
+				host: "karch9",
+				port: 9999,
+			});
+
+			await initConnectionFromConfig();
+
+			expect(connection.host).toBe("karch9");
+			expect(connection.port).toBe(9999);
+			expect(configStoreGet).toHaveBeenCalledWith("connection");
+		});
+
+		it("initConnectionFromConfig falls back to defaults when no config", async () => {
+			(configStoreGet as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+			setConnectionTarget("localhost", 8742);
+			await initConnectionFromConfig();
+
+			expect(connection.host).toBe("localhost");
+			expect(connection.port).toBe(8742);
+		});
+
+		it("saveConnectionToConfig saves host/port on successful connect", async () => {
+			setConnectionTarget("myhost", 5555);
+			await saveConnectionToConfig();
+
+			expect(configStoreSet).toHaveBeenCalledWith("connection", {
+				host: "myhost",
+				port: 5555,
+			});
 		});
 	});
 });

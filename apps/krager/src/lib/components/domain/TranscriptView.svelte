@@ -7,115 +7,128 @@
   Newest entries appear at the top. "Clear" button.
 -->
 <script lang="ts">
-	import { tick } from "svelte";
-	import { transcript, clearTranscript } from "$lib/state/transcript.svelte";
-	import { formatTimestamp, formatDuration } from "$lib/utils/format";
-	import SourceList from "$lib/components/domain/SourceList.svelte";
-	import CodeBlock from "$lib/components/ui/CodeBlock.svelte";
-	import Spinner from "$lib/components/ui/Spinner.svelte";
-	import Button from "$lib/components/ui/Button.svelte";
-	import type { SourceChunk, QueryResponse, RetrieveResponse } from "$lib/types";
+import { tick } from "svelte";
+import DebugMetadataView from "$lib/components/domain/DebugMetadataView.svelte";
+import SourceList from "$lib/components/domain/SourceList.svelte";
+import Button from "$lib/components/ui/Button.svelte";
+import CodeBlock from "$lib/components/ui/CodeBlock.svelte";
+import Spinner from "$lib/components/ui/Spinner.svelte";
+import {
+	clearTranscript,
+	isChunksExpanded,
+	toggleChunksExpanded,
+	transcript,
+} from "$lib/state/transcript.svelte";
+import type { DebugMetadata, QueryResponse, RetrieveResponse, SourceChunk } from "$lib/types";
+import { formatDuration, formatTimestamp } from "$lib/utils/format";
 
-	let scrollContainer: HTMLElement | undefined = $state(undefined);
+let scrollContainer: HTMLElement | undefined = $state(undefined);
 
-	const typeBadgeConfig: Record<string, { label: string; cssClass: string }> = {
-		query: { label: "Q", cssClass: "badge-query" },
-		retrieve: { label: "R", cssClass: "badge-retrieve" },
-		index: { label: "I", cssClass: "badge-index" },
-		debug: { label: "D", cssClass: "badge-debug" },
-	};
+const typeBadgeConfig: Record<string, { label: string; cssClass: string }> = {
+	query: { label: "Q", cssClass: "badge-query" },
+	retrieve: { label: "R", cssClass: "badge-retrieve" },
+	index: { label: "I", cssClass: "badge-index" },
+	debug: { label: "D", cssClass: "badge-debug" },
+};
 
-	/** Parsed segment of an answer: either plain text or a code fence. */
-	interface AnswerSegment {
-		type: "text" | "code";
-		content: string;
-		lang?: string;
-	}
+/** Parsed segment of an answer: either plain text or a code fence. */
+interface AnswerSegment {
+	type: "text" | "code";
+	content: string;
+	lang?: string;
+}
 
-	/**
-	 * Parse answer text into segments, splitting on markdown code fences.
-	 * Handles ```lang\n...\n``` patterns.
-	 */
-	function parseAnswerSegments(answer: string): AnswerSegment[] {
-		const segments: AnswerSegment[] = [];
-		const fenceRegex = /^```(\w*)\n([\s\S]*?)^```$/gm;
-		let lastIndex = 0;
+/**
+ * Parse answer text into segments, splitting on markdown code fences.
+ * Handles ```lang\n...\n``` patterns.
+ */
+function parseAnswerSegments(answer: string): AnswerSegment[] {
+	const segments: AnswerSegment[] = [];
+	const fenceRegex = /^```(\w*)\n([\s\S]*?)^```$/gm;
+	let lastIndex = 0;
 
-		for (const match of answer.matchAll(fenceRegex)) {
-			const matchStart = match.index ?? 0;
+	for (const match of answer.matchAll(fenceRegex)) {
+		const matchStart = match.index ?? 0;
 
-			// Text before this fence
-			if (matchStart > lastIndex) {
-				const text = answer.slice(lastIndex, matchStart);
-				if (text.trim()) {
-					segments.push({ type: "text", content: text });
-				}
-			}
-
-			segments.push({
-				type: "code",
-				content: match[2],
-				lang: match[1] || "text",
-			});
-
-			lastIndex = matchStart + match[0].length;
-		}
-
-		// Remaining text after last fence
-		if (lastIndex < answer.length) {
-			const text = answer.slice(lastIndex);
+		// Text before this fence
+		if (matchStart > lastIndex) {
+			const text = answer.slice(lastIndex, matchStart);
 			if (text.trim()) {
 				segments.push({ type: "text", content: text });
 			}
 		}
 
-		return segments;
+		segments.push({
+			type: "code",
+			content: match[2],
+			lang: match[1] || "text",
+		});
+
+		lastIndex = matchStart + match[0].length;
 	}
 
-	/** Check if answer contains any code fences. */
-	function hasCodeFences(answer: string): boolean {
-		return /^```\w*\n[\s\S]*?^```$/m.test(answer);
-	}
-
-	function getSources(response: unknown): SourceChunk[] {
-		if (!response || typeof response !== "object") return [];
-		const r = response as Record<string, unknown>;
-		if (Array.isArray(r.sources)) return r.sources as SourceChunk[];
-		return [];
-	}
-
-	function getAnswer(response: unknown): string | null {
-		if (!response || typeof response !== "object") return null;
-		const r = response as Record<string, unknown>;
-		if (typeof r.answer === "string") return r.answer;
-		return null;
-	}
-
-	function getQueryText(request: unknown): string {
-		if (!request || typeof request !== "object") return "";
-		const r = request as Record<string, unknown>;
-		return typeof r.query === "string" ? r.query : "";
-	}
-
-	async function scrollToTop() {
-		await tick();
-		if (scrollContainer) {
-			scrollContainer.scrollTop = 0;
+	// Remaining text after last fence
+	if (lastIndex < answer.length) {
+		const text = answer.slice(lastIndex);
+		if (text.trim()) {
+			segments.push({ type: "text", content: text });
 		}
 	}
 
-	// Auto-scroll to top when entries change (newest first)
-	$effect(() => {
-		const _len = transcript.entries.length;
-		scrollToTop();
-	});
+	return segments;
+}
 
-	function handleClear() {
-		clearTranscript();
+/** Check if answer contains any code fences. */
+function hasCodeFences(answer: string): boolean {
+	return /^```\w*\n[\s\S]*?^```$/m.test(answer);
+}
+
+function getSources(response: unknown): SourceChunk[] {
+	if (!response || typeof response !== "object") return [];
+	const r = response as Record<string, unknown>;
+	if (Array.isArray(r.sources)) return r.sources as SourceChunk[];
+	return [];
+}
+
+function getAnswer(response: unknown): string | null {
+	if (!response || typeof response !== "object") return null;
+	const r = response as Record<string, unknown>;
+	if (typeof r.answer === "string") return r.answer;
+	return null;
+}
+
+function getQueryText(request: unknown): string {
+	if (!request || typeof request !== "object") return "";
+	const r = request as Record<string, unknown>;
+	return typeof r.query === "string" ? r.query : "";
+}
+
+function getDebug(response: unknown): DebugMetadata | null {
+	if (!response || typeof response !== "object") return null;
+	const r = response as Record<string, unknown>;
+	if (r.debug && typeof r.debug === "object") return r.debug as DebugMetadata;
+	return null;
+}
+
+async function scrollToTop() {
+	await tick();
+	if (scrollContainer) {
+		scrollContainer.scrollTop = 0;
 	}
+}
 
-	/** Entries in reverse chronological order (newest first). */
-	const reversedEntries = $derived([...transcript.entries].reverse());
+// Auto-scroll to top when entries change (newest first)
+$effect(() => {
+	const _len = transcript.entries.length;
+	scrollToTop();
+});
+
+function handleClear() {
+	clearTranscript();
+}
+
+/** Entries in reverse chronological order (newest first). */
+const reversedEntries = $derived([...transcript.entries].reverse());
 </script>
 
 <div class="transcript-view">
@@ -137,6 +150,7 @@
 				{@const answer = getAnswer(entry.response)}
 				{@const sources = getSources(entry.response)}
 				{@const queryText = getQueryText(entry.request)}
+				{@const debugMeta = getDebug(entry.response)}
 				<div class="entry" class:entry-error={!!entry.error}>
 					<div class="entry-header">
 						<span class="type-badge {badgeInfo.cssClass}">{badgeInfo.label}</span>
@@ -184,7 +198,31 @@
 
 					{#if sources.length > 0}
 						<div class="entry-sources">
-							<SourceList {sources} />
+							<button
+								class="chunks-toggle"
+								onclick={() => toggleChunksExpanded(entry.id)}
+								aria-expanded={isChunksExpanded(entry.id)}
+							>
+								{isChunksExpanded(entry.id) ? "▾" : "▸"} {sources.length} source{sources.length === 1 ? "" : "s"}
+							</button>
+							{#if isChunksExpanded(entry.id)}
+								<SourceList {sources} />
+							{/if}
+						</div>
+					{/if}
+
+					{#if debugMeta}
+						<div class="entry-debug">
+							<button
+								class="chunks-toggle"
+								onclick={() => toggleChunksExpanded(`${entry.id}-debug`)}
+								aria-expanded={isChunksExpanded(`${entry.id}-debug`)}
+							>
+								{isChunksExpanded(`${entry.id}-debug`) ? "▾" : "▸"} Debug metadata
+							</button>
+							{#if isChunksExpanded(`${entry.id}-debug`)}
+								<DebugMetadataView metadata={debugMeta} />
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -359,6 +397,20 @@
 	.entry-sources {
 		padding-top: var(--space-sm, 8px);
 		border-top: 1px solid var(--border-subtle, #363849);
+	}
+
+	.chunks-toggle {
+		background: none;
+		border: none;
+		color: var(--fg-muted, #a6adc8);
+		cursor: pointer;
+		font-size: 0.8rem;
+		padding: var(--space-xs, 4px) 0;
+		transition: color var(--transition-fast, 150ms ease);
+	}
+
+	.chunks-toggle:hover {
+		color: var(--accent, #89b4fa);
 	}
 
 	.text-muted {

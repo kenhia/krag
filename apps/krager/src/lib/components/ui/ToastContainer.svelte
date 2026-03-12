@@ -5,8 +5,8 @@
   Reads from notifications state and auto-dismisses toasts.
 -->
 <script lang="ts">
-	import Toast from "./Toast.svelte";
-	import { notifications, dismissToast } from "$lib/state/notifications.svelte";
+import { dismissToast, notifications } from "$lib/state/notifications.svelte";
+import Toast from "./Toast.svelte";
 </script>
 
 {#if notifications.toasts.length > 0}

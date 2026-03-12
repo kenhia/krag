@@ -104,7 +104,9 @@ html {
 	background-color: var(--bg);
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
-	transition: background-color var(--transition-fast), color var(--transition-fast);
+	transition:
+		background-color var(--transition-fast),
+		color var(--transition-fast);
 	min-width: 800px;
 }
 

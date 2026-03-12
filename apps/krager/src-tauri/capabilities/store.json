@@ -1,0 +1,6 @@
+{
+  "identifier": "store",
+  "description": "Capability for the Tauri Store plugin — persistent config storage",
+  "windows": ["main"],
+  "permissions": ["store:default"]
+}

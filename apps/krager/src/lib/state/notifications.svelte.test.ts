@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { notifications, addToast, dismissToast, clearToasts } from "./notifications.svelte";
+import { beforeEach, describe, expect, it } from "vitest";
+import { addToast, clearToasts, dismissToast, notifications } from "./notifications.svelte";
 
 describe("notifications.svelte", () => {
 	beforeEach(() => {

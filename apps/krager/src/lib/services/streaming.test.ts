@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
@@ -7,12 +7,8 @@ vi.mock("@tauri-apps/plugin-http", () => ({
 	fetch: mockFetch,
 }));
 
-import {
-	streamQuerySSE,
-	streamIndexSSE,
-	parseSSELine,
-} from "./streaming";
-import type { QueryStreamEvent, IndexStreamEvent } from "$lib/types";
+import type { IndexStreamEvent, QueryStreamEvent } from "$lib/types";
+import { parseSSELine, streamIndexSSE, streamQuerySSE } from "./streaming";
 
 // Helper to create a ReadableStream from lines
 function createSSEStream(lines: string[]): ReadableStream<Uint8Array> {
@@ -82,7 +78,8 @@ describe("streaming", () => {
 		});
 
 		it("parses index:complete event", () => {
-			const data = '{"job_id": "j1", "status": "completed", "files_processed": 10, "duration_seconds": 5.2}';
+			const data =
+				'{"job_id": "j1", "status": "completed", "files_processed": 10, "duration_seconds": 5.2}';
 			const result = parseSSELine("index:complete", data);
 			expect(result).toEqual({
 				type: "index:complete",
@@ -123,16 +120,16 @@ describe("streaming", () => {
 			});
 
 			const events: QueryStreamEvent[] = [];
-			await streamQuerySSE(
-				"http://localhost:8742",
-				{ query: "test" },
-				(event) => events.push(event),
+			await streamQuerySSE("http://localhost:8742", { query: "test" }, (event) =>
+				events.push(event),
 			);
 
 			expect(events.length).toBe(4);
 			expect(events[0].type).toBe("query:sources");
 			expect(events[1].type).toBe("query:token");
-			expect((events[1] as { type: "query:token"; data: { token: string } }).data.token).toBe("Hello");
+			expect((events[1] as { type: "query:token"; data: { token: string } }).data.token).toBe(
+				"Hello",
+			);
 			expect(events[2].type).toBe("query:token");
 			expect(events[3].type).toBe("query:done");
 		});
@@ -192,10 +189,7 @@ describe("streaming", () => {
 			});
 
 			const events: IndexStreamEvent[] = [];
-			await streamIndexSSE(
-				"http://localhost:8742",
-				(event) => events.push(event),
-			);
+			await streamIndexSSE("http://localhost:8742", (event) => events.push(event));
 
 			expect(events.length).toBe(2);
 			expect(events[0].type).toBe("index:progress");
@@ -203,11 +197,7 @@ describe("streaming", () => {
 		});
 
 		it("handles index:idle event", async () => {
-			const sseLines = [
-				"event: index:idle",
-				'data: {"message": "No active indexing job"}',
-				"",
-			];
+			const sseLines = ["event: index:idle", 'data: {"message": "No active indexing job"}', ""];
 
 			mockFetch.mockResolvedValue({
 				ok: true,
@@ -216,10 +206,7 @@ describe("streaming", () => {
 			});
 
 			const events: IndexStreamEvent[] = [];
-			await streamIndexSSE(
-				"http://localhost:8742",
-				(event) => events.push(event),
-			);
+			await streamIndexSSE("http://localhost:8742", (event) => events.push(event));
 
 			expect(events.length).toBe(1);
 			expect(events[0].type).toBe("index:idle");

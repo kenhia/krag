@@ -17,11 +17,7 @@ export const notifications = $state<{ toasts: ToastEntry[] }>({
  * Add a toast notification.
  * Returns the toast ID for manual dismissal.
  */
-export function addToast(
-	message: string,
-	type: ToastEntry["type"],
-	duration = 5000,
-): string {
+export function addToast(message: string, type: ToastEntry["type"], duration = 5000): string {
 	const id = `toast-${++nextId}`;
 	notifications.toasts.push({ id, message, type, duration });
 	return id;

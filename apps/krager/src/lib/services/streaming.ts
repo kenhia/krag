@@ -12,14 +12,19 @@
  */
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import type { QueryRequest, QueryStreamEvent, IndexStreamEvent } from "$lib/types";
+import type { IndexStreamEvent, QueryRequest, QueryStreamEvent } from "$lib/types";
 
 // ─────────────────────────────────────────────────────────────────
 // Known SSE event types
 // ─────────────────────────────────────────────────────────────────
 
 const QUERY_EVENT_TYPES = new Set(["query:sources", "query:token", "query:done", "query:error"]);
-const INDEX_EVENT_TYPES = new Set(["index:idle", "index:progress", "index:complete", "index:error"]);
+const INDEX_EVENT_TYPES = new Set([
+	"index:idle",
+	"index:progress",
+	"index:complete",
+	"index:error",
+]);
 
 // ─────────────────────────────────────────────────────────────────
 // SSE line parser
