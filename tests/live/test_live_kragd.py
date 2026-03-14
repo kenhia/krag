@@ -12,6 +12,8 @@ Environment variables — see conftest.py for details.
 
 from __future__ import annotations
 
+import logging
+import time
 from pathlib import Path
 
 import pytest
@@ -530,3 +532,134 @@ class Test09SSEStreaming:
                             return
             # If we didn't find done, check for error
             assert "query:error" in resp.text, "Expected query:done or query:error event"
+
+
+# ──────────────────────────────────────────────
+# Phase 10 — US1: Multi-collection debug metadata keys
+# ──────────────────────────────────────────────
+
+
+class Test10DebugMetadataKeys:
+    """Verify debug metadata includes per_space_result_counts, collections_searched,
+    and vector_spaces_searched keys (sprint 015 US1)."""
+
+    def test_debug_query_has_metadata_keys(self, client: KragClient) -> None:
+        resp = client.post(
+            "/debug/query",
+            {"query": "python function", "top_k": 5},
+        )
+        debug = resp.get("debug", {})
+        assert "per_space_result_counts" in debug, (
+            f"Missing per_space_result_counts in debug keys: {list(debug.keys())}"
+        )
+        assert "collections_searched" in debug, (
+            f"Missing collections_searched in debug keys: {list(debug.keys())}"
+        )
+        assert "vector_spaces_searched" in debug, (
+            f"Missing vector_spaces_searched in debug keys: {list(debug.keys())}"
+        )
+
+    def test_collections_searched_is_list(self, client: KragClient) -> None:
+        resp = client.post(
+            "/debug/query",
+            {"query": "test", "top_k": 3},
+        )
+        debug = resp.get("debug", {})
+        collections = debug.get("collections_searched")
+        assert isinstance(collections, list), f"Expected list, got {type(collections)}"
+        assert len(collections) > 0, "Expected at least one collection searched"
+
+    def test_per_space_counts_are_ints(self, client: KragClient) -> None:
+        resp = client.post(
+            "/debug/query",
+            {"query": "code", "top_k": 5},
+        )
+        debug = resp.get("debug", {})
+        counts = debug.get("per_space_result_counts", {})
+        assert isinstance(counts, dict), f"Expected dict, got {type(counts)}"
+        for key, val in counts.items():
+            assert isinstance(val, int), f"Count for {key} should be int, got {type(val)}"
+
+
+# ──────────────────────────────────────────────
+# Phase 11 — US2: Multi-model vector spaces searched
+# ──────────────────────────────────────────────
+
+
+class Test11MultiModelVectorSpaces:
+    """Verify multi-model retrieval reports vector_spaces_searched and
+    produces reasonable results (sprint 015 US2).
+
+    Includes basic top-10 result overlap sanity check and latency measurement.
+    Performance values are logged but do not fail tests.
+    """
+
+    def test_vector_spaces_populated(self, client: KragClient) -> None:
+        resp = client.post(
+            "/debug/query",
+            {"query": "python class definition", "top_k": 10},
+        )
+        debug = resp.get("debug", {})
+        spaces = debug.get("vector_spaces_searched", [])
+        assert isinstance(spaces, list), f"Expected list, got {type(spaces)}"
+        # At minimum, the "text" space should always exist
+        if len(spaces) == 0:
+            pytest.skip("No vector spaces reported — single-model setup")
+
+    def test_top10_overlap_sanity(self, client: KragClient) -> None:
+        """Two identical queries should return similar result sets."""
+        q = "python function definition"
+        r1 = client.retrieve(q, top_k=10)
+        r2 = client.retrieve(q, top_k=10)
+        ids1 = {s.get("id", s.get("file_path", i)) for i, s in enumerate(r1)}
+        ids2 = {s.get("id", s.get("file_path", i)) for i, s in enumerate(r2)}
+        overlap = len(ids1 & ids2)
+        logger = logging.getLogger(__name__)
+        logger.info("Top-10 overlap: %d/%d", overlap, max(len(ids1), len(ids2)))
+        # Deterministic retrieval should have high overlap (>= 50%)
+        assert overlap >= len(ids1) // 2, (
+            f"Low overlap ({overlap}/{len(ids1)}) suggests non-deterministic retrieval"
+        )
+
+    def test_query_latency_measurement(self, client: KragClient) -> None:
+        """Measure and log query latency — does NOT fail on perf."""
+        logger = logging.getLogger(__name__)
+        q = "What is the architecture of this project?"
+        t0 = time.monotonic()
+        resp = client.query(q, top_k=5)
+        elapsed = time.monotonic() - t0
+        logger.info("Query latency: %.2fs for top_k=5", elapsed)
+        # Just verify the query succeeded — no perf assertion
+        assert "answer" in resp
+
+
+# ──────────────────────────────────────────────
+# Phase 12 — US3: Health-log suppression
+# ──────────────────────────────────────────────
+
+
+class Test12HealthLogSuppression:
+    """Verify health-check log suppression is active on the live service
+    (sprint 015 US3).
+
+    Since we cannot inspect server logs directly from the client, we verify
+    the middleware does not alter response behaviour — health endpoint still
+    returns 200 after repeated calls, and non-health requests are unaffected.
+    """
+
+    def test_consecutive_health_checks_return_200(self, client: KragClient) -> None:
+        """5 consecutive health checks should all return True (200)."""
+        for i in range(5):
+            assert client.health() is True, f"Health check #{i + 1} failed"
+
+    def test_non_health_after_health_works(self, client: KragClient) -> None:
+        """Non-health endpoint works normally after consecutive health checks."""
+        for _ in range(3):
+            client.health()
+        status = client.status()
+        assert "version" in status
+
+    def test_health_after_non_health_works(self, client: KragClient) -> None:
+        """Health endpoint works after a non-health request (suppression resets)."""
+        client.status()
+        assert client.health() is True

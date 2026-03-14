@@ -13,11 +13,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from krag_plugin_obsidian.handler import ObsidianFileTypeHandler
 
-from krag.models.configuration import PluginConfiguration, PluginMetadata
-from krag.plugins.interfaces import FileTypeHandler
-from krag.plugins.registry import PluginRegistry
+krag_plugin_obsidian = pytest.importorskip(
+    "krag_plugin_obsidian", reason="krag_plugin_obsidian not installed"
+)
+from krag_plugin_obsidian.handler import ObsidianFileTypeHandler  # noqa: E402
+
+from krag.models.configuration import PluginConfiguration, PluginMetadata  # noqa: E402
+from krag.plugins.interfaces import FileTypeHandler  # noqa: E402
+from krag.plugins.registry import PluginRegistry  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers — lightweight mock "markdown" plugin for extension fallback

@@ -428,17 +428,34 @@ class Retriever:
         """
         assert self.collection_manager is not None
 
-        query_embedding = self.embedding_generator.generate_single(query)
-        logger.debug(
-            "Multi-collection query: %d collections %s",
-            len(target_collections),
-            list(target_collections.keys()),
+        # Determine embedding strategy
+        use_multi_model = (
+            self.embedding_orchestrator is not None and self.embedding_orchestrator.is_multi_model
         )
+
+        if use_multi_model:
+            query_embeddings = self.embedding_orchestrator.embed_query(query)
+            logger.debug(
+                "Multi-collection multi-model query: %d collections %s, %d vector spaces %s",
+                len(target_collections),
+                list(target_collections.keys()),
+                len(query_embeddings),
+                list(query_embeddings.keys()),
+            )
+        else:
+            query_embedding = self.embedding_generator.generate_single(query)
+            logger.debug(
+                "Multi-collection query: %d collections %s",
+                len(target_collections),
+                list(target_collections.keys()),
+            )
 
         # Collect per-collection result lists with their weights
         all_result_lists: list[list[Any]] = []
         collection_weights: list[float] = []
         collection_tags: list[str] = []
+        self._last_per_space_counts: dict[str, int] = {}
+        self._last_collections_searched: list[str] = []
 
         for collection_name, weight in target_collections.items():
             try:
@@ -447,41 +464,89 @@ class Retriever:
                 logger.warning("Unknown collection '%s', skipping", collection_name)
                 continue
 
+            self._last_collections_searched.append(collection_name)
             vs = store.vector_store
-            try:
-                results = vs.search(query_embedding, limit=fetch_limit)
-            except Exception:
-                logger.warning(
-                    "Search failed for collection '%s', returning empty",
+
+            if use_multi_model and getattr(vs, "is_named_vectors", False):
+                # Multi-model path: search each named vector space, inner RRF
+                per_space_lists: list[list[Any]] = []
+                for vector_name, embedding in query_embeddings.items():
+                    try:
+                        results = vs.search_named(embedding, vector_name, limit=fetch_limit)
+                    except Exception:
+                        logger.warning(
+                            "search_named failed for collection '%s' space '%s', skipping",
+                            collection_name,
+                            vector_name,
+                            exc_info=True,
+                        )
+                        results = []
+                    self._last_per_space_counts[f"{collection_name}:{vector_name}"] = len(results)
+                    if results:
+                        per_space_lists.append(results)
+
+                # Level 1: Inner RRF merge within this collection
+                if not per_space_lists:
+                    logger.debug("  Collection '%s': 0 results across all spaces", collection_name)
+                    continue
+
+                inner_merged = reciprocal_rank_fusion(per_space_lists, k=60, limit=fetch_limit)
+                # Tag with collection name for outer merge
+                for point in inner_merged:
+                    point.payload["_collection"] = collection_name
+
+                logger.debug(
+                    "  Collection '%s': %d results after inner RRF (weight=%.2f)",
                     collection_name,
-                    exc_info=True,
+                    len(inner_merged),
+                    weight,
                 )
-                results = []
-
-            if not results:
-                logger.debug("  Collection '%s': 0 results (empty)", collection_name)
-                continue
-
-            # Convert dicts to ScoredPointLike objects for RRF
-            points: list[RRFScoredPoint] = []
-            for r in results:
-                points.append(
-                    RRFScoredPoint(
-                        id=r["id"],
-                        score=r["score"],
-                        payload={**r.get("payload", {}), "_collection": collection_name},
+                all_result_lists.append(inner_merged)
+                collection_weights.append(weight)
+                collection_tags.append(collection_name)
+            else:
+                # Single-model path: search unnamed vector space
+                single_embedding = (
+                    query_embeddings.get("text", next(iter(query_embeddings.values())))
+                    if use_multi_model
+                    else query_embedding
+                )
+                try:
+                    results = vs.search(single_embedding, limit=fetch_limit)
+                except Exception:
+                    logger.warning(
+                        "Search failed for collection '%s', returning empty",
+                        collection_name,
+                        exc_info=True,
                     )
-                )
+                    results = []
 
-            logger.debug(
-                "  Collection '%s': %d results (weight=%.2f)",
-                collection_name,
-                len(points),
-                weight,
-            )
-            all_result_lists.append(points)
-            collection_weights.append(weight)
-            collection_tags.append(collection_name)
+                self._last_per_space_counts[collection_name] = len(results)
+
+                if not results:
+                    logger.debug("  Collection '%s': 0 results (empty)", collection_name)
+                    continue
+
+                # Convert dicts to ScoredPointLike objects for RRF
+                points: list[RRFScoredPoint] = []
+                for r in results:
+                    points.append(
+                        RRFScoredPoint(
+                            id=r["id"],
+                            score=r["score"],
+                            payload={**r.get("payload", {}), "_collection": collection_name},
+                        )
+                    )
+
+                logger.debug(
+                    "  Collection '%s': %d results (weight=%.2f)",
+                    collection_name,
+                    len(points),
+                    weight,
+                )
+                all_result_lists.append(points)
+                collection_weights.append(weight)
+                collection_tags.append(collection_name)
 
         if not all_result_lists:
             logger.debug("No results from any collection")

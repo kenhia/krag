@@ -82,3 +82,27 @@ See `specs/011-obsidian-plugin/spec.md` for full specification.
   instead of only logging at start and completion.
 - Extension conflict warning silenced for `claims_file()` plugins (obsidian declaring
   `.md`/`.markdown` no longer spams WARNING on every indexing run).
+
+---
+
+## Sprint 015 — Debug Metadata Accuracy & Retrieval Completeness
+
+### `per_space_result_counts` shows `{'default': 120}` instead of per-collection breakdown
+
+`_multi_collection_retrieve` in `retriever.py` does not set `_last_per_space_counts`.
+The debug builder in `service.py` falls back to labelling all candidates as `"default"`.
+Should report per-collection counts (e.g. `{'code': 60, 'tests': 60}`).
+
+### Multi-model embeddings not used during multi-collection retrieval
+
+`_multi_collection_retrieve` calls `self.embedding_generator.generate_single(query)`
+(primary model only) and then `vs.search()` which falls back to the `"text"` vector
+space. The secondary embedding model (e.g. jina-code) stored in named vector spaces
+is never searched in multi-collection mode.
+
+### Health endpoint log suppression
+
+If kragd gets multiple "GET /health"'s in a row, only log the first; when another
+endpoint is used, log that normally, then log the next health.
+
+> **Retest on both `krag` CLI (`--debug`) and `krager` (debug toggle) when addressed.**

@@ -638,7 +638,12 @@ class KragService:
                 per_space_counts: dict[str, int] = {}
                 retriever_per_space = getattr(retriever, "_last_per_space_counts", None)
                 if retriever_per_space:
-                    vector_spaces = list(retriever_per_space.keys())
+                    # Extract clean vector-space names from composite keys
+                    keys = list(retriever_per_space.keys())
+                    if any(":" in k for k in keys):
+                        vector_spaces = list(dict.fromkeys(k.split(":", 1)[1] for k in keys))
+                    else:
+                        vector_spaces = keys
                     per_space_counts = dict(retriever_per_space)
                 else:
                     if self.vector_store is not None:
@@ -676,9 +681,8 @@ class KragService:
                     or self.config.prompt_preset
                     or "default",
                     mode=request.mode,
-                    collections_searched=sorted(mode_config.collections.keys())
-                    if mode_config
-                    else None,
+                    collections_searched=getattr(retriever, "_last_collections_searched", None)
+                    or (sorted(mode_config.collections.keys()) if mode_config else None),
                     retrieval_time_ms=round(retrieval_ms, 2),
                     generation_time_ms=round(generation_ms, 2),
                     embedding_models_used=list(self.embedding_orchestrator._model_names.values())

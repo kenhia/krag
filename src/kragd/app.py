@@ -88,6 +88,28 @@ def create_app(config: Configuration) -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Health-check log suppression middleware (US3)
+    _last_was_health = False
+
+    @app.middleware("http")
+    async def request_logging_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        nonlocal _last_was_health
+        response = await call_next(request)
+        is_health = request.method == "GET" and request.url.path == "/health"
+
+        if is_health and _last_was_health:
+            logger.debug(
+                "%s %s → %s (suppressed)", request.method, request.url.path, response.status_code
+            )
+        elif is_health:
+            logger.info("%s %s → %s", request.method, request.url.path, response.status_code)
+            _last_was_health = True
+        else:
+            logger.info("%s %s → %s", request.method, request.url.path, response.status_code)
+            _last_was_health = False
+
+        return response
+
     # Translate domain exceptions into appropriate HTTP responses
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:

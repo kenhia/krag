@@ -37,6 +37,7 @@ dev = [
     "krag-plugin-code @ file://${PROJECT_ROOT}/examples/krag-plugin-code",
     "krag-plugin-logs @ file://${PROJECT_ROOT}/examples/krag-plugin-logs",
     "krag-plugin-markdown @ file://${PROJECT_ROOT}/examples/krag-plugin-markdown",
+    "krag-plugin-obsidian @ file://${PROJECT_ROOT}/examples/krag-plugin-obsidian",
     "pytest-asyncio>=1.3.0",
 ]
 
