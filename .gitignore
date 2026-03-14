@@ -80,3 +80,6 @@ apps/*/build/
 apps/*/.svelte-kit/
 apps/*/src-tauri/target/
 apps/*/src-tauri/gen/
+
+# External content (e.g. Obsidian vaults cloned for live tests)
+obsidian/

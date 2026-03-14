@@ -42,11 +42,14 @@ def _vault_dir() -> Path:
 class Test00VaultIndexing:
     """Index an Obsidian vault and verify results are queryable."""
 
+    _vault_available: bool = False
+
     def test_vault_exists(self) -> None:
         """Skip all Obsidian live tests if the vault directory is missing."""
         vault = _vault_dir()
         if not vault.is_dir():
             pytest.skip(f"Obsidian vault not found: {vault}")
+        self.__class__._vault_available = True
 
     def test_trigger_vault_index(self, client: KragClient) -> None:
         """Trigger incremental indexing of the Obsidian vault directory."""
@@ -63,12 +66,16 @@ class Test00VaultIndexing:
 
     def test_wait_for_index(self, client: KragClient, live_timeout: float) -> None:
         """Wait for vault indexing to complete."""
+        if not self.__class__._vault_available:
+            pytest.skip("Vault not available — indexing was not triggered")
         result = poll_index_complete(client, timeout=live_timeout)
         assert result["status"] == "completed", f"Vault indexing failed: {result}"
         self.__class__._index_result = result
 
     def test_files_indexed(self) -> None:
         """At least some files should have been scanned."""
+        if not self.__class__._vault_available:
+            pytest.skip("Vault not available — indexing was not triggered")
         result = getattr(self.__class__, "_index_result", None)
         if result is None:
             pytest.skip("Indexing did not complete")

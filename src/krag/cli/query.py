@@ -132,9 +132,7 @@ def query_command(
         # Wire critic: per-request override > mode config
         critic_inst = None
         want_critic = (
-            critic
-            if critic is not None
-            else (mode_config.critic_enabled if mode_config else False)
+            critic if critic is not None else (mode_config.critic_enabled if mode_config else False)
         )
         if want_critic:
             from krag.critic.relevance_critic import RelevanceCritic
@@ -149,9 +147,7 @@ def query_command(
                 threshold=effective_threshold,
                 enabled=True,
             )
-            logger.info(
-                "Critic enabled (threshold=%d)", effective_threshold
-            )
+            logger.info("Critic enabled (threshold=%d)", effective_threshold)
             # Attach critic to query engine for standard path
             query_engine.critic = critic_inst
 
