@@ -1,5 +1,14 @@
 # krag
 
+> **Archived 2026-09-25 — retired, superseded by [kris](https://github.com/kenhia/kris), itself now retired.**
+> krag proved out the core patterns (multi-model embedding, LLM hot-swap, semantic chunking,
+> Qdrant storage) and kris was started as its successor to carry them further. Both were
+> retired on 2026-09-19 and neither is running anywhere. The tracked tree here is complete;
+> the untracked working notes were kept in a private archive, so nothing was lost.
+> Retirement record: korg WI 2857; archive executed by korg WI 2858.
+>
+> **Do not run this.** It is unmaintained and its dependencies are frozen as of the last commit.
+
 **Personal Multimodal RAG System - Phase 1: Text Indexing and Retrieval**
 
 A local-first system for indexing personal files (PC and NAS storage) and querying them using natural language with LLM-synthesized answers.
